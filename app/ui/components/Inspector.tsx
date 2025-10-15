@@ -1,7 +1,14 @@
+import { useMemo } from "react";
 import { usePatch } from "../state/PatchContext";
 
 export function Inspector(): JSX.Element {
-  const { viewModel } = usePatch();
+  const { viewModel, validation } = usePatch();
+  const statusMessage = useMemo(() => {
+    if (validation.isValid) {
+      return "Graph is valid and ready to compile.";
+    }
+    return "Fix the issues below before compiling.";
+  }, [validation.isValid]);
 
   return (
     <aside className="inspector-pane" aria-label="Node inspector">
@@ -24,6 +31,23 @@ export function Inspector(): JSX.Element {
           </div>
         </dl>
         <p>Select a node to view and tweak its parameters.</p>
+        <div
+          className={`validation-status ${
+            validation.isValid ? "ok" : "error"
+          }`}
+          role="status"
+        >
+          {statusMessage}
+        </div>
+        {!validation.isValid ? (
+          <ul className="validation-list">
+            {validation.issues.map((issue, index) => (
+              <li key={`${issue.code}-${index}`}>
+                <strong>{issue.code}:</strong> {issue.message}
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </div>
     </aside>
   );

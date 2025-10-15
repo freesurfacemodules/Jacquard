@@ -40,6 +40,11 @@
   font-size: 0.85rem;
 }
 
+.toolbar-section.success {
+  color: #9cd3aa;
+  font-size: 0.85rem;
+}
+
 .toolbar-button {
   border: 1px solid #3a4254;
   background: #263042;
@@ -88,4 +93,34 @@
 .inspector-row dd {
   margin: 0;
   font-variant-numeric: tabular-nums;
+}
+
+.validation-status {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  background: #1e2530;
+  border: 1px solid transparent;
+  font-size: 0.9rem;
+}
+
+.validation-status.ok {
+  border-color: #304a3a;
+  color: #9cd3aa;
+}
+
+.validation-status.error {
+  border-color: #55333f;
+  color: #f1a7ae;
+}
+
+.validation-list {
+  margin-top: 0.75rem;
+  padding-left: 1.25rem;
+  color: #f1d2a7;
+  font-size: 0.9rem;
+}
+
+.validation-list li {
+  margin-bottom: 0.5rem;
 }
