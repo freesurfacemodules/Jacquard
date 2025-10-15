@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "allowJs": false,
+    "resolveJsonModule": true,
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@ui/*": ["app/ui/*"],
+      "@graph/*": ["app/graph/*"],
+      "@codegen/*": ["app/codegen/*"],
+      "@compiler/*": ["app/compiler/*"],
+      "@audio/*": ["app/audio/*"],
+      "@dsp/*": ["app/dsp/*"],
+      "@tests/*": ["app/tests/*"]
+    }
+  },
+  "include": [
+    "app",
+    "vite.config.ts",
+    "env.d.ts"
+  ]
+}

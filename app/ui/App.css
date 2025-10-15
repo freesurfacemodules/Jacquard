@@ -1,0 +1,91 @@
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: #0f1115;
+  color: #f5f5f5;
+  font-family: "Inter", system-ui, sans-serif;
+}
+
+.workspace {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr);
+  grid-template-rows: 1fr;
+  gap: 1px;
+  background: #1b1f26;
+}
+
+.workspace > * {
+  background: #13161c;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: #181c24;
+  border-bottom: 1px solid #222733;
+}
+
+.toolbar-section {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.toolbar-section.error {
+  color: #f18f8f;
+  font-size: 0.85rem;
+}
+
+.toolbar-button {
+  border: 1px solid #3a4254;
+  background: #263042;
+  color: inherit;
+  border-radius: 6px;
+  padding: 0.4rem 0.9rem;
+  cursor: pointer;
+}
+
+.toolbar-button:hover {
+  background: #2e3950;
+}
+
+.canvas-pane,
+.inspector-pane {
+  display: flex;
+  flex-direction: column;
+}
+
+.canvas-header,
+.inspector-header {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #1f2430;
+}
+
+.canvas-body,
+.inspector-body {
+  padding: 1rem;
+  overflow: auto;
+}
+
+.placeholder {
+  color: #8289a1;
+}
+
+.inspector-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.inspector-row dt {
+  color: #a3acc4;
+}
+
+.inspector-row dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
