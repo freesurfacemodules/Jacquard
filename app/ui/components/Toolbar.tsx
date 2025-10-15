@@ -1,20 +1,14 @@
-import { useCallback, useEffect, useState } from "react";
-import { compilePatch } from "@compiler/compiler";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePatch } from "../state/PatchContext";
 
 export function Toolbar(): JSX.Element {
-  const { graph, validation } = usePatch();
-  const [isRunning, setIsRunning] = useState(false);
+  const { validation, compile, audio, artifact } = usePatch();
   const [compileStatus, setCompileStatus] = useState<
     "idle" | "compiling" | "ready" | "error"
   >("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-
-  const toggleRun = (): void => {
-    // Hooked up to audio worklet bootstrap in future patch.
-    setIsRunning((prev) => !prev);
-  };
+  const previousAudioState = useRef(audio.state);
 
   const handleCompile = useCallback(async () => {
     if (!validation.isValid) {
@@ -33,7 +27,7 @@ export function Toolbar(): JSX.Element {
     setErrorMessage(null);
     setSuccessMessage(null);
     try {
-      await compilePatch(graph);
+      await compile();
       setCompileStatus("ready");
       setSuccessMessage("Compiled successfully.");
     } catch (error) {
@@ -43,14 +37,44 @@ export function Toolbar(): JSX.Element {
       setErrorMessage(message);
       setCompileStatus("error");
     }
-  }, [graph, validation]);
+  }, [compile, validation]);
 
   useEffect(() => {
-    setCompileStatus("idle");
-    setSuccessMessage(null);
-    setErrorMessage(null);
-    setIsRunning(false);
-  }, [graph]);
+    if (!artifact) {
+      setCompileStatus("idle");
+      setSuccessMessage(null);
+      setErrorMessage(null);
+    }
+  }, [artifact]);
+
+  useEffect(() => {
+    if (previousAudioState.current !== audio.state) {
+      if (audio.state === "running") {
+        setSuccessMessage("Playback started.");
+      } else if (
+        previousAudioState.current === "running" &&
+        audio.state === "idle"
+      ) {
+        setSuccessMessage("Playback stopped.");
+      }
+      previousAudioState.current = audio.state;
+    }
+  }, [audio.state]);
+
+  const handleRunToggle = useCallback(async () => {
+    if (audio.state === "running") {
+      await audio.stop();
+      return;
+    }
+
+    await audio.start();
+  }, [audio]);
+
+  const isRunning = audio.state === "running";
+  const runDisabled =
+    (!isRunning && compileStatus !== "ready") ||
+    audio.state === "starting" ||
+    !audio.isSupported;
 
   return (
     <header className="toolbar" aria-label="Application controls">
@@ -68,9 +92,9 @@ export function Toolbar(): JSX.Element {
         </button>
         <button
           type="button"
-          onClick={toggleRun}
+          onClick={handleRunToggle}
           className="toolbar-button"
-          disabled={!isRunning && compileStatus !== "ready"}
+          disabled={runDisabled}
         >
           {isRunning ? "Stop" : "Run"}
         </button>
@@ -80,6 +104,14 @@ export function Toolbar(): JSX.Element {
       ) : null}
       {compileStatus === "ready" && successMessage ? (
         <div className="toolbar-section success">{successMessage}</div>
+      ) : null}
+      {audio.error ? (
+        <div className="toolbar-section error">{audio.error}</div>
+      ) : null}
+      {!audio.isSupported ? (
+        <div className="toolbar-section error">
+          Audio playback is unavailable in this environment.
+        </div>
       ) : null}
     </header>
   );

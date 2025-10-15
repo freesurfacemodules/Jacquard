@@ -41,4 +41,22 @@ describe("code generation", () => {
 
     expect(() => emitAssemblyScript(graph)).toThrow(/Graph validation failed/);
   });
+
+  it("auto routes an unconnected oscillator to both output channels", () => {
+    let graph = createGraph();
+    const osc = instantiateNode("osc.sine", "osc1");
+    const out = instantiateNode("io.output", "out1");
+
+    graph = addNode(graph, osc);
+    graph = addNode(graph, out);
+
+    const source = emitAssemblyScript(graph);
+
+    expect(source).toContain("let auto_out_left: f32 = 0.0;");
+    expect(source).toContain("let auto_out_right: f32 = 0.0;");
+    expect(source).toMatch(/auto_out_left = sample;/);
+    expect(source).toMatch(/auto_out_right = sample;/);
+    expect(source).toContain("let outLeft: f32 = auto_out_left;");
+    expect(source).toContain("let outRight: f32 = auto_out_right;");
+  });
 });

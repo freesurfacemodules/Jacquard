@@ -1,5 +1,5 @@
 import { PatchGraph } from "@graph/types";
-import { createExecutionPlan, PlanInput, PlanNode } from "./plan";
+import { createExecutionPlan, ExecutionPlan, PlanInput, PlanNode } from "./plan";
 import {
   indentLines,
   numberLiteral,
@@ -16,6 +16,7 @@ export function emitAssemblyScript(
 ): string {
   const moduleName = options.moduleName ?? "maxwasm_patch";
   const plan = createExecutionPlan(graph);
+  const autoRoute = determineAutoRoute(plan);
 
   const header = [
     "// Auto-generated AssemblyScript module",
@@ -74,9 +75,19 @@ export function emitAssemblyScript(
     processBodyLines.push(indentLines(wireLines.join("\n")));
   }
 
+  if (autoRoute.left) {
+    processBodyLines.push(indentLines(`let ${AUTO_LEFT_VAR}: f32 = 0.0;`));
+  }
+  if (autoRoute.right) {
+    processBodyLines.push(indentLines(`let ${AUTO_RIGHT_VAR}: f32 = 0.0;`));
+  }
+
   for (const planNode of plan.nodes) {
     processBodyLines.push(
-      indentLines(emitNode(planNode), 1 /* already inside loop */)
+      indentLines(
+        emitNode(planNode, { autoRoute }),
+        1 /* already inside loop */
+      )
     );
   }
 
@@ -95,13 +106,25 @@ export function emitAssemblyScript(
     .concat("\n");
 }
 
-function emitNode(planNode: PlanNode): string {
+const AUTO_LEFT_VAR = "auto_out_left";
+const AUTO_RIGHT_VAR = "auto_out_right";
+
+interface AutoRoute {
+  left?: string;
+  right?: string;
+}
+
+interface EmitContext {
+  autoRoute: AutoRoute;
+}
+
+function emitNode(planNode: PlanNode, context: EmitContext): string {
   switch (planNode.node.kind) {
     case "osc.sine": {
-      return emitSineNode(planNode);
+      return emitSineNode(planNode, context);
     }
     case "io.output": {
-      return emitOutputNode(planNode);
+      return emitOutputNode(planNode, context);
     }
     default: {
       throw new Error(`Unsupported node kind for code generation: ${planNode.node.kind}`);
@@ -109,11 +132,15 @@ function emitNode(planNode: PlanNode): string {
   }
 }
 
-function emitSineNode(planNode: PlanNode): string {
+function emitSineNode(planNode: PlanNode, context: EmitContext): string {
   const identifier = sanitizeIdentifier(planNode.node.id);
   const output = planNode.outputs.find((port) => port.port.id === "out");
 
-  if (!output || output.wires.length === 0) {
+  const isAutoRouted =
+    context.autoRoute.left === planNode.node.id ||
+    context.autoRoute.right === planNode.node.id;
+
+  if (!output || (output.wires.length === 0 && !isAutoRouted)) {
     return [
       `// ${planNode.node.label} (${planNode.node.id}) has no outgoing connections.`,
       "// Skipping oscillator evaluation to save CPU."
@@ -132,28 +159,56 @@ function emitSineNode(planNode: PlanNode): string {
     .map((wire) => `${wire.varName} = sample;`)
     .join("\n");
 
+  const autoAssignments: string[] = [];
+  if (context.autoRoute.left === planNode.node.id) {
+    autoAssignments.push(`${AUTO_LEFT_VAR} = sample;`);
+  }
+  if (context.autoRoute.right === planNode.node.id) {
+    autoAssignments.push(`${AUTO_RIGHT_VAR} = sample;`);
+  }
+
   const body = [
     `// ${planNode.node.label} (${planNode.node.id})`,
     "{",
     indentLines("let pitch: f32 = " + pitchExpr + ";", 1),
     indentLines("let frequency: f32 = FREQ_C4 * Mathf.pow(2.0, pitch);", 1),
     indentLines(`let sample: f32 = node_${identifier}.step(frequency);`, 1),
-    indentLines(assignments || "// No destinations for oscillator output.", 1),
+    assignments
+      ? indentLines(assignments, 1)
+      : !isAutoRouted
+      ? indentLines("// No destinations for oscillator output.", 1)
+      : "",
+    autoAssignments.length > 0 ? indentLines(autoAssignments.join("\n"), 1) : "",
     "}"
   ];
 
   return body.join("\n");
 }
 
-function emitOutputNode(planNode: PlanNode): string {
+function emitOutputNode(planNode: PlanNode, context: EmitContext): string {
   const leftInput = planNode.inputs.find((input) => input.port.id === "left");
   const rightInput = planNode.inputs.find((input) => input.port.id === "right");
 
   const leftExpr = leftInput
-    ? buildInputExpression(leftInput)
+    ? buildInputExpression(leftInput, {
+        autoVar:
+          leftInput.wires.length === 0 && context.autoRoute.left
+            ? AUTO_LEFT_VAR
+            : undefined
+      })
+    : context.autoRoute.left
+    ? AUTO_LEFT_VAR
     : numberLiteral(0);
+
   const rightExpr = rightInput
-    ? buildInputExpression(rightInput)
+    ? buildInputExpression(rightInput, {
+        autoVar:
+          rightInput.wires.length === 0 && context.autoRoute.right
+            ? AUTO_RIGHT_VAR
+            : undefined
+      })
+    : context.autoRoute.right
+    ? AUTO_RIGHT_VAR
     : numberLiteral(0);
 
   const body = [
@@ -169,7 +224,10 @@ function emitOutputNode(planNode: PlanNode): string {
   return body.join("\n");
 }
 
-function buildInputExpression(input: PlanInput): string {
+function buildInputExpression(
+  input: PlanInput,
+  options: { autoVar?: string } = {}
+): string {
   const terms: string[] = [];
 
   if (
@@ -180,7 +238,11 @@ function buildInputExpression(input: PlanInput): string {
   }
 
   for (const wire of input.wires) {
-    terms.push(wire.varName);
+   terms.push(wire.varName);
+  }
+
+  if (input.wires.length === 0 && options.autoVar) {
+    terms.push(options.autoVar);
   }
 
   if (terms.length === 0) {
@@ -188,4 +250,45 @@ function buildInputExpression(input: PlanInput): string {
   }
 
   return terms.length === 1 ? terms[0] : terms.join(" + ");
+}
+
+function determineAutoRoute(plan: ExecutionPlan): AutoRoute {
+  const outputInputs = plan.outputNode.inputs;
+  const leftInput = outputInputs.find((input) => input.port.id === "left");
+  const rightInput = outputInputs.find((input) => input.port.id === "right");
+
+  const oscillatorNodes = plan.nodes.filter(
+    (node) => node.node.kind === "osc.sine"
+  );
+
+  if (oscillatorNodes.length === 0) {
+    return {};
+  }
+
+  const oscillatorsWithFreeOutput = oscillatorNodes.filter((node) =>
+    node.outputs.some(
+      (output) => output.port.id === "out" && output.wires.length === 0
+    )
+  );
+
+  const candidates =
+    oscillatorsWithFreeOutput.length > 0
+      ? oscillatorsWithFreeOutput
+      : oscillatorNodes;
+
+  const autoRoute: AutoRoute = {};
+
+  if (leftInput && leftInput.wires.length === 0 && candidates[0]) {
+    autoRoute.left = candidates[0].node.id;
+  }
+
+  if (rightInput && rightInput.wires.length === 0) {
+    const candidate =
+      candidates.length > 1 ? candidates[1] : candidates[0] ?? null;
+    if (candidate) {
+      autoRoute.right = candidate.node.id;
+    }
+  }
+
+  return autoRoute;
 }
