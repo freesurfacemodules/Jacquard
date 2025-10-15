@@ -75,6 +75,14 @@ export function Toolbar(): JSX.Element {
     (!isRunning && compileStatus !== "ready") ||
     audio.state === "starting" ||
     !audio.isSupported;
+  const runLabel =
+    audio.state === "starting" ? "Starting…" : isRunning ? "Stop" : "Run";
+
+  useEffect(() => {
+    if (audio.error) {
+      setSuccessMessage(null);
+    }
+  }, [audio.error]);
 
   return (
     <header className="toolbar" aria-label="Application controls">
@@ -96,7 +104,7 @@ export function Toolbar(): JSX.Element {
           className="toolbar-button"
           disabled={runDisabled}
         >
-          {isRunning ? "Stop" : "Run"}
+          {runLabel}
         </button>
       </div>
       {compileStatus === "error" && errorMessage ? (

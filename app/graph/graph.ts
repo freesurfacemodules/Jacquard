@@ -17,7 +17,7 @@ export function createGraph(options: CreateGraphOptions = {}): PatchGraph {
     nodes: [],
     connections: [],
     sampleRate: options.sampleRate ?? 48_000,
-    blockSize: options.blockSize ?? 256,
+    blockSize: options.blockSize ?? 128,
     oversampling: options.oversampling ?? 1
   };
 }

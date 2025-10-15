@@ -10,7 +10,7 @@ describe("graph", () => {
     expect(graph.nodes).toHaveLength(0);
     expect(graph.connections).toHaveLength(0);
     expect(graph.sampleRate).toBe(48_000);
-    expect(graph.blockSize).toBe(256);
+    expect(graph.blockSize).toBe(128);
     expect(graph.oversampling).toBe(1);
   });
 

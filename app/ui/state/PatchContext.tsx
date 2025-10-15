@@ -56,6 +56,7 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
   const [audioError, setAudioError] = useState<string | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const workletHandleRef = useRef<WorkletHandle | null>(null);
+  const portListenerRef = useRef<((event: MessageEvent) => void) | null>(null);
 
   const addNodeToGraph = useCallback((node: NodeDescriptor) => {
     setGraph((prev) => addNode(prev, node));
@@ -66,6 +67,11 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
     workletHandleRef.current = null;
 
     if (handle) {
+      const listener = portListenerRef.current;
+      if (listener) {
+        handle.node.port.removeEventListener("message", listener);
+        portListenerRef.current = null;
+      }
       try {
         handle.node.disconnect();
       } catch (error) {
@@ -174,6 +180,29 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
 
       const handle = await loadPatchProcessor(context, artifact);
       workletHandleRef.current = handle;
+      const listener = (event: MessageEvent): void => {
+        const data = event.data;
+        if (!data || typeof data !== "object") {
+          return;
+        }
+        if (data.type === "error") {
+          const message =
+            typeof data.message === "string"
+              ? data.message
+              : "Audio processor reported an error.";
+          setAudioState("error");
+          setAudioError(message);
+          void (async () => {
+            await stopAudioInternal();
+          })();
+        } else if (data.type === "stopped") {
+          setAudioState("idle");
+        }
+      };
+
+      handle.node.port.addEventListener("message", listener);
+      handle.node.port.start?.();
+      portListenerRef.current = listener;
       handle.node.connect(context.destination);
 
       if (context.state === "suspended") {
@@ -186,6 +215,7 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
         error instanceof Error ? error.message : String(error);
       setAudioState("error");
       setAudioError(message);
+      await stopAudioInternal();
     }
   }, [audioSupported, artifact, stopAudioInternal, createAudioContext]);
 
