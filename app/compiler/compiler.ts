@@ -1,10 +1,12 @@
 import { instantiate } from "@assemblyscript/loader";
 import { emitAssemblyScript } from "@codegen/assemblyscript";
+import type { PlanControl } from "@codegen/plan";
 import { PatchGraph } from "@graph/types";
 
 export interface CompileResult {
   moduleSource: string;
   wasmBinary: Uint8Array;
+  parameterBindings: PlanControl[];
 }
 
 /**
@@ -13,7 +15,7 @@ export interface CompileResult {
  * a Worker bridge will be wired up once the evaluator is ready.
  */
 export async function compilePatch(graph: PatchGraph): Promise<CompileResult> {
-  const moduleSource = emitAssemblyScript(graph);
+  const { source: moduleSource, plan } = emitAssemblyScript(graph);
 
   const ascModule = await import("assemblyscript/asc");
   const compileString = (ascModule as {
@@ -41,6 +43,7 @@ export async function compilePatch(graph: PatchGraph): Promise<CompileResult> {
 
   return {
     moduleSource,
-    wasmBinary
+    wasmBinary,
+    parameterBindings: plan.controls
   };
 }

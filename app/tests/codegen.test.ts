@@ -26,7 +26,7 @@ describe("code generation", () => {
       toPortId: "right"
     });
 
-    const source = emitAssemblyScript(graph);
+    const { source } = emitAssemblyScript(graph);
 
     expect(source).toContain("class SineOsc");
     expect(source).toContain("node_osc1.step");
@@ -50,7 +50,7 @@ describe("code generation", () => {
     graph = addNode(graph, osc);
     graph = addNode(graph, out);
 
-    const source = emitAssemblyScript(graph);
+    const { source } = emitAssemblyScript(graph);
 
     expect(source).toContain("let auto_out_left: f32 = 0.0;");
     expect(source).toContain("let auto_out_right: f32 = 0.0;");
@@ -94,7 +94,7 @@ describe("code generation", () => {
       toPortId: "right"
     });
 
-    const source = emitAssemblyScript(graph);
+    const { source } = emitAssemblyScript(graph);
 
     expect(source).toContain("Stereo Mixer (mix1)");
     expect(source).toMatch(/let mix_mix1_left: f32 = 0.0;/);
@@ -139,8 +139,8 @@ describe("code generation", () => {
       toPortId: "right"
     });
 
-    const source = emitAssemblyScript(graph);
+    const { source } = emitAssemblyScript(graph);
     expect(source).toContain("// Gain (gain1)");
-    expect(source).toMatch(/scaled: f32 = \(wire\d+\) \* \(2.5\)/);
+    expect(source).toMatch(/scaled: f32 = \(wire\d+\) \* \(getParameterValue\(0\)\)/);
   });
 });

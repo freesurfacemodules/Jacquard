@@ -34,6 +34,9 @@ export const gainNode: NodeImplementation = {
       const input = planNode.inputs.find((port) => port.port.id === CHANNEL_IN);
       const gain = planNode.inputs.find((port) => port.port.id === CHANNEL_GAIN);
       const output = planNode.outputs.find((port) => port.port.id === CHANNEL_OUT);
+      const gainControl = planNode.controls.find(
+        (control) => control.controlId === CHANNEL_GAIN
+      );
 
       if (!output) {
         return `// ${planNode.node.label} (${planNode.node.id}) has no output.`;
@@ -42,8 +45,10 @@ export const gainNode: NodeImplementation = {
       const inputExpr = input
         ? helpers.buildInputExpression(input)
         : helpers.numberLiteral(0);
-      const gainExpr = gain
+      const gainExpr = gain && gain.wires.length > 0
         ? helpers.buildInputExpression(gain)
+        : gainControl
+        ? helpers.parameterRef(gainControl.index)
         : helpers.numberLiteral(1);
 
       const lines = [

@@ -1,5 +1,8 @@
 import { NodeDescriptor } from "@graph/types";
 import { memo } from "react";
+import type { NodeImplementation } from "@dsp/types";
+import { getNodeImplementation } from "@dsp/library";
+import { Knob } from "./Knob";
 
 export type PortKind = "input" | "output";
 
@@ -24,6 +27,7 @@ interface PatchNodeProps {
     portIndex: number,
     event: React.PointerEvent<HTMLButtonElement>
   ): void;
+  onControlChange(nodeId: string, controlId: string, value: number): void;
 }
 
 export const PatchNode = memo(function PatchNode({
@@ -36,8 +40,12 @@ export const PatchNode = memo(function PatchNode({
   onDrag,
   onDragEnd,
   onOutputPointerDown,
-  onInputPointerUp
+  onInputPointerUp,
+  onControlChange
 }: PatchNodeProps): JSX.Element {
+  const implementation: NodeImplementation | undefined = getNodeImplementation(node.kind);
+  const controls = implementation?.manifest.controls ?? [];
+
   const handleContainerPointerDown = (
     event: React.PointerEvent<HTMLDivElement>
   ): void => {
@@ -121,6 +129,26 @@ export const PatchNode = memo(function PatchNode({
           ))}
         </div>
       </div>
+      {controls.length > 0 ? (
+        <div className="patch-node__controls">
+          {controls.map((control) => {
+            const value = node.parameters[control.id];
+            return (
+              <div key={control.id} className="patch-node__control">
+                <Knob
+                  min={control.min}
+                  max={control.max}
+                  step={control.step ?? 0.01}
+                  value={value}
+                  onChange={(next) => onControlChange(node.id, control.id, next)}
+                />
+                <span>{control.label}</span>
+                <span className="patch-node__control-value">{value.toFixed(2)}</span>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
     </div>
   );
 });

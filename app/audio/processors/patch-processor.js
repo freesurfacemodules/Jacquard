@@ -10,6 +10,7 @@ if (typeof globalThis.AudioWorkletProcessor === "undefined") {
       super(options);
       this.state = null;
       this.ready = false;
+       this.pendingParameters = [];
 
       if (this.port && typeof this.port.start === "function") {
         this.port.start();
@@ -25,6 +26,15 @@ if (typeof globalThis.AudioWorkletProcessor === "undefined") {
             this.ready = false;
             this.state = null;
             this.port.postMessage({ type: "stopped" });
+          } else if (data.type === "parameter") {
+            this.queueParameter(data.index, data.value);
+          } else if (data.type === "parameterBatch") {
+            if (Array.isArray(data.values)) {
+              for (const entry of data.values) {
+                if (!entry) continue;
+                this.queueParameter(entry.index, entry.value);
+              }
+            }
           }
         };
       }
@@ -70,7 +80,7 @@ if (typeof globalThis.AudioWorkletProcessor === "undefined") {
 
       const { instance } = await WebAssembly.instantiate(wasmBinary, importObject);
       const exports = instance.exports;
-
+      
       if (typeof exports.process !== "function") {
         throw new Error("Wasm module is missing the process export.");
       }
@@ -108,7 +118,37 @@ if (typeof globalThis.AudioWorkletProcessor === "undefined") {
         right
       };
       this.ready = true;
+      this.flushPendingParameters();
       this.port?.postMessage({ type: "ready" });
+    }
+
+    queueParameter(index, value) {
+      if (this.ready && this.state) {
+        this.applyParameter(index, value);
+        return;
+      }
+      this.pendingParameters.push({ index, value });
+    }
+
+    flushPendingParameters() {
+      if (!this.ready || !this.state) {
+        return;
+      }
+      if (this.pendingParameters.length === 0) {
+        return;
+      }
+      for (const entry of this.pendingParameters) {
+        this.applyParameter(entry.index, entry.value);
+      }
+      this.pendingParameters.length = 0;
+    }
+
+    applyParameter(index, value) {
+      const state = this.state;
+      if (!state || typeof state.exports.setParameter !== "function") {
+        return;
+      }
+      state.exports.setParameter(index | 0, Number(value));
     }
 
     process(_inputs, outputs) {

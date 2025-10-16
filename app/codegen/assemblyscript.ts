@@ -1,5 +1,9 @@
 import { PatchGraph } from "@graph/types";
-import { createExecutionPlan, ExecutionPlan, PlanInput } from "./plan";
+import {
+  createExecutionPlan,
+  ExecutionPlan,
+  PlanInput
+} from "./plan";
 import {
   indentLines,
   numberLiteral,
@@ -15,10 +19,15 @@ export interface EmitOptions {
   moduleName?: string;
 }
 
+export interface EmitResult {
+  source: string;
+  plan: ExecutionPlan;
+}
+
 export function emitAssemblyScript(
   graph: PatchGraph,
   options: EmitOptions = {}
-): string {
+): EmitResult {
   const moduleName = options.moduleName ?? "maxwasm_patch";
   const plan = createExecutionPlan(graph);
   const autoRoute = determineAutoRoute(plan);
@@ -40,13 +49,28 @@ export function emitAssemblyScript(
     "const FREQ_C4: f32 = 261.6255653005986;"
   ].join("\n");
 
+  const parameterSection = collectParameterSection(plan);
   const declarations = collectAssemblyDeclarations();
-
   const stateLines = collectStateDeclarations(plan);
 
   const processBodyLines: string[] = [];
 
   processBodyLines.push("for (let n = 0; n < BLOCK_SIZE; n++) {");
+
+  if (plan.parameterCount > 0) {
+    processBodyLines.push(
+      indentLines(
+        [
+          "for (let p = 0; p < PARAM_COUNT; p++) {",
+          "  const current = unchecked(parameterValues[p]);",
+          "  const target = unchecked(parameterTargets[p]);",
+          "  unchecked(parameterValues[p] = current + (target - current) * PARAM_SMOOTH);",
+          "}"
+        ].join("\n"),
+        1
+      )
+    );
+  }
 
   if (plan.wires.length > 0) {
     const wireLines = plan.wires.map(
@@ -88,11 +112,20 @@ export function emitAssemblyScript(
     "}"
   ].join("\n");
 
-  return [header, constants, declarations, stateLines, processFunction]
+  const source = [
+    header,
+    constants,
+    parameterSection,
+    declarations,
+    stateLines,
+    processFunction
+  ]
     .filter(Boolean)
     .join("\n\n")
     .trimEnd()
     .concat("\n");
+
+  return { source, plan };
 }
 
 const AUTO_LEFT_VAR = "auto_out_left";
@@ -105,10 +138,57 @@ function createEmitHelpers(autoRoute: AutoRoute): NodeEmitHelpers {
     sanitizeIdentifier,
     buildInputExpression: (input: PlanInput, options?: { autoVar?: string }) =>
       buildInputExpression(input, options),
+    parameterRef: (index: number) => `getParameterValue(${index})`,
     autoRoute,
     autoLeftVar: AUTO_LEFT_VAR,
     autoRightVar: AUTO_RIGHT_VAR
   };
+}
+
+function collectParameterSection(plan: ExecutionPlan): string {
+  if (plan.parameterCount === 0) {
+    return "";
+  }
+
+  const initLines = plan.controls
+    .map((control) => {
+      const literal = numberLiteral(control.defaultValue);
+      return [
+        `unchecked(parameterValues[${control.index}] = ${literal});`,
+        `unchecked(parameterTargets[${control.index}] = ${literal});`
+      ].join("\n");
+    })
+    .join("\n");
+
+  return [
+    `const PARAM_COUNT: i32 = ${plan.parameterCount};`,
+    "const parameterValues = new StaticArray<f32>(PARAM_COUNT);",
+    "const parameterTargets = new StaticArray<f32>(PARAM_COUNT);",
+    "const PARAM_SMOOTH: f32 = 0.05;",
+    "",
+    "function initializeParameters(): void {",
+    indentLines(initLines || "", 1),
+    "}",
+    "",
+    "@inline function getParameterValue(index: i32): f32 {",
+    indentLines("return unchecked(parameterValues[index]);", 1),
+    "}",
+    "",
+    "export function setParameter(index: i32, value: f32): void {",
+    indentLines(
+      [
+        "if (index >= 0 && index < PARAM_COUNT) {",
+        "  unchecked(parameterTargets[index] = value);",
+        "}"
+      ].join("\n"),
+      1
+    ),
+    "}",
+    "",
+    "initializeParameters();"
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function collectAssemblyDeclarations(): string {

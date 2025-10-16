@@ -5,6 +5,7 @@ import {
   PatchGraph,
   PortDescriptor
 } from "@graph/types";
+import { getNodeImplementation } from "@dsp/library";
 
 export interface PlanWire {
   id: string;
@@ -32,12 +33,22 @@ export interface PlanNode {
   node: NodeDescriptor;
   inputs: PlanInput[];
   outputs: PlanOutput[];
+  controls: PlanControl[];
 }
 
 export interface ExecutionPlan {
   wires: PlanWire[];
   nodes: PlanNode[];
   outputNode: PlanNode;
+  controls: PlanControl[];
+  parameterCount: number;
+}
+
+export interface PlanControl {
+  nodeId: string;
+  controlId: string;
+  index: number;
+  defaultValue: number;
 }
 
 export function createExecutionPlan(graph: PatchGraph): ExecutionPlan {
@@ -56,6 +67,8 @@ export function createExecutionPlan(graph: PatchGraph): ExecutionPlan {
   const wires: PlanWire[] = [];
   const inputMap = new Map<string, PlanWire[]>();
   const outputMap = new Map<string, PlanWire[]>();
+  const controls: PlanControl[] = [];
+  let parameterCounter = 0;
 
   graph.connections.forEach((connection, index) => {
     const fromNode = nodesById.get(connection.from.node);
@@ -125,10 +138,29 @@ export function createExecutionPlan(graph: PatchGraph): ExecutionPlan {
       };
     });
 
+    const implementation = getNodeImplementation(node.kind);
+    const manifestControls = implementation?.manifest.controls ?? [];
+    const nodeControls: PlanControl[] = manifestControls.map((control) => {
+      const defaultValue =
+        typeof node.parameters[control.id] === "number"
+          ? node.parameters[control.id]
+          : implementation?.manifest.defaultParams?.[control.id] ??
+            control.min ?? 0;
+      const planControl: PlanControl = {
+        nodeId: node.id,
+        controlId: control.id,
+        index: parameterCounter++,
+        defaultValue
+      };
+      controls.push(planControl);
+      return planControl;
+    });
+
     return {
       node,
       inputs,
-      outputs
+      outputs,
+      controls: nodeControls
     };
   });
 
@@ -140,7 +172,9 @@ export function createExecutionPlan(graph: PatchGraph): ExecutionPlan {
   return {
     wires,
     nodes: planNodes,
-    outputNode
+    outputNode,
+    controls,
+    parameterCount: parameterCounter
   };
 }
 

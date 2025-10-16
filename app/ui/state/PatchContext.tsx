@@ -32,6 +32,13 @@ import {
   loadPatchProcessor,
   WorkletHandle
 } from "@audio/worklet-loader";
+import type { PlanControl } from "@codegen/plan";
+
+const PARAM_MESSAGE_BATCH = "parameterBatch";
+const PARAM_MESSAGE_SINGLE = "parameter";
+
+const makeParameterKey = (nodeId: string, controlId: string): string =>
+  `${nodeId}:${controlId}`;
 
 type AudioEngineState = "unsupported" | "idle" | "starting" | "running" | "error";
 
@@ -65,13 +72,15 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
   const [graph, setGraph] = useState<PatchGraph>(() => createGraph());
   const [artifact, setArtifact] = useState<CompileResult | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [parameterBindings, setParameterBindings] = useState<PlanControl[]>([]);
+  const [parameterValues, setParameterValues] = useState<Record<string, number>>({});
   const viewModel = useMemo(() => graphViewModelFromGraph(graph), [graph]);
   const validation = useMemo(() => validateGraph(graph), [graph]);
   const audioSupported =
     typeof window !== "undefined" &&
     (typeof window.AudioContext === "function" ||
-      typeof (window as unknown as { webkitAudioContext?: typeof AudioContext })
-        .webkitAudioContext === "function");
+      typeof (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext ===
+        "function");
   const [audioState, setAudioState] = useState<AudioEngineState>(
     audioSupported ? "idle" : "unsupported"
   );
@@ -79,6 +88,16 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
   const audioContextRef = useRef<AudioContext | null>(null);
   const workletHandleRef = useRef<WorkletHandle | null>(null);
   const portListenerRef = useRef<((event: MessageEvent) => void) | null>(null);
+  const parameterBindingsRef = useRef<PlanControl[]>([]);
+  const parameterValuesRef = useRef<Record<string, number>>({});
+
+  useEffect(() => {
+    parameterBindingsRef.current = parameterBindings;
+  }, [parameterBindings]);
+
+  useEffect(() => {
+    parameterValuesRef.current = parameterValues;
+  }, [parameterValues]);
 
   const addNodeToGraph = useCallback((node: NodeDescriptor) => {
     setGraph((prev) => addNode(prev, node));
@@ -102,6 +121,22 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
   const updateNodeParameter = useCallback(
     (nodeId: string, parameterId: string, value: number) => {
       setGraph((prev) => updateGraphNodeParameter(prev, nodeId, parameterId, value));
+      setParameterValues((prev) => ({
+        ...prev,
+        [makeParameterKey(nodeId, parameterId)]: value
+      }));
+
+      const binding = parameterBindingsRef.current.find(
+        (entry) => entry.nodeId === nodeId && entry.controlId === parameterId
+      );
+      const handle = workletHandleRef.current;
+      if (binding && handle) {
+        handle.node.port.postMessage({
+          type: PARAM_MESSAGE_SINGLE,
+          index: binding.index,
+          value
+        });
+      }
     },
     []
   );
@@ -188,6 +223,19 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
     const result = await compilePatch(graph);
     await stopAudioInternal();
     setArtifact(result);
+    setParameterBindings(result.parameterBindings);
+
+    setParameterValues((prev) => {
+      const next = { ...prev };
+      for (const binding of result.parameterBindings) {
+        const node = graph.nodes.find((candidate) => candidate.id === binding.nodeId);
+        if (!node) continue;
+        next[makeParameterKey(binding.nodeId, binding.controlId)] =
+          node.parameters[binding.controlId] ?? binding.defaultValue;
+      }
+      return next;
+    });
+
     if (audioSupported) {
       setAudioState("idle");
       setAudioError(null);
@@ -255,6 +303,15 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       handle.node.port.start?.();
       portListenerRef.current = listener;
       handle.node.connect(context.destination);
+
+      if (artifact.parameterBindings.length > 0) {
+        const values = artifact.parameterBindings.map((binding) => {
+          const key = makeParameterKey(binding.nodeId, binding.controlId);
+          const value = parameterValuesRef.current[key] ?? binding.defaultValue;
+          return { index: binding.index, value };
+        });
+        handle.node.port.postMessage({ type: PARAM_MESSAGE_BATCH, values });
+      }
 
       if (context.state === "suspended") {
         await context.resume();

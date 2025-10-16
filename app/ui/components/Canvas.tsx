@@ -90,6 +90,7 @@ export function Canvas(): JSX.Element {
     addNode,
     connectNodes,
     updateNodePosition,
+    updateNodeParameter,
     selectedNodeId,
     selectNode
   } = usePatch();
@@ -308,6 +309,13 @@ export function Canvas(): JSX.Element {
     [pendingConnection, connectNodes]
   );
 
+  const handleControlChange = useCallback(
+    (nodeId: string, controlId: string, value: number) => {
+      updateNodeParameter(nodeId, controlId, value);
+    },
+    [updateNodeParameter]
+  );
+
   return (
     <section className="canvas-pane" aria-label="Patch editor">
       <header className="canvas-header">
@@ -349,6 +357,7 @@ export function Canvas(): JSX.Element {
               onDragEnd={handleDragEnd}
               onOutputPointerDown={handleOutputPointerDown}
               onInputPointerUp={handleInputPointerUp}
+              onControlChange={handleControlChange}
             />
           );
         })}
