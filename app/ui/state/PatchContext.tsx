@@ -210,7 +210,9 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
         audioContextRef.current = context;
       }
 
+      console.info("[MaxWasm] Creating audio worklet node");
       const handle = await loadPatchProcessor(context, artifact);
+      console.info("[MaxWasm] Worklet node created");
       workletHandleRef.current = handle;
       const listener = (event: MessageEvent): void => {
         const data = event.data;
@@ -222,6 +224,7 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
             typeof data.message === "string"
               ? data.message
               : "Audio processor reported an error.";
+          console.error("[MaxWasm] Worklet error", message);
           setAudioState("error");
           setAudioError(message);
           void (async () => {
@@ -241,10 +244,12 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
         await context.resume();
       }
 
+      console.info("[MaxWasm] Audio rendering started");
       setAudioState("running");
     } catch (error) {
       const message =
         error instanceof Error ? error.message : String(error);
+      console.error("[MaxWasm] Failed to start audio", error);
       setAudioState("error");
       setAudioError(message);
       await stopAudioInternal();
