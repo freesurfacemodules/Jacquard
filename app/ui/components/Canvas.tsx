@@ -89,6 +89,9 @@ export function Canvas(): JSX.Element {
     viewModel,
     addNode,
     connectNodes,
+    removeNode,
+    removeConnectionsFromPort,
+    removeConnectionsToPort,
     updateNodePosition,
     updateNodeParameter,
     selectedNodeId,
@@ -262,6 +265,13 @@ export function Canvas(): JSX.Element {
       event: React.PointerEvent<HTMLButtonElement>
     ) => {
       event.stopPropagation();
+      if (event.altKey) {
+        removeConnectionsFromPort(nodeId, portId);
+        setPendingConnection(null);
+        setPointerPosition(null);
+        setConnectionError(null);
+        return;
+      }
       const node = nodesById.get(nodeId);
       const position = nodePositions.get(nodeId);
       if (!node || !position) {
@@ -277,7 +287,7 @@ export function Canvas(): JSX.Element {
       setPointerPosition(anchor);
       setConnectionError(null);
     },
-    [nodesById, nodePositions]
+    [nodesById, nodePositions, removeConnectionsFromPort]
   );
 
   const handleInputPointerUp = useCallback(
@@ -288,6 +298,13 @@ export function Canvas(): JSX.Element {
       event: React.PointerEvent<HTMLButtonElement>
     ) => {
       event.stopPropagation();
+      if (event.altKey) {
+        removeConnectionsToPort(nodeId, portId);
+        setPendingConnection(null);
+        setPointerPosition(null);
+        setConnectionError(null);
+        return;
+      }
       if (!pendingConnection) {
         return;
       }
@@ -307,8 +324,40 @@ export function Canvas(): JSX.Element {
         setConnectionError(message);
       }
     },
-    [pendingConnection, connectNodes]
+    [pendingConnection, connectNodes, removeConnectionsToPort]
   );
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (!selectedNodeId) {
+        return;
+      }
+      if (event.key !== "Delete" && event.key !== "Backspace") {
+        return;
+      }
+
+      const target = event.target as HTMLElement | null;
+      if (target) {
+        const tagName = target.tagName;
+        const editable =
+          target.isContentEditable ||
+          tagName === "INPUT" ||
+          tagName === "TEXTAREA" ||
+          tagName === "SELECT";
+        if (editable) {
+          return;
+        }
+      }
+
+      event.preventDefault();
+      removeNode(selectedNodeId);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [selectedNodeId, removeNode]);
 
   const handleControlChange = useCallback(
     (nodeId: string, controlId: string, value: number) => {

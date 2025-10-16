@@ -4,6 +4,8 @@ import {
   addNode,
   connectNodes,
   removeConnection,
+  removeConnectionsFromPort,
+  removeConnectionsToPort,
   removeNode,
   updateNodePosition,
   updateNodeParameter
@@ -196,6 +198,75 @@ describe("graph", () => {
     expect(graph.connections).toHaveLength(1);
     expect(updated.nodes.map((node) => node.id)).toEqual(["out1"]);
     expect(updated.connections).toHaveLength(0);
+  });
+
+  it("removes connections from a specific output port", () => {
+    const osc = instantiateNode("osc.sine", "osc1");
+    const mixer = instantiateNode("mixer.stereo", "mix1");
+    const out = instantiateNode("io.output", "out1");
+
+    let graph = createGraph();
+    graph = addNode(graph, osc);
+    graph = addNode(graph, mixer);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: osc.id,
+      fromPortId: "out",
+      toNodeId: mixer.id,
+      toPortId: "ch1"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: osc.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    const pruned = removeConnectionsFromPort(graph, osc.id, "out");
+
+    expect(pruned.connections).toHaveLength(0);
+    expect(graph.connections).toHaveLength(2);
+  });
+
+  it("removes connections targeting a specific input port", () => {
+    const osc = instantiateNode("osc.sine", "osc1");
+    const gain = instantiateNode("utility.gain", "gain1");
+    const out = instantiateNode("io.output", "out1");
+
+    let graph = createGraph();
+    graph = addNode(graph, osc);
+    graph = addNode(graph, gain);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: osc.id,
+      fromPortId: "out",
+      toNodeId: gain.id,
+      toPortId: "in"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: gain.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: osc.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "right"
+    });
+
+    const pruned = removeConnectionsToPort(graph, out.id, "right");
+
+    expect(pruned.connections).toHaveLength(2);
+    expect(pruned.connections.every((connection) => connection.to.port !== "right")).toBe(
+      true
+    );
   });
 
   it("updates node parameters immutably", () => {

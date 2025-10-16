@@ -116,6 +116,41 @@ export function removeConnection(
   };
 }
 
+export function removeConnectionsFromPort(
+  graph: PatchGraph,
+  nodeId: string,
+  portId: string
+): PatchGraph {
+  const connections = graph.connections.filter(
+    (connection) =>
+      connection.from.node !== nodeId || connection.from.port !== portId
+  );
+  if (connections.length === graph.connections.length) {
+    return graph;
+  }
+  return {
+    ...graph,
+    connections
+  };
+}
+
+export function removeConnectionsToPort(
+  graph: PatchGraph,
+  nodeId: string,
+  portId: string
+): PatchGraph {
+  const connections = graph.connections.filter(
+    (connection) => connection.to.node !== nodeId || connection.to.port !== portId
+  );
+  if (connections.length === graph.connections.length) {
+    return graph;
+  }
+  return {
+    ...graph,
+    connections
+  };
+}
+
 export function updateNodePosition(
   graph: PatchGraph,
   nodeId: string,

@@ -13,6 +13,8 @@ import {
   connectNodes as connectGraphNodes,
   createGraph,
   removeConnection,
+  removeConnectionsFromPort as removeGraphConnectionsFromPort,
+  removeConnectionsToPort as removeGraphConnectionsToPort,
   removeNode as removeGraphNode,
   updateNodePosition as updateGraphNodePosition,
   updateNodeParameter as updateGraphNodeParameter
@@ -87,6 +89,8 @@ export interface PatchController {
   connectNodes(params: ConnectNodesParams): void;
   disconnectConnection(connectionId: string): void;
   removeNode(nodeId: string): void;
+  removeConnectionsFromPort(nodeId: string, portId: string): void;
+  removeConnectionsToPort(nodeId: string, portId: string): void;
   updateNodePosition(nodeId: string, position: NodePosition): void;
   updateNodeParameter(nodeId: string, parameterId: string, value: number): void;
   selectedNodeId: string | null;
@@ -253,6 +257,22 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
         options.selectNode = null;
       }
       applyGraphChange(nextGraph, options);
+    },
+    [applyGraphChange]
+  );
+
+  const removeConnectionsFromPort = useCallback(
+    (nodeId: string, portId: string) => {
+      const nextGraph = removeGraphConnectionsFromPort(graphRef.current, nodeId, portId);
+      applyGraphChange(nextGraph, { changeType: "topology" });
+    },
+    [applyGraphChange]
+  );
+
+  const removeConnectionsToPort = useCallback(
+    (nodeId: string, portId: string) => {
+      const nextGraph = removeGraphConnectionsToPort(graphRef.current, nodeId, portId);
+      applyGraphChange(nextGraph, { changeType: "topology" });
     },
     [applyGraphChange]
   );
@@ -624,6 +644,8 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       connectNodes,
       disconnectConnection,
       removeNode: removeNodeFromGraph,
+      removeConnectionsFromPort,
+      removeConnectionsToPort,
       updateNodePosition,
       updateNodeParameter,
       selectedNodeId,
@@ -649,6 +671,8 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       connectNodes,
       disconnectConnection,
       removeNodeFromGraph,
+      removeConnectionsFromPort,
+      removeConnectionsToPort,
       updateNodePosition,
       updateNodeParameter,
       selectedNodeId,
