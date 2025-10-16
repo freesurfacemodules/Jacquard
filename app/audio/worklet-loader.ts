@@ -64,7 +64,7 @@ export async function loadPatchProcessor(
 
 async function ensureWorkletModule(context: AudioContext): Promise<void> {
   const moduleUrl = new URL(
-    "./processors/patch-processor.ts",
+    "./processors/patch-processor.js",
     import.meta.url
   );
   if (!context.audioWorklet) {
