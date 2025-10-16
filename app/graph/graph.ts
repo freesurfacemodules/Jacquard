@@ -2,6 +2,7 @@ import { nanoid } from "@codegen/utils/nanoid";
 import {
   Connection,
   NodeDescriptor,
+  NodePosition,
   PatchGraph,
   PortDescriptor
 } from "./types";
@@ -112,6 +113,47 @@ export function removeConnection(
   return {
     ...graph,
     connections
+  };
+}
+
+export function updateNodePosition(
+  graph: PatchGraph,
+  nodeId: string,
+  position: NodePosition
+): PatchGraph {
+  let changed = false;
+  const nodes = graph.nodes.map((node) => {
+    if (node.id !== nodeId) {
+      return node;
+    }
+
+    const currentPosition = node.metadata?.position;
+    if (
+      currentPosition &&
+      currentPosition.x === position.x &&
+      currentPosition.y === position.y
+    ) {
+      return node;
+    }
+
+    changed = true;
+
+    return {
+      ...node,
+      metadata: {
+        ...(node.metadata ?? {}),
+        position: { x: position.x, y: position.y }
+      }
+    };
+  });
+
+  if (!changed) {
+    return graph;
+  }
+
+  return {
+    ...graph,
+    nodes
   };
 }
 

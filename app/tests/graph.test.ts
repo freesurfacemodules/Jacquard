@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { createGraph, addNode, connectNodes } from "@graph/graph";
+import {
+  createGraph,
+  addNode,
+  connectNodes,
+  removeConnection,
+  updateNodePosition
+} from "@graph/graph";
 import { validateGraph } from "@graph/validation";
 import { instantiateNode } from "@dsp/nodes";
 import { nanoid } from "@codegen/utils/nanoid";
@@ -43,6 +49,31 @@ describe("graph", () => {
       from: { node: "osc1", port: "out" },
       to: { node: "out1", port: "left" }
     });
+  });
+
+  it("prevents duplicate connections", () => {
+    let graph = createGraph();
+    const osc = instantiateNode("osc.sine", "osc1");
+    const out = instantiateNode("io.output", "out1");
+
+    graph = addNode(graph, osc);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: osc.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    expect(() =>
+      connectNodes(graph, {
+        fromNodeId: osc.id,
+        fromPortId: "out",
+        toNodeId: out.id,
+        toPortId: "left"
+      })
+    ).toThrow(/Duplicate connection/);
   });
 
   it("validates acyclic graphs", () => {
@@ -113,5 +144,33 @@ describe("graph", () => {
     expect(result.issues.some((issue) => issue.code === "CYCLE_DETECTED")).toBe(
       true
     );
+  });
+
+  it("updates node position immutably", () => {
+    const osc = instantiateNode("osc.sine", "osc1");
+    const graph = addNode(createGraph(), osc);
+    const updated = updateNodePosition(graph, osc.id, { x: 120, y: 200 });
+
+    expect(graph.nodes[0].metadata?.position).toBeUndefined();
+    expect(updated.nodes[0].metadata?.position).toEqual({ x: 120, y: 200 });
+  });
+
+  it("removes connections without mutating the original graph", () => {
+    const osc = instantiateNode("osc.sine", "osc1");
+    const out = instantiateNode("io.output", "out1");
+
+    const graphWithNodes = addNode(addNode(createGraph(), osc), out);
+    const graphWithConnection = connectNodes(graphWithNodes, {
+      fromNodeId: osc.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    const connectionId = graphWithConnection.connections[0].id;
+    const trimmed = removeConnection(graphWithConnection, connectionId);
+
+    expect(graphWithConnection.connections).toHaveLength(1);
+    expect(trimmed.connections).toHaveLength(0);
   });
 });

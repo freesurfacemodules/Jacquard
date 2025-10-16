@@ -38,6 +38,7 @@ export function instantiateNode(kind: string, id: string): NodeDescriptor {
     label: manifest.label,
     inputs: manifest.inputs.map((port) => ({ ...port })),
     outputs: manifest.outputs.map((port) => ({ ...port })),
-    parameters: { ...(manifest.defaultParams ?? {}) }
+    parameters: { ...(manifest.defaultParams ?? {}) },
+    metadata: {}
   };
 }

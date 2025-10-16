@@ -8,12 +8,23 @@ import {
   useRef,
   useState
 } from "react";
-import { addNode, createGraph } from "@graph/graph";
+import {
+  addNode,
+  connectNodes as connectGraphNodes,
+  createGraph,
+  removeConnection,
+  updateNodePosition as updateGraphNodePosition
+} from "@graph/graph";
 import {
   GraphViewModel,
   graphViewModelFromGraph
 } from "@graph/view-model";
-import { NodeDescriptor, PatchGraph } from "@graph/types";
+import {
+  ConnectNodesParams,
+  NodeDescriptor,
+  NodePosition,
+  PatchGraph
+} from "@graph/types";
 import { GraphValidationResult, validateGraph } from "@graph/validation";
 import { compilePatch, CompileResult } from "@compiler/compiler";
 import {
@@ -39,6 +50,9 @@ export interface PatchController {
   compile(): Promise<CompileResult>;
   audio: AudioControls;
   addNode(node: NodeDescriptor): void;
+  connectNodes(params: ConnectNodesParams): void;
+  disconnectConnection(connectionId: string): void;
+  updateNodePosition(nodeId: string, position: NodePosition): void;
 }
 
 const PatchContext = createContext<PatchController | null>(null);
@@ -64,6 +78,21 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
   const addNodeToGraph = useCallback((node: NodeDescriptor) => {
     setGraph((prev) => addNode(prev, node));
   }, []);
+
+  const connectNodes = useCallback((params: ConnectNodesParams) => {
+    setGraph((prev) => connectGraphNodes(prev, params));
+  }, []);
+
+  const disconnectConnection = useCallback((connectionId: string) => {
+    setGraph((prev) => removeConnection(prev, connectionId));
+  }, []);
+
+  const updateNodePosition = useCallback(
+    (nodeId: string, position: NodePosition) => {
+      setGraph((prev) => updateGraphNodePosition(prev, nodeId, position));
+    },
+    []
+  );
 
   const stopAudioInternal = useCallback(async () => {
     const handle = workletHandleRef.current;
@@ -236,7 +265,10 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
         start: startAudio,
         stop: stopAudio
       },
-      addNode: addNodeToGraph
+      addNode: addNodeToGraph,
+      connectNodes,
+      disconnectConnection,
+      updateNodePosition
     }),
     [
       graph,
@@ -249,7 +281,10 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       audioSupported,
       startAudio,
       stopAudio,
-      addNodeToGraph
+      addNodeToGraph,
+      connectNodes,
+      disconnectConnection,
+      updateNodePosition
     ]
   );
 

@@ -3,6 +3,16 @@ export type PortId = string;
 
 export type DataType = "audio";
 
+export interface NodePosition {
+  x: number;
+  y: number;
+}
+
+export interface NodeMetadata {
+  position?: NodePosition;
+  [key: string]: unknown;
+}
+
 export interface PortDescriptor {
   id: PortId;
   name: string;
@@ -16,7 +26,7 @@ export interface NodeDescriptor {
   inputs: PortDescriptor[];
   outputs: PortDescriptor[];
   parameters: Record<string, number>;
-  metadata?: Record<string, unknown>;
+  metadata?: NodeMetadata;
 }
 
 export interface Connection {
