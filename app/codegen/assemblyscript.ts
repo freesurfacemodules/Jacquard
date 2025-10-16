@@ -45,6 +45,7 @@ export function emitAssemblyScript(
     `export const OVERSAMPLING: i32 = ${graph.oversampling};`,
     "",
     "const INV_SAMPLE_RATE: f32 = 1.0 / SAMPLE_RATE;",
+    "const INV_SAMPLE_RATE_OVERSAMPLED: f32 = INV_SAMPLE_RATE / OVERSAMPLING as f32;",
     "const TAU: f32 = 6.283185307179586;",
     "const FREQ_C4: f32 = 261.6255653005986;"
   ].join("\n");
@@ -186,45 +187,32 @@ const DOWNSAMPLE_TAPS = [
 ] as Array<f32>;
 const DOWNSAMPLE_TAP_COUNT: i32 = DOWNSAMPLE_TAPS.length;
 
-class Downsampler {
-  private history: StaticArray<f32>;
-  private position: i32 = 0;
-  private factor: i32;
-  private last: f32 = 0.0;
-
-  constructor(factor: i32) {
-    this.factor = factor;
-    this.history = new StaticArray<f32>(DOWNSAMPLE_TAP_COUNT);
-    this.reset();
-  }
+class HalfbandDownsampler {
+  private history: StaticArray<f32> = new StaticArray<f32>(DOWNSAMPLE_TAP_COUNT);
+  private offset: i32 = 0;
+  private toggle: i32 = 0;
 
   reset(): void {
     for (let i = 0; i < DOWNSAMPLE_TAP_COUNT; i++) {
       unchecked(this.history[i] = 0.0);
     }
-    this.position = 0;
-    this.last = 0.0;
+    this.offset = 0;
+    this.toggle = 0;
   }
 
-  push(sample: f32): void {
-    this.last = sample;
-    if (this.factor === 1) {
-      return;
+  push(sample: f32): bool {
+    unchecked(this.history[this.offset] = sample);
+    this.offset++;
+    if (this.offset === DOWNSAMPLE_TAP_COUNT) {
+      this.offset = 0;
     }
-    let index = this.position - 1;
-    if (index < 0) {
-      index = DOWNSAMPLE_TAP_COUNT - 1;
-    }
-    this.position = index;
-    unchecked(this.history[index] = sample);
+    this.toggle ^= 1;
+    return this.toggle === 0;
   }
 
   output(): f32 {
-    if (this.factor === 1) {
-      return this.last;
-    }
     let acc: f32 = 0.0;
-    let index = this.position;
+    let index = this.offset;
     for (let i = 0; i < DOWNSAMPLE_TAP_COUNT; i++) {
       acc += unchecked(DOWNSAMPLE_TAPS[i]) * unchecked(this.history[index]);
       index++;
@@ -233,6 +221,60 @@ class Downsampler {
       }
     }
     return acc;
+  }
+}
+
+class Downsampler {
+  private factor: i32;
+  private stages: Array<HalfbandDownsampler> = new Array<HalfbandDownsampler>();
+  private last: f32 = 0.0;
+
+  constructor(factor: i32) {
+    this.factor = factor;
+    this.reset();
+  }
+
+  reset(): void {
+    this.last = 0.0;
+    this.stages.length = 0;
+    if (this.factor > 1) {
+      let stageFactor = this.factor;
+      while (stageFactor > 1) {
+        if ((stageFactor & 1) !== 0) {
+          throw new Error("Downsampler factor must be a power of two.");
+        }
+        const stage = new HalfbandDownsampler();
+        stage.reset();
+        this.stages.push(stage);
+        stageFactor >>= 1;
+      }
+    }
+  }
+
+  push(sample: f32): void {
+    if (this.stages.length === 0) {
+      this.last = sample;
+      return;
+    }
+    let value = sample;
+    let produced = true;
+    for (let i = 0; i < this.stages.length; i++) {
+      const stage = this.stages[i];
+      if (stage.push(value)) {
+        value = stage.output();
+        produced = true;
+      } else {
+        produced = false;
+        break;
+      }
+    }
+    if (produced) {
+      this.last = value;
+    }
+  }
+
+  output(): f32 {
+    return this.last;
   }
 }
 `;

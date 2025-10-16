@@ -30,8 +30,8 @@ describe("code generation", () => {
 
     expect(source).toContain("class SineOsc");
     expect(source).toContain("node_osc1.step");
-    expect(source).toContain("store<f32>(ptrL");
-    expect(source).toContain("store<f32>(ptrR");
+    expect(source).toContain("pushOutputSamples(outLeft, outRight)");
+    expect(source).toContain("INV_SAMPLE_RATE_OVERSAMPLED");
   });
 
   it("throws when graph validation fails", () => {
