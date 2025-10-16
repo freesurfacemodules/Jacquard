@@ -129,10 +129,10 @@ type NodeManifest = {
 1. **User edits patch** in the node editor.
 2. **Validate graph** (acyclic except declared feedback via delay nodes).
 3. **Lower to IR**: topologically sorted execution schedule; port indices assigned.
-4. **Generate AssemblyScript**: single file containing:
+4. **Generate AssemblyScript**: compose a single module by stitching together the node-specific AssemblyScript snippets declared in the DSP library, plus the shared process scaffolding:
 
-   * Node structs/state
-   * Process function for one **oversampled substep**
+   * Node helper classes/state taken from each manifest bundle
+   * Per-node processing bodies emitted in topological order
    * Block renderer that loops `blockSize × oversample`
 5. **Compile** AS→Wasm in the **main thread** (or a Worker) using `asc`.
 6. **Load** Wasm module in **AudioWorkletProcessor** via `WebAssembly.compile` transfer or `instantiate`.
@@ -196,63 +196,62 @@ The **delay** ensures well-defined causality.
 
 ## 6) DSP component model
 
-### 6.1 AssemblyScript node interface (generated)
+### 6.0 Source layout
+
+Nodes live under `app/dsp/nodes/<category>/<name>/`. Each node bundle contains:
+
+* `manifest.ts` — describes ports, default parameters, appearance metadata, and provides an `emit()` function that writes the AssemblyScript body for the node when the code generator visits it.
+* Optional `*.as` files (imported with Vite’s `?raw` modifier) — reusable AssemblyScript helpers such as oscillator classes or filter kernels that the manifest can inject into the generated module.
+
+`app/dsp/library.ts` registers every manifest and exposes helpers (`instantiateNode`, `getNodeImplementation`) shared by the UI and the code generator. Extending the DSP library means dropping a new folder with these files and re-exporting it from the library list.
+
+### 6.1 AssemblyScript node helpers
 
 ```ts
-// Scalar helpers
-@inline export function hzFromPitch(p: f32, fC4: f32): f32 { return fC4 * Mathf.pow(2.0, p); }
+// app/dsp/nodes/oscillator/sine/sine.as
+export class SineOsc {
+  private phase: f32 = 0.0;
 
-@unmanaged
-class SineOsc {
-  phase: f32;
-  // constructor inlined by codegen
-  static init(): SineOsc { let s = changetype<SineOsc>(memory.data(sizeof<SineOsc>())); s.phase = 0.0; return s; }
-
-  // process one oversample tick
-  @inline step(freq: f32, dt: f32): f32 {
-    this.phase = this.phase + 2.0 * Mathf.PI * freq * dt;
-    if (this.phase >= 2.0 * Mathf.PI) this.phase -= 2.0 * Mathf.PI;
+  step(frequency: f32): f32 {
+    const phaseDelta: f32 = frequency * INV_SAMPLE_RATE * TAU;
+    this.phase += phaseDelta;
+    if (this.phase >= TAU) {
+      this.phase -= TAU;
+    }
     return Mathf.sin(this.phase);
   }
 }
 ```
 
+The paired manifest (`manifest.ts`) imports this snippet (`import sineOsc from "./sine.as?raw"`) and registers it as a declaration with the generator. During codegen the emitter adds the declaration once, allocates `const node_<id> = new SineOsc();` for each instance, and writes the per-sample logic referencing `node_<id>.step(...)`.
+
 > **Design constraints**
 >
-> * `@unmanaged` structs to avoid GC.
-> * `StaticArray<f32>` for buffers.
-> * Use `unchecked()` array accesses in tight loops (bounds checks removed).
+> * Helpers avoid dynamic allocation; persistent state is held in module-level constants generated alongside the process loop.
+> * Ports are audio-rate floats. Manifests provide default parameter values and the emitter decides how to fold constants vs. live wires.
+> * Emitters use shared utilities (`indentLines`, `numberLiteral`, `buildInputExpression`) so output is consistent and readable.
 
-### 6.2 Example standard nodes (manifests)
+### 6.2 Example standard nodes
 
 * **osc.sine**
 
-  * Inputs: `pitch`
-  * Outputs: `out`
-  * Notes: frequency = `hzFromPitch(pitch, fC4)`; multiply by `oversampleMul` through `dt = 1/(fs*OS)`.
+  * Manifest declares one `pitch` input and one `out` output with default pitch 0.
+  * AssemblyScript snippet defines the `SineOsc` class; emitter instantiates it and writes its output to connected wires or auto-route buffers.
 
-* **filter.biquad**
+* **mixer.stereo**
 
-  * Inputs: `in`, `cut` (pitch-semantics), `Q`
-  * Outputs: `out`
-  * Notes: recompute coefficients if target differs; coefficient smoothing recommended.
+  * Manifest exposes four mono inputs with per-channel gain/pan parameters and two outputs (`left`, `right`).
+  * Emitter accumulates gain/pan-scaled sums for each channel and fans results into downstream wires or the auto-routing buffers when outputs are unconnected.
 
-* **delay.ddl**
+* **io.output**
 
-  * Inputs: `in`, `time` (seconds or pitch-mapped beats in later versions)
-  * Outputs: `out`
-  * Attributes: `maxDelaySec`
-  * Notes: circular buffer at `fs'`; write/read pointers advanced per substep.
-
-* **math.add/mul/clamp** etc.: single-instruction nodes, SIMD-friendly in block loops.
+  * Terminal node writes the current left/right accumulators into the linear-memory buffers pointed to by the AudioWorklet. Auto-routing fills in defaults when its ports are left open.
 
 ### 6.3 Parameters vs inputs
 
-* **All ports** are audio-rate. **Parameters** are metadata that:
-
-  * Show up in the UI inspector with widgets.
-  * Receive event ramps/smoothing internally.
-  * Are compiled to **per-sample scalars** merged into the graph (constant-fold when static).
+* **All ports** carry audio-rate floats. **Parameters** are metadata-only default values that surface in the UI inspector.
+* Parameters get injected into the generated code as scalar literals; when a port is unconnected the emitter falls back to the parameter default.
+* Runtime smoothing/ramping is handled in the generated Wasm by converting parameter events into per-sample scalars (future work includes bringing back the SAB event queue mentioned earlier).
 
 ---
 
