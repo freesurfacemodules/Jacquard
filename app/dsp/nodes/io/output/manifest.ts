@@ -46,8 +46,7 @@ export const outputNode: NodeImplementation = {
         "{",
         helpers.indentLines(`let outLeft: f32 = ${leftExpr};`, 1),
         helpers.indentLines(`let outRight: f32 = ${rightExpr};`, 1),
-        helpers.indentLines("store<f32>(ptrL + (n << 2), outLeft);", 1),
-        helpers.indentLines("store<f32>(ptrR + (n << 2), outRight);", 1),
+        helpers.indentLines("pushOutputSamples(outLeft, outRight);", 1),
         "}"
       ].join("\n");
     }

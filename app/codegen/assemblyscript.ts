@@ -72,18 +72,22 @@ export function emitAssemblyScript(
     );
   }
 
+  processBodyLines.push(
+    indentLines("for (let step = 0; step < OVERSAMPLING; step++) {", 1)
+  );
+
   if (plan.wires.length > 0) {
     const wireLines = plan.wires.map(
       (wire) => `let ${wire.varName}: f32 = 0.0;`
     );
-    processBodyLines.push(indentLines(wireLines.join("\n")));
+    processBodyLines.push(indentLines(wireLines.join("\n"), 2));
   }
 
   if (autoRoute.left) {
-    processBodyLines.push(indentLines(`let ${AUTO_LEFT_VAR}: f32 = 0.0;`));
+    processBodyLines.push(indentLines(`let ${AUTO_LEFT_VAR}: f32 = 0.0;`, 2));
   }
   if (autoRoute.right) {
-    processBodyLines.push(indentLines(`let ${AUTO_RIGHT_VAR}: f32 = 0.0;`));
+    processBodyLines.push(indentLines(`let ${AUTO_RIGHT_VAR}: f32 = 0.0;`, 2));
   }
 
   for (const planNode of plan.nodes) {
@@ -100,9 +104,23 @@ export function emitAssemblyScript(
     );
 
     if (snippet && snippet.trim().length > 0) {
-      processBodyLines.push(indentLines(snippet, 1));
+      processBodyLines.push(indentLines(snippet, 2));
     }
   }
+
+  processBodyLines.push(indentLines("}", 1));
+  processBodyLines.push(
+    indentLines("const outLeft: f32 = downsampleLeft.output();", 1)
+  );
+  processBodyLines.push(
+    indentLines("const outRight: f32 = downsampleRight.output();", 1)
+  );
+  processBodyLines.push(
+    indentLines("store<f32>(ptrL + (n << 2), outLeft);", 1)
+  );
+  processBodyLines.push(
+    indentLines("store<f32>(ptrR + (n << 2), outRight);", 1)
+  );
 
   processBodyLines.push("}");
 
@@ -130,6 +148,94 @@ export function emitAssemblyScript(
 
 const AUTO_LEFT_VAR = "auto_out_left";
 const AUTO_RIGHT_VAR = "auto_out_right";
+const DOWNSAMPLER_DECLARATION = `
+const DOWNSAMPLE_TAPS = [
+  -0.0002176010,
+  0.0,
+  0.0011521409,
+  0.0,
+  -0.0041649918,
+  0.0,
+  0.0115624329,
+  0.0,
+  -0.0257889088,
+  0.0,
+  0.0492123309,
+  0.0,
+  -0.0850986623,
+  0.0,
+  0.1380523615,
+  0.0,
+  0.7956409454,
+  0.0,
+  0.1380523615,
+  0.0,
+  -0.0850986623,
+  0.0,
+  0.0492123309,
+  0.0,
+  -0.0257889088,
+  0.0,
+  0.0115624329,
+  0.0,
+  -0.0041649918,
+  0.0,
+  0.0011521409,
+  0.0,
+  -0.0002176010
+] as Array<f32>;
+const DOWNSAMPLE_TAP_COUNT: i32 = DOWNSAMPLE_TAPS.length;
+
+class Downsampler {
+  private history: StaticArray<f32>;
+  private position: i32 = 0;
+  private factor: i32;
+  private last: f32 = 0.0;
+
+  constructor(factor: i32) {
+    this.factor = factor;
+    this.history = new StaticArray<f32>(DOWNSAMPLE_TAP_COUNT);
+    this.reset();
+  }
+
+  reset(): void {
+    for (let i = 0; i < DOWNSAMPLE_TAP_COUNT; i++) {
+      unchecked(this.history[i] = 0.0);
+    }
+    this.position = 0;
+    this.last = 0.0;
+  }
+
+  push(sample: f32): void {
+    this.last = sample;
+    if (this.factor === 1) {
+      return;
+    }
+    let index = this.position - 1;
+    if (index < 0) {
+      index = DOWNSAMPLE_TAP_COUNT - 1;
+    }
+    this.position = index;
+    unchecked(this.history[index] = sample);
+  }
+
+  output(): f32 {
+    if (this.factor === 1) {
+      return this.last;
+    }
+    let acc: f32 = 0.0;
+    let index = this.position;
+    for (let i = 0; i < DOWNSAMPLE_TAP_COUNT; i++) {
+      acc += unchecked(DOWNSAMPLE_TAPS[i]) * unchecked(this.history[index]);
+      index++;
+      if (index === DOWNSAMPLE_TAP_COUNT) {
+        index = 0;
+      }
+    }
+    return acc;
+  }
+}
+`;
 
 function createEmitHelpers(autoRoute: AutoRoute): NodeEmitHelpers {
   return {
@@ -194,6 +300,8 @@ function collectParameterSection(plan: ExecutionPlan): string {
 function collectAssemblyDeclarations(): string {
   const declarations = new Set<string>();
 
+  declarations.add(DOWNSAMPLER_DECLARATION.trim());
+
   for (const implementation of nodeImplementations) {
     const snippet = implementation.assembly?.declarations;
     if (snippet && snippet.trim().length > 0) {
@@ -209,20 +317,30 @@ function collectAssemblyDeclarations(): string {
 }
 
 function collectStateDeclarations(plan: ExecutionPlan): string {
+  const lines: string[] = [];
+  lines.push("const downsampleLeft = new Downsampler(OVERSAMPLING);");
+  lines.push("const downsampleRight = new Downsampler(OVERSAMPLING);");
+  lines.push("");
+  lines.push("@inline function pushOutputSamples(left: f32, right: f32): void {");
+  lines.push("  downsampleLeft.push(left);");
+  lines.push("  downsampleRight.push(right);");
+  lines.push("}");
+  lines.push("");
   const sineNodes = plan.nodes.filter(
     (planNode) => planNode.node.kind === "osc.sine"
   );
 
   if (sineNodes.length === 0) {
-    return "";
+    return lines.join("\n");
   }
 
-  return sineNodes
-    .map((planNode) => {
-      const identifier = sanitizeIdentifier(planNode.node.id);
-      return `const node_${identifier} = new SineOsc();`;
-    })
-    .join("\n");
+  const sineLines = sineNodes.map((planNode) => {
+    const identifier = sanitizeIdentifier(planNode.node.id);
+    return `const node_${identifier} = new SineOsc();`;
+  });
+
+  lines.push(...sineLines);
+  return lines.join("\n");
 }
 
 function buildInputExpression(
