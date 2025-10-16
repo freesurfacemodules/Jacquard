@@ -45,7 +45,7 @@ export function emitAssemblyScript(
     `export const OVERSAMPLING: i32 = ${graph.oversampling};`,
     "",
     "const INV_SAMPLE_RATE: f32 = 1.0 / SAMPLE_RATE;",
-    "const INV_SAMPLE_RATE_OVERSAMPLED: f32 = INV_SAMPLE_RATE / OVERSAMPLING as f32;",
+    "const INV_SAMPLE_RATE_OVERSAMPLED: f32 = INV_SAMPLE_RATE / (<f32>OVERSAMPLING);",
     "const TAU: f32 = 6.283185307179586;",
     "const FREQ_C4: f32 = 261.6255653005986;"
   ].join("\n");
@@ -226,7 +226,10 @@ class HalfbandDownsampler {
 
 class Downsampler {
   private factor: i32;
-  private stages: Array<HalfbandDownsampler> = new Array<HalfbandDownsampler>();
+  private stageCount: i32 = 0;
+  private stage0: HalfbandDownsampler = new HalfbandDownsampler();
+  private stage1: HalfbandDownsampler = new HalfbandDownsampler();
+  private stage2: HalfbandDownsampler = new HalfbandDownsampler();
   private last: f32 = 0.0;
 
   constructor(factor: i32) {
@@ -236,41 +239,46 @@ class Downsampler {
 
   reset(): void {
     this.last = 0.0;
-    this.stages.length = 0;
-    if (this.factor > 1) {
-      let stageFactor = this.factor;
-      while (stageFactor > 1) {
-        if ((stageFactor & 1) !== 0) {
-          throw new Error("Downsampler factor must be a power of two.");
-        }
-        const stage = new HalfbandDownsampler();
-        stage.reset();
-        this.stages.push(stage);
-        stageFactor >>= 1;
-      }
+    this.stage0.reset();
+    this.stage1.reset();
+    this.stage2.reset();
+    this.stageCount = 0;
+    if (this.factor >= 2) {
+      this.stageCount = 1;
+    }
+    if (this.factor >= 4) {
+      this.stageCount = 2;
+    }
+    if (this.factor >= 8) {
+      this.stageCount = 3;
     }
   }
 
   push(sample: f32): void {
-    if (this.stages.length === 0) {
+    if (this.stageCount === 0) {
       this.last = sample;
       return;
     }
     let value = sample;
-    let produced = true;
-    for (let i = 0; i < this.stages.length; i++) {
-      const stage = this.stages[i];
-      if (stage.push(value)) {
-        value = stage.output();
-        produced = true;
-      } else {
-        produced = false;
-        break;
+    if (this.stageCount >= 1) {
+      if (!this.stage0.push(value)) {
+        return;
       }
+      value = this.stage0.output();
     }
-    if (produced) {
-      this.last = value;
+    if (this.stageCount >= 2) {
+      if (!this.stage1.push(value)) {
+        return;
+      }
+      value = this.stage1.output();
     }
+    if (this.stageCount >= 3) {
+      if (!this.stage2.push(value)) {
+        return;
+      }
+      value = this.stage2.output();
+    }
+    this.last = value;
   }
 
   output(): f32 {

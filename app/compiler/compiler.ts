@@ -30,7 +30,7 @@ export async function compilePatch(graph: PatchGraph): Promise<CompileResult> {
     throw new Error("AssemblyScript compiler is unavailable in this environment.");
   }
 
-  const { binary } = await compileString(moduleSource, {
+  const { binary, stderr, stdout } = await compileString(moduleSource, {
     optimizeLevel: 3,
     shrinkLevel: 1,
     noAssert: true
@@ -41,7 +41,11 @@ export async function compilePatch(graph: PatchGraph): Promise<CompileResult> {
   });
 
   if (!binary) {
-    throw new Error("AssemblyScript compilation failed: no binary output");
+    const stderrText = typeof stderr?.toString === "function" ? stderr.toString() : "";
+    const stdoutText = typeof stdout?.toString === "function" ? stdout.toString() : "";
+    throw new Error(
+      `AssemblyScript compilation failed: no binary output.\nstdout: ${stdoutText}\nstderr: ${stderrText}`
+    );
   }
 
   const wasmBinary =
