@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePatch } from "../state/PatchContext";
 import { getNodeImplementation, instantiateNode } from "@dsp/nodes";
 import { nanoid } from "@codegen/utils/nanoid";
