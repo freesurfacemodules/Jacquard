@@ -15,7 +15,7 @@ export interface CompileResult {
 export async function compilePatch(graph: PatchGraph): Promise<CompileResult> {
   const moduleSource = emitAssemblyScript(graph);
 
-  const ascModule = await import("assemblyscript/dist/asc.js");
+  const ascModule = await import("assemblyscript/asc");
   const compileString = (ascModule as { compileString?: typeof import("assemblyscript/dist/asc.js").compileString }).compileString;
   if (!compileString) {
     throw new Error("AssemblyScript compiler is unavailable in this environment.");
