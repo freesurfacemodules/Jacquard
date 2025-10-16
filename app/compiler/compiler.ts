@@ -15,7 +15,12 @@ export interface CompileResult {
  * a Worker bridge will be wired up once the evaluator is ready.
  */
 export async function compilePatch(graph: PatchGraph): Promise<CompileResult> {
+  console.info("[MaxWasm] emitAssemblyScript begin");
   const { source: moduleSource, plan } = emitAssemblyScript(graph);
+  console.info("[MaxWasm] emitAssemblyScript done", {
+    controls: plan.controls.length,
+    nodes: plan.nodes.length
+  });
 
   const ascModule = await import("assemblyscript/asc");
   const compileString = (ascModule as {
@@ -29,6 +34,10 @@ export async function compilePatch(graph: PatchGraph): Promise<CompileResult> {
     optimizeLevel: 3,
     shrinkLevel: 1,
     noAssert: true
+  });
+  console.info("[MaxWasm] asc compileString finished", {
+    hasBinary: !!binary,
+    binaryLength: binary?.length ?? 0
   });
 
   if (!binary) {

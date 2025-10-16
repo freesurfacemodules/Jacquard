@@ -266,7 +266,15 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       })
     };
 
+    console.info("[MaxWasm] compile start", {
+      nodes: graphWithParameters.nodes.length,
+      connections: graphWithParameters.connections.length
+    });
     const result = await compilePatch(graphWithParameters);
+    console.info("[MaxWasm] compile finished", {
+      wasmBytes: result.wasmBinary.byteLength,
+      parameters: result.parameterBindings.length
+    });
     await stopAudioInternal();
     setGraph(graphWithParameters);
     setArtifact(result);
@@ -366,6 +374,7 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
           };
         });
         handle.node.port.postMessage({ type: PARAM_MESSAGE_BATCH, values });
+        console.info("[MaxWasm] Sent parameter batch", values);
       }
 
       if (context.state === "suspended") {
