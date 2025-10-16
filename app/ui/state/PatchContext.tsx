@@ -13,7 +13,8 @@ import {
   connectNodes as connectGraphNodes,
   createGraph,
   removeConnection,
-  updateNodePosition as updateGraphNodePosition
+  updateNodePosition as updateGraphNodePosition,
+  updateNodeParameter as updateGraphNodeParameter
 } from "@graph/graph";
 import {
   GraphViewModel,
@@ -145,6 +146,7 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
 
   const updateNodeParameter = useCallback(
     (nodeId: string, parameterId: string, value: number) => {
+      setGraph((prev) => updateGraphNodeParameter(prev, nodeId, parameterId, value));
       const key = makeParameterKey(nodeId, parameterId);
       setParameterValues((prev) => ({ ...prev, [key]: value }));
 
