@@ -9,18 +9,18 @@ export interface GraphViewModel {
   sampleRate: number;
 }
 
-export namespace GraphViewModel {
-  export function fromGraph(graph: PatchGraph): GraphViewModel {
-    return {
-      nodes: graph.nodes,
-      connections: graph.connections,
-      oversampling: graph.oversampling,
-      blockSize: graph.blockSize,
-      sampleRate: graph.sampleRate
-    };
-  }
+export function graphViewModelFromGraph(
+  graph: PatchGraph
+): GraphViewModel {
+  return {
+    nodes: graph.nodes,
+    connections: graph.connections,
+    oversampling: graph.oversampling,
+    blockSize: graph.blockSize,
+    sampleRate: graph.sampleRate
+  };
+}
 
-  export function createEmpty(): GraphViewModel {
-    return fromGraph(createGraph());
-  }
+export function createEmptyGraphViewModel(): GraphViewModel {
+  return graphViewModelFromGraph(createGraph());
 }

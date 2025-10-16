@@ -50,7 +50,7 @@ export async function loadPatchProcessor(
     }
     try {
       node.port.close();
-    } catch (closeError) {
+    } catch {
       /* ignore */
     }
     throw error;

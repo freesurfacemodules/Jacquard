@@ -9,7 +9,10 @@ import {
   useState
 } from "react";
 import { addNode, createGraph } from "@graph/graph";
-import { GraphViewModel } from "@graph/view-model";
+import {
+  GraphViewModel,
+  graphViewModelFromGraph
+} from "@graph/view-model";
 import { NodeDescriptor, PatchGraph } from "@graph/types";
 import { GraphValidationResult, validateGraph } from "@graph/validation";
 import { compilePatch, CompileResult } from "@compiler/compiler";
@@ -43,7 +46,7 @@ const PatchContext = createContext<PatchController | null>(null);
 export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
   const [graph, setGraph] = useState<PatchGraph>(() => createGraph());
   const [artifact, setArtifact] = useState<CompileResult | null>(null);
-  const viewModel = useMemo(() => GraphViewModel.fromGraph(graph), [graph]);
+  const viewModel = useMemo(() => graphViewModelFromGraph(graph), [graph]);
   const validation = useMemo(() => validateGraph(graph), [graph]);
   const audioSupported =
     typeof window !== "undefined" &&
