@@ -107,6 +107,40 @@
   color: #8289a1;
 }
 
+.inspector-settings {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.inspector-setting {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+}
+
+.inspector-setting span {
+  color: #aeb7d2;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.7rem;
+}
+
+.inspector-setting select {
+  background: #1f2533;
+  border: 1px solid #2f3647;
+  border-radius: 6px;
+  color: #f0f4ff;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.9rem;
+}
+
+.inspector-setting select:focus {
+  outline: none;
+  border-color: #7a89ff;
+  box-shadow: 0 0 0 1px rgba(122, 137, 255, 0.3);
+}
+
 .inspector-connections {
   margin-top: 1rem;
   padding-top: 0.75rem;

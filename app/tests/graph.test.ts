@@ -7,6 +7,7 @@ import {
   removeConnectionsFromPort,
   removeConnectionsToPort,
   removeNode,
+  updatePatchSettings,
   updateNodePosition,
   updateNodeParameter
 } from "@graph/graph";
@@ -267,6 +268,30 @@ describe("graph", () => {
     expect(pruned.connections.every((connection) => connection.to.port !== "right")).toBe(
       true
     );
+  });
+
+  it("updates patch settings immutably", () => {
+    const graph = createGraph();
+    const updated = updatePatchSettings(graph, {
+      sampleRate: 96_000,
+      blockSize: 256,
+      oversampling: 4
+    });
+
+    expect(graph.sampleRate).toBe(48_000);
+    expect(graph.blockSize).toBe(128);
+    expect(graph.oversampling).toBe(1);
+
+    expect(updated.sampleRate).toBe(96_000);
+    expect(updated.blockSize).toBe(256);
+    expect(updated.oversampling).toBe(4);
+  });
+
+  it("rejects invalid patch settings", () => {
+    const graph = createGraph();
+    expect(() => updatePatchSettings(graph, { sampleRate: -1 })).toThrow(/Invalid sample rate/);
+    expect(() => updatePatchSettings(graph, { blockSize: 64 as 128 })).toThrow(/Invalid block size/);
+    expect(() => updatePatchSettings(graph, { oversampling: 3 as 1 })).toThrow(/Invalid oversampling/);
   });
 
   it("updates node parameters immutably", () => {

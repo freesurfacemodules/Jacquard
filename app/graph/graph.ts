@@ -245,3 +245,45 @@ function findPortOrThrow(
   }
   return port;
 }
+
+export interface PatchSettingsUpdate {
+  sampleRate?: number;
+  blockSize?: PatchGraph["blockSize"];
+  oversampling?: PatchGraph["oversampling"];
+}
+
+export function updatePatchSettings(
+  graph: PatchGraph,
+  settings: PatchSettingsUpdate
+): PatchGraph {
+  const nextSampleRate = settings.sampleRate ?? graph.sampleRate;
+  const nextBlockSize = settings.blockSize ?? graph.blockSize;
+  const nextOversampling = settings.oversampling ?? graph.oversampling;
+
+  if (
+    nextSampleRate === graph.sampleRate &&
+    nextBlockSize === graph.blockSize &&
+    nextOversampling === graph.oversampling
+  ) {
+    return graph;
+  }
+
+  if (!Number.isFinite(nextSampleRate) || nextSampleRate <= 0) {
+    throw new Error(`Invalid sample rate: ${nextSampleRate}`);
+  }
+
+  if (![128, 256, 512].includes(nextBlockSize)) {
+    throw new Error(`Invalid block size: ${nextBlockSize}`);
+  }
+
+  if (![1, 2, 4, 8].includes(nextOversampling)) {
+    throw new Error(`Invalid oversampling factor: ${nextOversampling}`);
+  }
+
+  return {
+    ...graph,
+    sampleRate: nextSampleRate,
+    blockSize: nextBlockSize,
+    oversampling: nextOversampling
+  };
+}

@@ -11,8 +11,8 @@
    - Delay-free cycles are rejected at connection time, but we still need inline guidance (highlighting offending ports/nodes) to help users resolve the loop quickly.
 
 2. **Patch Settings**
-   - Sample rate, block size, and oversampling remain fixed defaults.
-   - Expose editable patch settings and propagate changes through the compilation/runtime path without reloading the page.
+   - Editing sample rate, block size, or oversampling forces a full recompilation and restarts audio.
+   - Streamline the workflow so small changes cross-fade or schedule seamlessly without interrupting playback.
 
 3. **Worklet Parameter Channel**
    - Parameter updates currently post messages per event. We still need the planned SharedArrayBuffer ring for higher-rate automation and eventual scheduling.
@@ -24,9 +24,9 @@
    - Manual save/load is available, but there is no auto-save or patch library. Add IndexedDB-backed autosave and patch metadata/history management.
 
 ## Next Steps / Roadmap Highlights
-- Add guard rails that automatically reject illegal cycles now that delete/disconnect UI and undo/redo exist.
-- Add patch-level settings UI, wiring them through `compilePatch`, the worklet, and status displays.
+- Surface inline diagnostics for rejected feedback loops (highlight offending ports, suggest delay nodes).
+- Make patch settings edits seamless (hot-reload worklet state, minimize audio interruptions).
 - Introduce a SAB-backed parameter/event ring plus scheduling timestamps to support automation.
 - Expand node manifests with rich UI controls and streaming taps; build helper components (meters, scopes).
-- Persist patches (JSON) and add undo/redo stacks.
+- Add autosave/patch library via IndexedDB with metadata and quick recall.
 - Broaden the DSP library and tests, including audio render regression checks and end-to-end UI flows.

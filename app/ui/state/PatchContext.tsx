@@ -16,6 +16,8 @@ import {
   removeConnectionsFromPort as removeGraphConnectionsFromPort,
   removeConnectionsToPort as removeGraphConnectionsToPort,
   removeNode as removeGraphNode,
+  PatchSettingsUpdate,
+  updatePatchSettings as updateGraphPatchSettings,
   updateNodePosition as updateGraphNodePosition,
   updateNodeParameter as updateGraphNodeParameter
 } from "@graph/graph";
@@ -131,6 +133,7 @@ export interface PatchController {
   canRedo: boolean;
   exportPatch(): PatchDocument;
   importPatch(document: PatchDocument | PatchGraph): void;
+  updatePatchSettings(settings: PatchSettingsUpdate): void;
 }
 
 const PatchContext = createContext<PatchController | null>(null);
@@ -310,6 +313,14 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
   const removeConnectionsToPort = useCallback(
     (nodeId: string, portId: string) => {
       const nextGraph = removeGraphConnectionsToPort(graphRef.current, nodeId, portId);
+      applyGraphChange(nextGraph, { changeType: "topology" });
+    },
+    [applyGraphChange]
+  );
+
+  const updatePatchSettings = useCallback(
+    (settings: PatchSettingsUpdate) => {
+      const nextGraph = updateGraphPatchSettings(graphRef.current, settings);
       applyGraphChange(nextGraph, { changeType: "topology" });
     },
     [applyGraphChange]
@@ -729,7 +740,8 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       canUndo,
       canRedo,
       exportPatch,
-      importPatch
+      importPatch,
+      updatePatchSettings
     }),
     [
       graph,
@@ -758,7 +770,8 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       canUndo,
       canRedo,
       exportPatch,
-      importPatch
+      importPatch,
+      updatePatchSettings
     ]
   );
 

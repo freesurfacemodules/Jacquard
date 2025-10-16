@@ -3,6 +3,7 @@ import { createGraph, addNode } from "@graph/graph";
 import { instantiateNode } from "@dsp/nodes";
 import { nanoid } from "@codegen/utils/nanoid";
 import { createPatchDocument, normalizePatchDocument } from "@graph/persistence";
+import { updatePatchSettings } from "@graph/graph";
 
 const createPatch = () => {
   let graph = createGraph();
@@ -40,6 +41,20 @@ describe("patch persistence", () => {
     const normalized = normalizePatchDocument(patch);
     expect(normalized.version).toBe(1);
     expect(normalized.graph).toEqual(patch);
+  });
+
+  it("preserves patch settings in documents", () => {
+    let patch = createPatch();
+    patch = updatePatchSettings(patch, {
+      sampleRate: 96_000,
+      blockSize: 256,
+      oversampling: 4
+    });
+    const document = createPatchDocument(patch);
+    const restored = normalizePatchDocument(document);
+    expect(restored.graph.sampleRate).toBe(96_000);
+    expect(restored.graph.blockSize).toBe(256);
+    expect(restored.graph.oversampling).toBe(4);
   });
 
   it("throws on invalid payloads", () => {

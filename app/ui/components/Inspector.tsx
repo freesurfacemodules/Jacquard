@@ -2,6 +2,10 @@ import { ChangeEvent, useMemo } from "react";
 import { usePatch } from "../state/PatchContext";
 import { getNodeImplementation } from "@dsp/nodes";
 
+const SAMPLE_RATE_OPTIONS = [44_100, 48_000, 96_000] as const;
+const BLOCK_SIZE_OPTIONS = [128, 256, 512] as const;
+const OVERSAMPLING_OPTIONS = [1, 2, 4, 8] as const;
+
 export function Inspector(): JSX.Element {
   const {
     viewModel,
@@ -10,7 +14,8 @@ export function Inspector(): JSX.Element {
     updateNodeParameter,
     getParameterValue,
     disconnectConnection,
-    removeNode
+    removeNode,
+    updatePatchSettings
   } = usePatch();
   const selectedNode = useMemo(() => {
     if (!selectedNodeId) {
@@ -82,6 +87,21 @@ export function Inspector(): JSX.Element {
     return "Fix the issues below before compiling.";
   }, [validation.isValid]);
 
+  const handleSampleRateChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const sampleRate = Number.parseInt(event.target.value, 10);
+    updatePatchSettings({ sampleRate });
+  };
+
+  const handleBlockSizeChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const blockSize = Number.parseInt(event.target.value, 10) as (typeof BLOCK_SIZE_OPTIONS)[number];
+    updatePatchSettings({ blockSize });
+  };
+
+  const handleOversamplingChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const oversampling = Number.parseInt(event.target.value, 10) as (typeof OVERSAMPLING_OPTIONS)[number];
+    updatePatchSettings({ oversampling });
+  };
+
   const handleControlChange = (
     nodeId: string,
     controlId: string
@@ -98,20 +118,44 @@ export function Inspector(): JSX.Element {
       <div className="inspector-body">
         <section className="inspector-section">
           <h3>Patch Settings</h3>
-          <dl>
-            <div className="inspector-row">
-              <dt>Sample rate</dt>
-              <dd>{viewModel.sampleRate} Hz</dd>
-            </div>
-            <div className="inspector-row">
-              <dt>Block size</dt>
-              <dd>{viewModel.blockSize} frames</dd>
-            </div>
-            <div className="inspector-row">
-              <dt>Oversampling</dt>
-              <dd>{viewModel.oversampling}×</dd>
-            </div>
-          </dl>
+          <div className="inspector-settings">
+            <label className="inspector-setting">
+              <span>Sample rate</span>
+              <select
+                value={viewModel.sampleRate}
+                onChange={handleSampleRateChange}
+              >
+                {SAMPLE_RATE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option.toLocaleString()} Hz
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="inspector-setting">
+              <span>Block size</span>
+              <select value={viewModel.blockSize} onChange={handleBlockSizeChange}>
+                {BLOCK_SIZE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option} frames
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="inspector-setting">
+              <span>Oversampling</span>
+              <select
+                value={viewModel.oversampling}
+                onChange={handleOversamplingChange}
+              >
+                {OVERSAMPLING_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}×
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
         </section>
 
         <section className="inspector-section">
