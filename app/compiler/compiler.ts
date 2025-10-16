@@ -15,10 +15,13 @@ export interface CompileResult {
 export async function compilePatch(graph: PatchGraph): Promise<CompileResult> {
   const moduleSource = emitAssemblyScript(graph);
 
-  // TODO: Use the AssemblyScript compiler API instead of dynamic import.
-  const asc = await import("assemblyscript/cli/asc.js");
+  const ascModule = await import("assemblyscript/dist/asc.js");
+  const compileString = (ascModule as { compileString?: typeof import("assemblyscript/dist/asc.js").compileString }).compileString;
+  if (!compileString) {
+    throw new Error("AssemblyScript compiler is unavailable in this environment.");
+  }
 
-  const { binary } = await asc.compileString(moduleSource, {
+  const { binary } = await compileString(moduleSource, {
     optimizeLevel: 3,
     shrinkLevel: 1,
     noAssert: true
