@@ -59,4 +59,51 @@ describe("code generation", () => {
     expect(source).toContain("let outLeft: f32 = auto_out_left;");
     expect(source).toContain("let outRight: f32 = auto_out_right;");
   });
+
+  it("emits stereo mixer node wiring", () => {
+    let graph = createGraph();
+    const osc = instantiateNode("osc.sine", "osc1");
+    const mixer = instantiateNode("mixer.stereo", "mix1");
+    const out = instantiateNode("io.output", "out1");
+
+    mixer.parameters.pan_ch1 = -0.25;
+    mixer.parameters.gain_ch1 = 0.5;
+
+    graph = addNode(graph, osc);
+    graph = addNode(graph, mixer);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: osc.id,
+      fromPortId: "out",
+      toNodeId: mixer.id,
+      toPortId: "ch1"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: mixer.id,
+      fromPortId: "left",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: mixer.id,
+      fromPortId: "right",
+      toNodeId: out.id,
+      toPortId: "right"
+    });
+
+    const source = emitAssemblyScript(graph);
+
+    expect(source).toContain("Stereo Mixer (mix1)");
+    expect(source).toMatch(/let mix_mix1_left: f32 = 0.0;/);
+    expect(source).toMatch(/let mix_mix1_right: f32 = 0.0;/);
+    expect(source).toMatch(/gain_ch1: f32 = 0.5/);
+    expect(source).toMatch(/pan_ch1: f32 = -0.25/);
+    expect(source).toMatch(/mix_mix1_left \+=/);
+    expect(source).toMatch(/mix_mix1_right \+=/);
+    expect(source).toMatch(/wire\d+ = mix_mix1_left;/);
+    expect(source).toMatch(/wire\d+ = mix_mix1_right;/);
+  });
 });

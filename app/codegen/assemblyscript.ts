@@ -123,6 +123,9 @@ function emitNode(planNode: PlanNode, context: EmitContext): string {
     case "osc.sine": {
       return emitSineNode(planNode, context);
     }
+    case "mixer.stereo": {
+      return emitMixerNode(planNode, context);
+    }
     case "io.output": {
       return emitOutputNode(planNode, context);
     }
@@ -130,6 +133,87 @@ function emitNode(planNode: PlanNode, context: EmitContext): string {
       throw new Error(`Unsupported node kind for code generation: ${planNode.node.kind}`);
     }
   }
+}
+
+function emitMixerNode(planNode: PlanNode, context: EmitContext): string {
+  const leftOutput = planNode.outputs.find((output) => output.port.id === "left");
+  const rightOutput = planNode.outputs.find((output) => output.port.id === "right");
+
+  if (!leftOutput || !rightOutput) {
+    return `// ${planNode.node.label} (${planNode.node.id}) is missing stereo outputs.`;
+  }
+
+  const leftVar = `mix_${sanitizeIdentifier(planNode.node.id)}_left`;
+  const rightVar = `mix_${sanitizeIdentifier(planNode.node.id)}_right`;
+
+  const lines: string[] = [
+    `// ${planNode.node.label} (${planNode.node.id})`,
+    "{",
+    indentLines(`let ${leftVar}: f32 = 0.0;`, 1),
+    indentLines(`let ${rightVar}: f32 = 0.0;`, 1)
+  ];
+
+  for (const input of planNode.inputs) {
+    if (!input.port.id.startsWith("ch")) {
+      continue;
+    }
+
+    const sampleVar = `sample_${sanitizeIdentifier(planNode.node.id)}_${sanitizeIdentifier(input.port.id)}`;
+    const gainKey = `gain_${input.port.id}`;
+    const panKey = `pan_${input.port.id}`;
+    const gainValue = numberLiteral(
+      typeof planNode.node.parameters?.[gainKey] === "number"
+        ? planNode.node.parameters![gainKey]
+        : 1
+    );
+    const panValue = numberLiteral(
+      typeof planNode.node.parameters?.[panKey] === "number"
+        ? planNode.node.parameters![panKey]
+        : 0
+    );
+
+    const expr = buildInputExpression(input);
+    lines.push(indentLines(`let ${sampleVar}: f32 = ${expr};`, 1));
+    lines.push(indentLines(`let gain_${input.port.id}: f32 = ${gainValue};`, 1));
+    lines.push(indentLines(`let pan_${input.port.id}: f32 = ${panValue};`, 1));
+    lines.push(
+      indentLines(
+        `${leftVar} += ${sampleVar} * gain_${input.port.id} * (0.5 * (1.0 - pan_${input.port.id}));`,
+        1
+      )
+    );
+    lines.push(
+      indentLines(
+        `${rightVar} += ${sampleVar} * gain_${input.port.id} * (0.5 * (1.0 + pan_${input.port.id}));`,
+        1
+      )
+    );
+  }
+
+  const leftAssignments = leftOutput.wires
+    .map((wire) => `${wire.varName} = ${leftVar};`)
+    .join("\n");
+  const rightAssignments = rightOutput.wires
+    .map((wire) => `${wire.varName} = ${rightVar};`)
+    .join("\n");
+
+  if (leftAssignments) {
+    lines.push(indentLines(leftAssignments, 1));
+  }
+  if (rightAssignments) {
+    lines.push(indentLines(rightAssignments, 1));
+  }
+
+  if (context.autoRoute.left === planNode.node.id) {
+    lines.push(indentLines(`${AUTO_LEFT_VAR} = ${leftVar};`, 1));
+  }
+  if (context.autoRoute.right === planNode.node.id) {
+    lines.push(indentLines(`${AUTO_RIGHT_VAR} = ${rightVar};`, 1));
+  }
+
+  lines.push("}");
+
+  return lines.join("\n");
 }
 
 function emitSineNode(planNode: PlanNode, context: EmitContext): string {
@@ -253,6 +337,30 @@ function buildInputExpression(
 }
 
 function determineAutoRoute(plan: ExecutionPlan): AutoRoute {
+  const stereoCandidates = plan.nodes.filter((node) =>
+    node.outputs.some((output) => output.port.id === "left") &&
+    node.outputs.some((output) => output.port.id === "right")
+  );
+
+  const stereoWithFreeOutputs = stereoCandidates.filter((node) => {
+    const left = node.outputs.find((output) => output.port.id === "left");
+    const right = node.outputs.find((output) => output.port.id === "right");
+    return (
+      !!left &&
+      !!right &&
+      left.wires.length === 0 &&
+      right.wires.length === 0
+    );
+  });
+
+  const stereoPick = stereoWithFreeOutputs[0] ?? stereoCandidates[0];
+  if (stereoPick) {
+    return {
+      left: stereoPick.node.id,
+      right: stereoPick.node.id
+    };
+  }
+
   const outputInputs = plan.outputNode.inputs;
   const leftInput = outputInputs.find((input) => input.port.id === "left");
   const rightInput = outputInputs.find((input) => input.port.id === "right");

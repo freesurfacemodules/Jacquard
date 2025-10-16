@@ -27,6 +27,28 @@ export const builtinNodes: DspNodeManifest[] = [
     }
   },
   {
+    kind: "mixer.stereo",
+    category: "utility",
+    label: "Stereo Mixer",
+    inputs: [
+      audioPort("ch1", "Channel 1"),
+      audioPort("ch2", "Channel 2"),
+      audioPort("ch3", "Channel 3"),
+      audioPort("ch4", "Channel 4")
+    ],
+    outputs: [audioPort("left", "Left"), audioPort("right", "Right")],
+    defaultParams: {
+      gain_ch1: 1,
+      gain_ch2: 1,
+      gain_ch3: 1,
+      gain_ch4: 1,
+      pan_ch1: 0,
+      pan_ch2: 0,
+      pan_ch3: 0,
+      pan_ch4: 0
+    }
+  },
+  {
     kind: "filter.biquad",
     category: "filter",
     label: "Biquad Low-pass",
