@@ -15,7 +15,6 @@ export default defineConfig({
     }
   },
   optimizeDeps: {
-    exclude: ["assemblyscript", "binaryen"],
     esbuildOptions: {
       target: "esnext",
       supported: {

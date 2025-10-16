@@ -15,6 +15,7 @@ export async function loadPatchProcessor(
   context: AudioContext,
   artifact: CompileResult
 ): Promise<WorkletHandle> {
+  console.time("[MaxWasm] loadPatchProcessor");
   await ensureWorkletModule(context);
   const wasmArray =
     artifact.wasmBinary instanceof Uint8Array
@@ -42,6 +43,7 @@ export async function loadPatchProcessor(
 
   try {
     await waitForProcessorReady(node);
+    console.timeEnd("[MaxWasm] loadPatchProcessor");
   } catch (error) {
     try {
       node.disconnect();
@@ -61,10 +63,7 @@ export async function loadPatchProcessor(
 }
 
 async function ensureWorkletModule(context: AudioContext): Promise<void> {
-  const moduleUrl = new URL(
-    "./processors/patch-processor.ts",
-    import.meta.url
-  );
+  const moduleUrl = new URL("./processors/patch-processor.js", import.meta.url);
   if (!context.audioWorklet) {
     throw new Error("AudioWorklet is not available in this environment.");
   }
@@ -84,7 +83,7 @@ async function ensureWorkletModule(context: AudioContext): Promise<void> {
     await context.audioWorklet.addModule(moduleUrl.href);
     console.info("[MaxWasm] Worklet module loaded");
   } catch (error) {
-    console.error("[MaxWasm] Failed to load worklet module", error);
+    console.error("[MaxWasm] Failed to load worklet module", error, moduleUrl.href);
     throw error;
   }
   registry.add(moduleUrl.href);
