@@ -13,8 +13,7 @@ import {
   connectNodes as connectGraphNodes,
   createGraph,
   removeConnection,
-  updateNodePosition as updateGraphNodePosition,
-  updateNodeParameter as updateGraphNodeParameter
+  updateNodePosition as updateGraphNodePosition
 } from "@graph/graph";
 import {
   GraphViewModel,
@@ -32,6 +31,7 @@ import {
   loadPatchProcessor,
   WorkletHandle
 } from "@audio/worklet-loader";
+import { getNodeImplementation } from "@dsp/nodes";
 import type { PlanControl } from "@codegen/plan";
 
 const PARAM_MESSAGE_BATCH = "parameterBatch";
@@ -64,6 +64,7 @@ export interface PatchController {
   updateNodeParameter(nodeId: string, parameterId: string, value: number): void;
   selectedNodeId: string | null;
   selectNode(nodeId: string | null): void;
+  getParameterValue(nodeId: string, controlId: string): number;
 }
 
 const PatchContext = createContext<PatchController | null>(null);
@@ -74,8 +75,10 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [parameterBindings, setParameterBindings] = useState<PlanControl[]>([]);
   const [parameterValues, setParameterValues] = useState<Record<string, number>>({});
+
   const viewModel = useMemo(() => graphViewModelFromGraph(graph), [graph]);
   const validation = useMemo(() => validateGraph(graph), [graph]);
+
   const audioSupported =
     typeof window !== "undefined" &&
     (typeof window.AudioContext === "function" ||
@@ -118,13 +121,32 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
     []
   );
 
+  const getParameterValue = useCallback(
+    (nodeId: string, controlId: string) => {
+      const key = makeParameterKey(nodeId, controlId);
+      if (key in parameterValues) {
+        return parameterValues[key];
+      }
+      const node = graph.nodes.find((candidate) => candidate.id === nodeId);
+      if (node && typeof node.parameters[controlId] === "number") {
+        return node.parameters[controlId];
+      }
+      if (node) {
+        const implementation = getNodeImplementation(node.kind);
+        const fallback = implementation?.manifest.defaultParams?.[controlId];
+        if (typeof fallback === "number") {
+          return fallback;
+        }
+      }
+      return 0;
+    },
+    [graph.nodes, parameterValues]
+  );
+
   const updateNodeParameter = useCallback(
     (nodeId: string, parameterId: string, value: number) => {
-      setGraph((prev) => updateGraphNodeParameter(prev, nodeId, parameterId, value));
-      setParameterValues((prev) => ({
-        ...prev,
-        [makeParameterKey(nodeId, parameterId)]: value
-      }));
+      const key = makeParameterKey(nodeId, parameterId);
+      setParameterValues((prev) => ({ ...prev, [key]: value }));
 
       const binding = parameterBindingsRef.current.find(
         (entry) => entry.nodeId === nodeId && entry.controlId === parameterId
@@ -220,18 +242,46 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
   }, [audioSupported]);
 
   const compileGraph = useCallback(async (): Promise<CompileResult> => {
-    const result = await compilePatch(graph);
+    const parameterMap = parameterValuesRef.current;
+    const graphWithParameters: PatchGraph = {
+      ...graph,
+      nodes: graph.nodes.map((node) => {
+        const implementation = getNodeImplementation(node.kind);
+        const controls = implementation?.manifest.controls ?? [];
+        if (!controls.length) {
+          return node;
+        }
+        const parameters = { ...node.parameters };
+        let changed = false;
+        for (const control of controls) {
+          const key = makeParameterKey(node.id, control.id);
+          if (parameterMap[key] !== undefined) {
+            parameters[control.id] = parameterMap[key];
+            changed = true;
+          }
+        }
+        return changed ? { ...node, parameters } : node;
+      })
+    };
+
+    const result = await compilePatch(graphWithParameters);
     await stopAudioInternal();
+    setGraph(graphWithParameters);
     setArtifact(result);
     setParameterBindings(result.parameterBindings);
 
     setParameterValues((prev) => {
       const next = { ...prev };
       for (const binding of result.parameterBindings) {
-        const node = graph.nodes.find((candidate) => candidate.id === binding.nodeId);
-        if (!node) continue;
-        next[makeParameterKey(binding.nodeId, binding.controlId)] =
-          node.parameters[binding.controlId] ?? binding.defaultValue;
+        const key = makeParameterKey(binding.nodeId, binding.controlId);
+        const node = graphWithParameters.nodes.find(
+          (candidate) => candidate.id === binding.nodeId
+        );
+        if (node && typeof node.parameters[binding.controlId] === "number") {
+          next[key] = node.parameters[binding.controlId];
+        } else {
+          next[key] = binding.defaultValue;
+        }
       }
       return next;
     });
@@ -307,8 +357,11 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       if (artifact.parameterBindings.length > 0) {
         const values = artifact.parameterBindings.map((binding) => {
           const key = makeParameterKey(binding.nodeId, binding.controlId);
-          const value = parameterValuesRef.current[key] ?? binding.defaultValue;
-          return { index: binding.index, value };
+          const current = parameterValuesRef.current[key];
+          return {
+            index: binding.index,
+            value: current ?? binding.defaultValue
+          };
         });
         handle.node.port.postMessage({ type: PARAM_MESSAGE_BATCH, values });
       }
@@ -349,7 +402,8 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       updateNodePosition,
       updateNodeParameter,
       selectedNodeId,
-      selectNode
+      selectNode,
+      getParameterValue
     }),
     [
       graph,
@@ -368,7 +422,8 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       updateNodePosition,
       updateNodeParameter,
       selectedNodeId,
-      selectNode
+      selectNode,
+      getParameterValue
     ]
   );
 

@@ -92,7 +92,8 @@ export function Canvas(): JSX.Element {
     updateNodePosition,
     updateNodeParameter,
     selectedNodeId,
-    selectNode
+    selectNode,
+    getParameterValue
   } = usePatch();
 
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -344,6 +345,12 @@ export function Canvas(): JSX.Element {
         {viewModel.nodes.map((node) => {
           const position = nodePositions.get(node.id) ?? getNodePosition(node);
           const { width } = getNodeDimensions(node);
+          const implementation = getNodeImplementation(node.kind);
+          const controls = implementation?.manifest.controls ?? [];
+          const controlValues = controls.reduce<Record<string, number>>((acc, control) => {
+            acc[control.id] = getParameterValue(node.id, control.id);
+            return acc;
+          }, {});
           return (
             <PatchNode
               key={node.id}
@@ -357,6 +364,7 @@ export function Canvas(): JSX.Element {
               onDragEnd={handleDragEnd}
               onOutputPointerDown={handleOutputPointerDown}
               onInputPointerUp={handleInputPointerUp}
+              controlValues={controlValues}
               onControlChange={handleControlChange}
             />
           );

@@ -27,6 +27,7 @@ interface PatchNodeProps {
     portIndex: number,
     event: React.PointerEvent<HTMLButtonElement>
   ): void;
+  controlValues: Record<string, number>;
   onControlChange(nodeId: string, controlId: string, value: number): void;
 }
 
@@ -41,6 +42,7 @@ export const PatchNode = memo(function PatchNode({
   onDragEnd,
   onOutputPointerDown,
   onInputPointerUp,
+  controlValues,
   onControlChange
 }: PatchNodeProps): JSX.Element {
   const implementation: NodeImplementation | undefined = getNodeImplementation(node.kind);
@@ -132,7 +134,11 @@ export const PatchNode = memo(function PatchNode({
       {controls.length > 0 ? (
         <div className="patch-node__controls">
           {controls.map((control) => {
-            const value = node.parameters[control.id];
+            const value =
+              controlValues[control.id] ??
+              node.parameters[control.id] ??
+              implementation?.manifest.defaultParams?.[control.id] ??
+              control.min ?? 0;
             return (
               <div key={control.id} className="patch-node__control">
                 <Knob

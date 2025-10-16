@@ -7,7 +7,8 @@ export function Inspector(): JSX.Element {
     viewModel,
     validation,
     selectedNodeId,
-    updateNodeParameter
+    updateNodeParameter,
+    getParameterValue
   } = usePatch();
   const selectedNode = useMemo(() => {
     if (!selectedNodeId) {
@@ -73,7 +74,7 @@ export function Inspector(): JSX.Element {
               {selectedImplementation.manifest.controls?.length ? (
                 <div className="inspector-controls">
                   {selectedImplementation.manifest.controls.map((control) => {
-                    const value = selectedNode.parameters[control.id];
+                    const value = getParameterValue(selectedNode.id, control.id);
                     return (
                       <label key={control.id} className="inspector-control">
                         <span className="inspector-control__label">
