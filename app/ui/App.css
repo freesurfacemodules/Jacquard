@@ -141,6 +141,20 @@
   box-shadow: 0 0 0 1px rgba(122, 137, 255, 0.3);
 }
 
+.inspector-source {
+  max-height: 240px;
+  overflow: auto;
+  background: #141924;
+  border: 1px solid #252c3d;
+  border-radius: 6px;
+  padding: 0.75rem;
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: #d8e1ff;
+  white-space: pre;
+}
+
 .inspector-connections {
   margin-top: 1rem;
   padding-top: 0.75rem;

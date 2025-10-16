@@ -10,6 +10,7 @@ export function Inspector(): JSX.Element {
   const {
     viewModel,
     validation,
+    artifact,
     selectedNodeId,
     updateNodeParameter,
     getParameterValue,
@@ -156,6 +157,19 @@ export function Inspector(): JSX.Element {
               </select>
             </label>
           </div>
+        </section>
+
+        <section className="inspector-section">
+          <h3>Generated AssemblyScript</h3>
+          {artifact?.moduleSource ? (
+            <pre className="inspector-source">
+              <code>{artifact.moduleSource}</code>
+            </pre>
+          ) : (
+            <p className="inspector-placeholder">
+              AssemblyScript has not been generated yet.
+            </p>
+          )}
         </section>
 
         <section className="inspector-section">
