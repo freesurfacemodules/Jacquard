@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { usePatch } from "../state/PatchContext";
 
 export function Toolbar(): JSX.Element {
-  const { validation, compile, audio, artifact } = usePatch();
+  const { validation, compile, audio, artifact, undo, redo, canUndo, canRedo } =
+    usePatch();
   const [compileStatus, setCompileStatus] = useState<
     "idle" | "compiling" | "ready" | "error"
   >("idle");
@@ -70,6 +71,14 @@ export function Toolbar(): JSX.Element {
     await audio.start();
   }, [audio]);
 
+  const handleUndo = useCallback(() => {
+    undo();
+  }, [undo]);
+
+  const handleRedo = useCallback(() => {
+    redo();
+  }, [redo]);
+
   const isRunning = audio.state === "running";
   const runDisabled =
     (!isRunning && compileStatus !== "ready") ||
@@ -90,6 +99,22 @@ export function Toolbar(): JSX.Element {
         <strong>MaxWasm</strong>
       </div>
       <div className="toolbar-section">
+        <button
+          type="button"
+          onClick={handleUndo}
+          className="toolbar-button"
+          disabled={!canUndo}
+        >
+          Undo
+        </button>
+        <button
+          type="button"
+          onClick={handleRedo}
+          className="toolbar-button"
+          disabled={!canRedo}
+        >
+          Redo
+        </button>
         <button
           type="button"
           onClick={handleCompile}

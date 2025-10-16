@@ -4,6 +4,7 @@ import {
   addNode,
   connectNodes,
   removeConnection,
+  removeNode,
   updateNodePosition,
   updateNodeParameter
 } from "@graph/graph";
@@ -173,6 +174,28 @@ describe("graph", () => {
 
     expect(graphWithConnection.connections).toHaveLength(1);
     expect(trimmed.connections).toHaveLength(0);
+  });
+
+  it("removes nodes and their connections immutably", () => {
+    const osc = instantiateNode("osc.sine", "osc1");
+    const out = instantiateNode("io.output", "out1");
+
+    let graph = createGraph();
+    graph = addNode(graph, osc);
+    graph = addNode(graph, out);
+    graph = connectNodes(graph, {
+      fromNodeId: osc.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    const updated = removeNode(graph, osc.id);
+
+    expect(graph.nodes).toHaveLength(2);
+    expect(graph.connections).toHaveLength(1);
+    expect(updated.nodes.map((node) => node.id)).toEqual(["out1"]);
+    expect(updated.connections).toHaveLength(0);
   });
 
   it("updates node parameters immutably", () => {

@@ -107,6 +107,69 @@
   color: #8289a1;
 }
 
+.inspector-connections {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #2a3040;
+}
+
+.inspector-connection-group + .inspector-connection-group {
+  margin-top: 0.75rem;
+}
+
+.inspector-connection-group h5 {
+  margin: 0 0 0.35rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6f7a96;
+}
+
+.inspector-connection-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.inspector-connection-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: #c3cbdd;
+}
+
+.inspector-connection-item button {
+  background: #2a3040;
+  color: #d1d8f5;
+  border: 1px solid #3a4255;
+  border-radius: 4px;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.75rem;
+}
+
+.inspector-connection-item button:hover {
+  background: #353c51;
+}
+
+.inspector-danger-button {
+  margin-top: 0.9rem;
+  width: 100%;
+  padding: 0.45rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid #643e3e;
+  background: rgba(120, 52, 52, 0.2);
+  color: #f3b6b6;
+  font-size: 0.85rem;
+}
+
+.inspector-danger-button:hover {
+  background: rgba(150, 60, 60, 0.35);
+}
+
 .canvas-connections {
   position: absolute;
   inset: 0;

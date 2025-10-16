@@ -8,7 +8,9 @@ export function Inspector(): JSX.Element {
     validation,
     selectedNodeId,
     updateNodeParameter,
-    getParameterValue
+    getParameterValue,
+    disconnectConnection,
+    removeNode
   } = usePatch();
   const selectedNode = useMemo(() => {
     if (!selectedNodeId) {
@@ -23,6 +25,55 @@ export function Inspector(): JSX.Element {
     }
     return getNodeImplementation(selectedNode.kind) ?? null;
   }, [selectedNode]);
+
+  const connectionDetails = useMemo(() => {
+    if (!selectedNode) {
+      return {
+        incoming: [],
+        outgoing: []
+      };
+    }
+
+    const nodeMap = new Map(viewModel.nodes.map((node) => [node.id, node]));
+
+    const incoming = viewModel.connections
+      .filter((connection) => connection.to.node === selectedNode.id)
+      .map((connection) => {
+        const sourceNode = nodeMap.get(connection.from.node);
+        const sourcePort = sourceNode?.outputs.find(
+          (port) => port.id === connection.from.port
+        );
+        const targetPort = selectedNode.inputs.find(
+          (port) => port.id === connection.to.port
+        );
+        return {
+          connectionId: connection.id,
+          sourceLabel: sourceNode?.label ?? connection.from.node,
+          sourcePort: sourcePort?.name ?? connection.from.port,
+          targetPort: targetPort?.name ?? connection.to.port
+        };
+      });
+
+    const outgoing = viewModel.connections
+      .filter((connection) => connection.from.node === selectedNode.id)
+      .map((connection) => {
+        const targetNode = nodeMap.get(connection.to.node);
+        const targetPort = targetNode?.inputs.find(
+          (port) => port.id === connection.to.port
+        );
+        const sourcePort = selectedNode.outputs.find(
+          (port) => port.id === connection.from.port
+        );
+        return {
+          connectionId: connection.id,
+          targetLabel: targetNode?.label ?? connection.to.node,
+          targetPort: targetPort?.name ?? connection.to.port,
+          sourcePort: sourcePort?.name ?? connection.from.port
+        };
+      });
+
+    return { incoming, outgoing };
+  }, [selectedNode, viewModel.connections, viewModel.nodes]);
 
   const statusMessage = useMemo(() => {
     if (validation.isValid) {
@@ -104,6 +155,73 @@ export function Inspector(): JSX.Element {
                   This node does not expose adjustable parameters.
                 </p>
               )}
+              <div className="inspector-connections">
+                <h4>Connections</h4>
+                {connectionDetails.incoming.length === 0 &&
+                connectionDetails.outgoing.length === 0 ? (
+                  <p className="inspector-placeholder">
+                    No active connections for this node.
+                  </p>
+                ) : (
+                  <>
+                    {connectionDetails.incoming.length > 0 ? (
+                      <div className="inspector-connection-group">
+                        <h5>Inputs</h5>
+                        <ul className="inspector-connection-list">
+                          {connectionDetails.incoming.map((entry) => (
+                            <li
+                              key={entry.connectionId}
+                              className="inspector-connection-item"
+                            >
+                              <span>
+                                {entry.sourceLabel} • {entry.sourcePort} →{" "}
+                                {entry.targetPort}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => disconnectConnection(entry.connectionId)}
+                              >
+                                Disconnect
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+                    {connectionDetails.outgoing.length > 0 ? (
+                      <div className="inspector-connection-group">
+                        <h5>Outputs</h5>
+                        <ul className="inspector-connection-list">
+                          {connectionDetails.outgoing.map((entry) => (
+                            <li
+                              key={entry.connectionId}
+                              className="inspector-connection-item"
+                            >
+                              <span>
+                                {entry.sourcePort} → {entry.targetLabel} •{" "}
+                                {entry.targetPort}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => disconnectConnection(entry.connectionId)}
+                              >
+                                Disconnect
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+                  </>
+                )}
+              </div>
+              <button
+                type="button"
+                className="inspector-danger-button"
+                onClick={() => removeNode(selectedNode.id)}
+              >
+                Delete Node
+              </button>
             </div>
           ) : (
             <p className="inspector-placeholder">

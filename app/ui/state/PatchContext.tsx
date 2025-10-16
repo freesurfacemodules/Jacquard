@@ -13,6 +13,7 @@ import {
   connectNodes as connectGraphNodes,
   createGraph,
   removeConnection,
+  removeNode as removeGraphNode,
   updateNodePosition as updateGraphNodePosition,
   updateNodeParameter as updateGraphNodeParameter
 } from "@graph/graph";
@@ -41,6 +42,30 @@ const PARAM_MESSAGE_SINGLE = "parameter";
 const makeParameterKey = (nodeId: string, controlId: string): string =>
   `${nodeId}:${controlId}`;
 
+type PatchChangeType = "topology" | "parameter" | "metadata";
+
+interface PatchSnapshot {
+  graph: PatchGraph;
+  parameterValues: Record<string, number>;
+  selectedNodeId: string | null;
+  changeType: PatchChangeType;
+}
+
+const filterParameterValuesForGraph = (
+  values: Record<string, number>,
+  graph: PatchGraph
+): Record<string, number> => {
+  const allowedNodeIds = new Set(graph.nodes.map((node) => node.id));
+  const next: Record<string, number> = {};
+  for (const [key, value] of Object.entries(values)) {
+    const [nodeId] = key.split(":");
+    if (nodeId && allowedNodeIds.has(nodeId)) {
+      next[key] = value;
+    }
+  }
+  return next;
+};
+
 type AudioEngineState = "unsupported" | "idle" | "starting" | "running" | "error";
 
 export interface AudioControls {
@@ -61,11 +86,16 @@ export interface PatchController {
   addNode(node: NodeDescriptor): void;
   connectNodes(params: ConnectNodesParams): void;
   disconnectConnection(connectionId: string): void;
+  removeNode(nodeId: string): void;
   updateNodePosition(nodeId: string, position: NodePosition): void;
   updateNodeParameter(nodeId: string, parameterId: string, value: number): void;
   selectedNodeId: string | null;
   selectNode(nodeId: string | null): void;
   getParameterValue(nodeId: string, controlId: string): number;
+  undo(): void;
+  redo(): void;
+  canUndo: boolean;
+  canRedo: boolean;
 }
 
 const PatchContext = createContext<PatchController | null>(null);
@@ -77,6 +107,8 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
   const [parameterBindings, setParameterBindings] = useState<PlanControl[]>([]);
   const [parameterValues, setParameterValues] = useState<Record<string, number>>({});
   const [topologyVersion, setTopologyVersion] = useState(0);
+  const [undoStack, setUndoStack] = useState<PatchSnapshot[]>([]);
+  const [redoStack, setRedoStack] = useState<PatchSnapshot[]>([]);
 
   const viewModel = useMemo(() => graphViewModelFromGraph(graph), [graph]);
   const validation = useMemo(() => validateGraph(graph), [graph]);
@@ -95,6 +127,8 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
   const portListenerRef = useRef<((event: MessageEvent) => void) | null>(null);
   const parameterBindingsRef = useRef<PlanControl[]>([]);
   const parameterValuesRef = useRef<Record<string, number>>({});
+  const graphRef = useRef<PatchGraph>(graph);
+  const selectedNodeIdRef = useRef<string | null>(selectedNodeId);
 
   useEffect(() => {
     parameterBindingsRef.current = parameterBindings;
@@ -104,26 +138,134 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
     parameterValuesRef.current = parameterValues;
   }, [parameterValues]);
 
-  const addNodeToGraph = useCallback((node: NodeDescriptor) => {
-    setGraph((prev) => addNode(prev, node));
-    setTopologyVersion((version) => version + 1);
-  }, []);
+  useEffect(() => {
+    graphRef.current = graph;
+  }, [graph]);
 
-  const connectNodes = useCallback((params: ConnectNodesParams) => {
-    setGraph((prev) => connectGraphNodes(prev, params));
-    setTopologyVersion((version) => version + 1);
-  }, []);
+  useEffect(() => {
+    selectedNodeIdRef.current = selectedNodeId;
+  }, [selectedNodeId]);
 
-  const disconnectConnection = useCallback((connectionId: string) => {
-    setGraph((prev) => removeConnection(prev, connectionId));
-    setTopologyVersion((version) => version + 1);
-  }, []);
+  const applyGraphChange = useCallback(
+    (
+      nextGraph: PatchGraph,
+      options: {
+        changeType?: PatchChangeType;
+        selectNode?: string | null;
+        recordHistory?: boolean;
+        afterCommit?: (previous: PatchGraph, updated: PatchGraph) => void;
+      } = {}
+    ): boolean => {
+      const previousGraph = graphRef.current;
+      if (nextGraph === previousGraph) {
+        if (options.selectNode !== undefined && selectedNodeIdRef.current !== options.selectNode) {
+          setSelectedNodeId(options.selectNode);
+          selectedNodeIdRef.current = options.selectNode;
+        }
+        return false;
+      }
+
+      const changeType = options.changeType ?? "topology";
+      const shouldRecord = options.recordHistory ?? true;
+
+      if (shouldRecord) {
+        const snapshot: PatchSnapshot = {
+          graph: previousGraph,
+          parameterValues: { ...parameterValuesRef.current },
+          selectedNodeId: selectedNodeIdRef.current,
+          changeType
+        };
+        setUndoStack((prev) => [...prev, snapshot]);
+      }
+      setRedoStack([]);
+
+      setGraph(nextGraph);
+      graphRef.current = nextGraph;
+
+      if (options.selectNode !== undefined) {
+        setSelectedNodeId(options.selectNode);
+        selectedNodeIdRef.current = options.selectNode;
+      }
+
+      if (changeType === "topology") {
+        setTopologyVersion((version) => version + 1);
+        setParameterBindings([]);
+      }
+
+      if (options.afterCommit) {
+        options.afterCommit(previousGraph, nextGraph);
+      }
+
+      return true;
+    },
+    [
+      setGraph,
+      setUndoStack,
+      setRedoStack,
+      setSelectedNodeId,
+      setTopologyVersion,
+      setParameterBindings
+    ]
+  );
+
+  const addNodeToGraph = useCallback(
+    (node: NodeDescriptor) => {
+      const nextGraph = addNode(graphRef.current, node);
+      applyGraphChange(nextGraph, { changeType: "topology", selectNode: node.id });
+    },
+    [applyGraphChange]
+  );
+
+  const connectNodes = useCallback(
+    (params: ConnectNodesParams) => {
+      const nextGraph = connectGraphNodes(graphRef.current, params);
+      applyGraphChange(nextGraph, { changeType: "topology" });
+    },
+    [applyGraphChange]
+  );
+
+  const disconnectConnection = useCallback(
+    (connectionId: string) => {
+      const nextGraph = removeConnection(graphRef.current, connectionId);
+      applyGraphChange(nextGraph, { changeType: "topology" });
+    },
+    [applyGraphChange]
+  );
+
+  const removeNodeFromGraph = useCallback(
+    (nodeId: string) => {
+      const nextGraph = removeGraphNode(graphRef.current, nodeId);
+      const options: {
+        changeType: PatchChangeType;
+        selectNode?: string | null;
+        afterCommit?: (previous: PatchGraph, updated: PatchGraph) => void;
+      } = {
+        changeType: "topology",
+        afterCommit: (_prev, updated) => {
+          setParameterValues((prevValues) => {
+            const filtered = filterParameterValuesForGraph(prevValues, updated);
+            parameterValuesRef.current = filtered;
+            return filtered;
+          });
+        }
+      };
+      if (selectedNodeIdRef.current === nodeId) {
+        options.selectNode = null;
+      }
+      applyGraphChange(nextGraph, options);
+    },
+    [applyGraphChange]
+  );
 
   const updateNodePosition = useCallback(
     (nodeId: string, position: NodePosition) => {
-      setGraph((prev) => updateGraphNodePosition(prev, nodeId, position));
+      const nextGraph = updateGraphNodePosition(graphRef.current, nodeId, position);
+      applyGraphChange(nextGraph, {
+        changeType: "metadata",
+        recordHistory: false
+      });
     },
-    []
+    [applyGraphChange]
   );
 
   const getParameterValue = useCallback(
@@ -150,9 +292,25 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
 
   const updateNodeParameter = useCallback(
     (nodeId: string, parameterId: string, value: number) => {
-      setGraph((prev) => updateGraphNodeParameter(prev, nodeId, parameterId, value));
+      const nextGraph = updateGraphNodeParameter(
+        graphRef.current,
+        nodeId,
+        parameterId,
+        value
+      );
+      const changed = applyGraphChange(nextGraph, {
+        changeType: "parameter",
+        recordHistory: false
+      });
       const key = makeParameterKey(nodeId, parameterId);
-      setParameterValues((prev) => ({ ...prev, [key]: value }));
+      setParameterValues((prev) => {
+        if (!changed && prev[key] === value) {
+          return prev;
+        }
+        const next = { ...prev, [key]: value };
+        parameterValuesRef.current = next;
+        return next;
+      });
 
       const binding = parameterBindingsRef.current.find(
         (entry) => entry.nodeId === nodeId && entry.controlId === parameterId
@@ -171,7 +329,80 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
 
   const selectNode = useCallback((nodeId: string | null) => {
     setSelectedNodeId(nodeId);
+    selectedNodeIdRef.current = nodeId;
   }, []);
+
+  const undo = useCallback(() => {
+    setUndoStack((prevUndo) => {
+      if (prevUndo.length === 0) {
+        return prevUndo;
+      }
+      const snapshot = prevUndo[prevUndo.length - 1];
+      const remaining = prevUndo.slice(0, -1);
+      const currentSnapshot: PatchSnapshot = {
+        graph: graphRef.current,
+        parameterValues: { ...parameterValuesRef.current },
+        selectedNodeId: selectedNodeIdRef.current,
+        changeType: snapshot.changeType
+      };
+      setRedoStack((prevRedo) => [...prevRedo, currentSnapshot]);
+      setGraph(snapshot.graph);
+      graphRef.current = snapshot.graph;
+      setParameterValues(snapshot.parameterValues);
+      parameterValuesRef.current = snapshot.parameterValues;
+      setSelectedNodeId(snapshot.selectedNodeId);
+      selectedNodeIdRef.current = snapshot.selectedNodeId;
+      if (snapshot.changeType === "topology") {
+        setTopologyVersion((version) => version + 1);
+        setParameterBindings([]);
+      }
+      return remaining;
+    });
+  }, [
+    setGraph,
+    setParameterValues,
+    setParameterBindings,
+    setRedoStack,
+    setSelectedNodeId,
+    setTopologyVersion,
+    setUndoStack
+  ]);
+
+  const redo = useCallback(() => {
+    setRedoStack((prevRedo) => {
+      if (prevRedo.length === 0) {
+        return prevRedo;
+      }
+      const snapshot = prevRedo[prevRedo.length - 1];
+      const remaining = prevRedo.slice(0, -1);
+      const currentSnapshot: PatchSnapshot = {
+        graph: graphRef.current,
+        parameterValues: { ...parameterValuesRef.current },
+        selectedNodeId: selectedNodeIdRef.current,
+        changeType: snapshot.changeType
+      };
+      setUndoStack((prevUndo) => [...prevUndo, currentSnapshot]);
+      setGraph(snapshot.graph);
+      graphRef.current = snapshot.graph;
+      setParameterValues(snapshot.parameterValues);
+      parameterValuesRef.current = snapshot.parameterValues;
+      setSelectedNodeId(snapshot.selectedNodeId);
+      selectedNodeIdRef.current = snapshot.selectedNodeId;
+      if (snapshot.changeType === "topology") {
+        setTopologyVersion((version) => version + 1);
+        setParameterBindings([]);
+      }
+      return remaining;
+    });
+  }, [
+    setGraph,
+    setParameterValues,
+    setParameterBindings,
+    setUndoStack,
+    setSelectedNodeId,
+    setTopologyVersion,
+    setRedoStack
+  ]);
 
   const stopAudioInternal = useCallback(async () => {
     const handle = workletHandleRef.current;
@@ -271,6 +502,7 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
           next[key] = binding.defaultValue;
         }
       }
+      parameterValuesRef.current = next;
       return next;
     });
 
@@ -371,6 +603,9 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
     }
   }, [audioSupported, artifact, stopAudioInternal, createAudioContext]);
 
+  const canUndo = undoStack.length > 0;
+  const canRedo = redoStack.length > 0;
+
   const value = useMemo<PatchController>(
     () => ({
       graph,
@@ -388,11 +623,16 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       addNode: addNodeToGraph,
       connectNodes,
       disconnectConnection,
+      removeNode: removeNodeFromGraph,
       updateNodePosition,
       updateNodeParameter,
       selectedNodeId,
       selectNode,
-      getParameterValue
+      getParameterValue,
+      undo,
+      redo,
+      canUndo,
+      canRedo
     }),
     [
       graph,
@@ -408,11 +648,16 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       addNodeToGraph,
       connectNodes,
       disconnectConnection,
+      removeNodeFromGraph,
       updateNodePosition,
       updateNodeParameter,
       selectedNodeId,
       selectNode,
-      getParameterValue
+      getParameterValue,
+      undo,
+      redo,
+      canUndo,
+      canRedo
     ]
   );
 
