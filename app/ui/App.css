@@ -68,6 +68,10 @@
 .inspector-header {
   padding: 0.75rem 1rem;
   border-bottom: 1px solid #1f2430;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
 }
 
 .canvas-body,
@@ -78,6 +82,64 @@
 
 .placeholder {
   color: #8289a1;
+}
+
+.node-palette {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.node-palette-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  background: #1a1f28;
+  border: 1px solid #242b36;
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+}
+
+.node-palette-group > header {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #7a859d;
+}
+
+.node-palette-items {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.node-palette-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  border: 1px solid #303845;
+  background: #222833;
+  color: inherit;
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  min-width: 120px;
+  cursor: pointer;
+}
+
+.node-palette-item:hover {
+  border-color: #3f4b5c;
+  background: #28303e;
+}
+
+.node-palette-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.node-palette-kind {
+  font-size: 0.7rem;
+  color: #9aa4bd;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .inspector-row {

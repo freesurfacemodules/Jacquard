@@ -2,22 +2,24 @@ import { useCallback } from "react";
 import { usePatch } from "../state/PatchContext";
 import { instantiateNode } from "@dsp/nodes";
 import { nanoid } from "@codegen/utils/nanoid";
+import { NodePalette } from "./NodePalette";
 
 export function Canvas(): JSX.Element {
   const { viewModel, addNode } = usePatch();
 
-  const handleAddSine = useCallback(() => {
-    const node = instantiateNode("osc.sine", nanoid());
-    addNode(node);
-  }, [addNode]);
+  const handleCreateNode = useCallback(
+    (kind: string) => {
+      const node = instantiateNode(kind, nanoid());
+      addNode(node);
+    },
+    [addNode]
+  );
 
   return (
     <section className="canvas-pane" aria-label="Patch editor">
       <header className="canvas-header">
         <h1>Patch</h1>
-        <button type="button" onClick={handleAddSine} className="toolbar-button">
-          Add Sine
-        </button>
+        <NodePalette onCreateNode={handleCreateNode} />
       </header>
       <div className="canvas-body">
         {viewModel.nodes.length === 0 ? (
