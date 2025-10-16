@@ -1,8 +1,8 @@
 # Agent Guide for MaxWasm
 
 ## Project Overview
-- **STATUS.md** → High-level progress, known limitations, and roadmap items.
 - **README.md** → Detailed architecture, data flow, and technology stack.
+- **STATUS.md** → High-level progress, known limitations, and roadmap items.
 - **NEXT_STEPS.md** → Immediate engineering tasks in priority order.
 
 ## Repository Layout
@@ -23,6 +23,7 @@ Supporting files: `README.md`, `STATUS.md`, `NEXT_STEPS.md`, `AGENTS.md`, Vite/T
 - Prefer reusable utilities over ad hoc logic; follow existing patterns (manifest-driven nodes, hooks in `PatchContext`).
 - Keep playback uninterrupted during UI changes: avoid recompiles unless topology changes.
 - Add logging for non-trivial workflows (compile, worklet start) and remove obsolete logs once issues are resolved.
+- Commit changes after each development cycle.
 
 ## Testing & Validation
 - **Lint:** `npm run lint`
