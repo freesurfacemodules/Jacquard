@@ -37,6 +37,12 @@ import {
 } from "@audio/worklet-loader";
 import { getNodeImplementation } from "@dsp/nodes";
 import type { PlanControl } from "@codegen/plan";
+import {
+  createPatchDocument,
+  normalizePatchDocument,
+  PATCH_DOCUMENT_VERSION,
+  PatchDocument
+} from "@graph/persistence";
 
 const PARAM_MESSAGE_BATCH = "parameterBatch";
 const PARAM_MESSAGE_SINGLE = "parameter";
@@ -66,6 +72,29 @@ const filterParameterValuesForGraph = (
     }
   }
   return next;
+};
+
+const buildParameterValuesForGraph = (graph: PatchGraph): Record<string, number> => {
+  const values: Record<string, number> = {};
+  for (const node of graph.nodes) {
+    const implementation = getNodeImplementation(node.kind);
+    const controls = implementation?.manifest.controls ?? [];
+    for (const control of controls) {
+      const key = makeParameterKey(node.id, control.id);
+      const nodeValue = node.parameters?.[control.id];
+      if (typeof nodeValue === "number") {
+        values[key] = nodeValue;
+      } else if (
+        implementation?.manifest.defaultParams &&
+        typeof implementation.manifest.defaultParams[control.id] === "number"
+      ) {
+        values[key] = implementation.manifest.defaultParams[control.id]!;
+      } else {
+        values[key] = control.min ?? 0;
+      }
+    }
+  }
+  return values;
 };
 
 type AudioEngineState = "unsupported" | "idle" | "starting" | "running" | "error";
@@ -100,6 +129,8 @@ export interface PatchController {
   redo(): void;
   canUndo: boolean;
   canRedo: boolean;
+  exportPatch(): PatchDocument;
+  importPatch(document: PatchDocument | PatchGraph): void;
 }
 
 const PatchContext = createContext<PatchController | null>(null);
@@ -223,6 +254,13 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
   const connectNodes = useCallback(
     (params: ConnectNodesParams) => {
       const nextGraph = connectGraphNodes(graphRef.current, params);
+      const validationResult = validateGraph(nextGraph);
+      const cycleIssue = validationResult.issues.find(
+        (issue) => issue.code === "CYCLE_DETECTED"
+      );
+      if (cycleIssue) {
+        throw new Error(cycleIssue.message);
+      }
       applyGraphChange(nextGraph, { changeType: "topology" });
     },
     [applyGraphChange]
@@ -623,6 +661,41 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
     }
   }, [audioSupported, artifact, stopAudioInternal, createAudioContext]);
 
+  const exportPatch = useCallback((): PatchDocument => {
+    return createPatchDocument(graphRef.current);
+  }, []);
+
+  const importPatch = useCallback(
+    (input: PatchDocument | PatchGraph) => {
+      const document = normalizePatchDocument(input);
+      if (document.version > PATCH_DOCUMENT_VERSION) {
+        throw new Error(
+          `Unsupported patch version ${document.version}. Upgrade the application to load this file.`
+        );
+      }
+
+      const validationResult = validateGraph(document.graph);
+      if (!validationResult.isValid) {
+        const firstIssue = validationResult.issues[0];
+        const detail = firstIssue
+          ? `${firstIssue.code}: ${firstIssue.message}`
+          : "Patch is invalid.";
+        throw new Error(detail);
+      }
+
+      applyGraphChange(document.graph, {
+        changeType: "topology",
+        selectNode: null,
+        afterCommit: (_prev, updated) => {
+          const derivedValues = buildParameterValuesForGraph(updated);
+          setParameterValues(derivedValues);
+          parameterValuesRef.current = derivedValues;
+        }
+      });
+    },
+    [applyGraphChange]
+  );
+
   const canUndo = undoStack.length > 0;
   const canRedo = redoStack.length > 0;
 
@@ -654,7 +727,9 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       undo,
       redo,
       canUndo,
-      canRedo
+      canRedo,
+      exportPatch,
+      importPatch
     }),
     [
       graph,
@@ -681,7 +756,9 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       undo,
       redo,
       canUndo,
-      canRedo
+      canRedo,
+      exportPatch,
+      importPatch
     ]
   );
 

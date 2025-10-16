@@ -8,8 +8,7 @@
 
 ## Known Constraints / Pending Work
 1. **Cycle Recovery**
-   - Node and connection deletion plus undo/redo are in place, but users can still create delay-free cycles that persist until manual cleanup.
-   - Add guard rails that automatically revert the last connection when it introduces an invalid cycle.
+   - Delay-free cycles are rejected at connection time, but we still need inline guidance (highlighting offending ports/nodes) to help users resolve the loop quickly.
 
 2. **Patch Settings**
    - Sample rate, block size, and oversampling remain fixed defaults.
@@ -22,7 +21,7 @@
    - Only simple knobs are supported. Nodes need a richer UI manifest for sliders, meters, oscilloscopes, etc., plus data taps back to React.
 
 5. **Persistence & Undo**
-   - Graph edits aren’t stored outside in-memory state. Add persistent storage (local/save file) and history (undo/redo).
+   - Manual save/load is available, but there is no auto-save or patch library. Add IndexedDB-backed autosave and patch metadata/history management.
 
 ## Next Steps / Roadmap Highlights
 - Add guard rails that automatically reject illegal cycles now that delete/disconnect UI and undo/redo exist.

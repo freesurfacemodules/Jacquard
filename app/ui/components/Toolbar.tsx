@@ -1,15 +1,26 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { ChangeEvent, useCallback, useEffect, useRef, useState } from "react";
 import { usePatch } from "../state/PatchContext";
 
 export function Toolbar(): JSX.Element {
-  const { validation, compile, audio, artifact, undo, redo, canUndo, canRedo } =
-    usePatch();
+  const {
+    validation,
+    compile,
+    audio,
+    artifact,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    exportPatch,
+    importPatch
+  } = usePatch();
   const [compileStatus, setCompileStatus] = useState<
     "idle" | "compiling" | "ready" | "error"
   >("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const previousAudioState = useRef(audio.state);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleCompile = useCallback(async () => {
     if (!validation.isValid) {
@@ -79,6 +90,64 @@ export function Toolbar(): JSX.Element {
     redo();
   }, [redo]);
 
+  const handleSavePatch = useCallback(() => {
+    try {
+      if (typeof window === "undefined") {
+        throw new Error("Saving patches is only available in a browser.");
+      }
+      const patchDocument = exportPatch();
+      const json = JSON.stringify(patchDocument, null, 2);
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const anchor = window.document.createElement("a");
+      const timestamp = new Date()
+        .toISOString()
+        .replace(/[:.]/g, "-");
+      anchor.href = url;
+      anchor.download = `maxwasm-patch-${timestamp}.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setSuccessMessage("Patch saved.");
+      setErrorMessage(null);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to save patch.";
+      setErrorMessage(message);
+      setSuccessMessage(null);
+    }
+  }, [exportPatch]);
+
+  const handleLoadClick = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const handleFileChange = useCallback(
+    async (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) {
+        return;
+      }
+
+      try {
+        const text = await file.text();
+        const payload = JSON.parse(text);
+        importPatch(payload);
+        setSuccessMessage(`Loaded patch from ${file.name}.`);
+        setErrorMessage(null);
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Failed to load patch file.";
+        setErrorMessage(message);
+        setSuccessMessage(null);
+      } finally {
+        event.target.value = "";
+      }
+    },
+    [importPatch]
+  );
+
   const isRunning = audio.state === "running";
   const runDisabled =
     (!isRunning && compileStatus !== "ready") ||
@@ -117,6 +186,20 @@ export function Toolbar(): JSX.Element {
         </button>
         <button
           type="button"
+          onClick={handleSavePatch}
+          className="toolbar-button"
+        >
+          Save
+        </button>
+        <button
+          type="button"
+          onClick={handleLoadClick}
+          className="toolbar-button"
+        >
+          Load
+        </button>
+        <button
+          type="button"
           onClick={handleCompile}
           className="toolbar-button"
           disabled={compileStatus === "compiling"}
@@ -146,6 +229,13 @@ export function Toolbar(): JSX.Element {
           Audio playback is unavailable in this environment.
         </div>
       ) : null}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="application/json,.json"
+        onChange={handleFileChange}
+        style={{ display: "none" }}
+      />
     </header>
   );
 }
