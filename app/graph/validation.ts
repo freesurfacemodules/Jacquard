@@ -127,6 +127,11 @@ export function topologicalSort(graph: PatchGraph): TopologyResult {
       continue;
     }
 
+    const fromNode = nodesById.get(connection.from.node);
+    if (fromNode?.kind === "delay.ddl") {
+      continue;
+    }
+
     const neighbors = adjacency.get(connection.from.node);
     if (neighbors && !neighbors.has(connection.to.node)) {
       neighbors.add(connection.to.node);

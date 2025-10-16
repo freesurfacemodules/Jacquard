@@ -32,6 +32,33 @@ export function emitAssemblyScript(
   const plan = createExecutionPlan(graph);
   const autoRoute = determineAutoRoute(plan);
 
+  const delayPrefetchLines: string[] = [];
+  for (const planNode of plan.nodes) {
+    if (planNode.node.kind !== "delay.ddl") {
+      continue;
+    }
+    const identifier = sanitizeIdentifier(planNode.node.id);
+    const delayVar = `delay_${identifier}`;
+    const prefetchVar = `delay_${identifier}_prefetch`;
+    const assignments: string[] = [];
+    const output = planNode.outputs.find((candidate) => candidate.port.id === "out");
+    if (output) {
+      for (const wire of output.wires) {
+        assignments.push(`${wire.varName} = ${prefetchVar};`);
+      }
+    }
+    if (autoRoute.left === planNode.node.id) {
+      assignments.push(`${AUTO_LEFT_VAR} = ${prefetchVar};`);
+    }
+    if (autoRoute.right === planNode.node.id) {
+      assignments.push(`${AUTO_RIGHT_VAR} = ${prefetchVar};`);
+    }
+    if (assignments.length > 0) {
+      delayPrefetchLines.push(`const ${prefetchVar}: f32 = ${delayVar}.prepare();`);
+      delayPrefetchLines.push(...assignments);
+    }
+  }
+
   const header = [
     "// Auto-generated AssemblyScript module",
     `// Module: ${moduleName}`,
@@ -89,6 +116,10 @@ export function emitAssemblyScript(
   }
   if (autoRoute.right) {
     processBodyLines.push(indentLines(`let ${AUTO_RIGHT_VAR}: f32 = 0.0;`, 2));
+  }
+
+  if (delayPrefetchLines.length > 0) {
+    processBodyLines.push(indentLines(delayPrefetchLines.join("\n"), 2));
   }
 
   for (const planNode of plan.nodes) {
@@ -381,15 +412,26 @@ function collectStateDeclarations(plan: ExecutionPlan): string {
   );
 
   if (sineNodes.length === 0) {
-    return lines.join("\n");
+    // continue gathering additional state below
   }
-
   const sineLines = sineNodes.map((planNode) => {
     const identifier = sanitizeIdentifier(planNode.node.id);
     return `const node_${identifier} = new SineOsc();`;
   });
-
   lines.push(...sineLines);
+
+  const delayNodes = plan.nodes.filter((planNode) => planNode.node.kind === "delay.ddl");
+  if (delayNodes.length > 0) {
+    if (lines[lines.length - 1] !== "") {
+      lines.push("");
+    }
+    const delayLines = delayNodes.map((planNode) => {
+      const identifier = sanitizeIdentifier(planNode.node.id);
+      return `const delay_${identifier} = new DdlDelay();`;
+    });
+    lines.push(...delayLines);
+  }
+
   return lines.join("\n");
 }
 

@@ -396,10 +396,27 @@ export function Canvas(): JSX.Element {
           const { width } = getNodeDimensions(node);
           const implementation = getNodeImplementation(node.kind);
           const controls = implementation?.manifest.controls ?? [];
-          const controlValues = controls.reduce<Record<string, number>>((acc, control) => {
-            acc[control.id] = getParameterValue(node.id, control.id);
-            return acc;
-          }, {});
+          const controlConfigs = controls.map((control) => {
+            let min = control.min ?? 0;
+            const max = control.max ?? 1;
+            let step = control.step ?? 0.01;
+            if (node.kind === "delay.ddl" && control.id === "delay") {
+              const dynamicStep = 1 / viewModel.oversampling;
+              min = dynamicStep;
+              step = dynamicStep;
+            }
+            const rawValue = getParameterValue(node.id, control.id);
+            const clampedValue = Math.min(max, Math.max(min, rawValue));
+            const quantized = Math.round(clampedValue / step) * step;
+            return {
+              id: control.id,
+              label: control.label,
+              value: quantized,
+              min,
+              max,
+              step
+            };
+          });
           return (
             <PatchNode
               key={node.id}
@@ -413,7 +430,7 @@ export function Canvas(): JSX.Element {
               onDragEnd={handleDragEnd}
               onOutputPointerDown={handleOutputPointerDown}
               onInputPointerUp={handleInputPointerUp}
-              controlValues={controlValues}
+              controls={controlConfigs}
               onControlChange={handleControlChange}
             />
           );

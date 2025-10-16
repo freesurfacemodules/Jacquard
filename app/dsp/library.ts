@@ -4,11 +4,13 @@ import { sineOscNode } from "@dsp/nodes/oscillator/sine/manifest";
 import { stereoMixerNode } from "@dsp/nodes/mixer/stereo/manifest";
 import { outputNode } from "@dsp/nodes/io/output/manifest";
 import { gainNode } from "@dsp/nodes/utility/gain/manifest";
+import { ddlDelayNode } from "@dsp/nodes/delay/ddl/manifest";
 
 const implementations: NodeImplementation[] = [
   sineOscNode,
   stereoMixerNode,
   gainNode,
+  ddlDelayNode,
   outputNode
 ];
 

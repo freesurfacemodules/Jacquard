@@ -27,7 +27,14 @@ interface PatchNodeProps {
     portIndex: number,
     event: React.PointerEvent<HTMLButtonElement>
   ): void;
-  controlValues: Record<string, number>;
+  controls: Array<{
+    id: string;
+    label: string;
+    value: number;
+    min: number;
+    max: number;
+    step: number;
+  }>;
   onControlChange(nodeId: string, controlId: string, value: number): void;
 }
 
@@ -42,11 +49,10 @@ export const PatchNode = memo(function PatchNode({
   onDragEnd,
   onOutputPointerDown,
   onInputPointerUp,
-  controlValues,
+  controls,
   onControlChange
 }: PatchNodeProps): JSX.Element {
   const implementation: NodeImplementation | undefined = getNodeImplementation(node.kind);
-  const controls = implementation?.manifest.controls ?? [];
 
   const handleContainerPointerDown = (
     event: React.PointerEvent<HTMLDivElement>
@@ -133,26 +139,19 @@ export const PatchNode = memo(function PatchNode({
       </div>
       {controls.length > 0 ? (
         <div className="patch-node__controls">
-          {controls.map((control) => {
-            const value =
-              controlValues[control.id] ??
-              node.parameters[control.id] ??
-              implementation?.manifest.defaultParams?.[control.id] ??
-              control.min ?? 0;
-            return (
-              <div key={control.id} className="patch-node__control">
-                <Knob
-                  min={control.min}
-                  max={control.max}
-                  step={control.step ?? 0.01}
-                  value={value}
-                  onChange={(next) => onControlChange(node.id, control.id, next)}
-                />
-                <span>{control.label}</span>
-                <span className="patch-node__control-value">{value.toFixed(2)}</span>
-              </div>
-            );
-          })}
+          {controls.map((control) => (
+            <div key={control.id} className="patch-node__control">
+              <Knob
+                min={control.min}
+                max={control.max}
+                step={control.step}
+                value={control.value}
+                onChange={(next) => onControlChange(node.id, control.id, next)}
+              />
+              <span>{control.label}</span>
+              <span className="patch-node__control-value">{control.value.toFixed(3)}</span>
+            </div>
+          ))}
         </div>
       ) : null}
     </div>

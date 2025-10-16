@@ -52,6 +52,17 @@ const PARAM_MESSAGE_SINGLE = "parameter";
 const makeParameterKey = (nodeId: string, controlId: string): string =>
   `${nodeId}:${controlId}`;
 
+const DELAY_NODE_KIND = "delay.ddl";
+const DELAY_CONTROL_ID = "delay";
+const DELAY_MAX_SAMPLES = 4096;
+
+const clampDelayParameter = (value: number, oversampling: number): number => {
+  const step = 1 / oversampling;
+  const clamped = Math.min(DELAY_MAX_SAMPLES, Math.max(step, value));
+  const quantized = Math.round(clamped / step) * step;
+  return Number.isFinite(quantized) ? quantized : step;
+};
+
 type PatchChangeType = "topology" | "parameter" | "metadata";
 
 interface PatchSnapshot {
@@ -74,6 +85,40 @@ const filterParameterValuesForGraph = (
     }
   }
   return next;
+};
+
+const normalizeDelayNodes = (
+  graph: PatchGraph,
+  oversampling: number
+): { graph: PatchGraph; updatedValues: Record<string, number> } => {
+  let changed = false;
+  const updatedValues: Record<string, number> = {};
+  const nodes = graph.nodes.map((node) => {
+    if (node.kind !== DELAY_NODE_KIND) {
+      return node;
+    }
+    const rawValue = typeof node.parameters[DELAY_CONTROL_ID] === "number"
+      ? node.parameters[DELAY_CONTROL_ID]
+      : 1;
+    const clamped = clampDelayParameter(rawValue, oversampling);
+    updatedValues[node.id] = clamped;
+    if (clamped === rawValue) {
+      return node;
+    }
+    changed = true;
+    return {
+      ...node,
+      parameters: {
+        ...node.parameters,
+        [DELAY_CONTROL_ID]: clamped
+      }
+    };
+  });
+
+  return {
+    graph: changed ? { ...graph, nodes } : graph,
+    updatedValues
+  };
 };
 
 const buildParameterValuesForGraph = (graph: PatchGraph): Record<string, number> => {
@@ -320,8 +365,29 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
 
   const updatePatchSettings = useCallback(
     (settings: PatchSettingsUpdate) => {
-      const nextGraph = updateGraphPatchSettings(graphRef.current, settings);
-      applyGraphChange(nextGraph, { changeType: "topology" });
+      const oversampling = settings.oversampling ?? graphRef.current.oversampling;
+      const updatedBase = updateGraphPatchSettings(graphRef.current, settings);
+      const { graph: normalizedGraph, updatedValues } = normalizeDelayNodes(
+        updatedBase,
+        oversampling
+      );
+      applyGraphChange(normalizedGraph, {
+        changeType: "topology",
+        afterCommit: (_prev, updated) => {
+          if (Object.keys(updatedValues).length === 0) {
+            return;
+          }
+          setParameterValues((prev) => {
+            const next = { ...prev };
+            for (const [nodeId, value] of Object.entries(updatedValues)) {
+              const key = makeParameterKey(nodeId, DELAY_CONTROL_ID);
+              next[key] = value;
+            }
+            parameterValuesRef.current = next;
+            return next;
+          });
+        }
+      });
     },
     [applyGraphChange]
   );
@@ -345,12 +411,19 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       }
       const node = graph.nodes.find((candidate) => candidate.id === nodeId);
       if (node && typeof node.parameters[controlId] === "number") {
-        return node.parameters[controlId];
+        const raw = node.parameters[controlId];
+        if (node.kind === DELAY_NODE_KIND && controlId === DELAY_CONTROL_ID) {
+          return clampDelayParameter(raw, graph.oversampling);
+        }
+        return raw;
       }
       if (node) {
         const implementation = getNodeImplementation(node.kind);
         const fallback = implementation?.manifest.defaultParams?.[controlId];
         if (typeof fallback === "number") {
+          if (node.kind === DELAY_NODE_KIND && controlId === DELAY_CONTROL_ID) {
+            return clampDelayParameter(fallback, graph.oversampling);
+          }
           return fallback;
         }
       }
@@ -361,11 +434,18 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
 
   const updateNodeParameter = useCallback(
     (nodeId: string, parameterId: string, value: number) => {
+      const currentGraph = graphRef.current;
+      const oversampling = currentGraph.oversampling;
+      const targetNode = currentGraph.nodes.find((candidate) => candidate.id === nodeId);
+      let adjustedValue = value;
+      if (targetNode?.kind === DELAY_NODE_KIND && parameterId === DELAY_CONTROL_ID) {
+        adjustedValue = clampDelayParameter(value, oversampling);
+      }
       const nextGraph = updateGraphNodeParameter(
-        graphRef.current,
+        currentGraph,
         nodeId,
         parameterId,
-        value
+        adjustedValue
       );
       const changed = applyGraphChange(nextGraph, {
         changeType: "parameter",
@@ -373,10 +453,10 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       });
       const key = makeParameterKey(nodeId, parameterId);
       setParameterValues((prev) => {
-        if (!changed && prev[key] === value) {
+        if (!changed && prev[key] === adjustedValue) {
           return prev;
         }
-        const next = { ...prev, [key]: value };
+        const next = { ...prev, [key]: adjustedValue };
         parameterValuesRef.current = next;
         return next;
       });
@@ -389,7 +469,7 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
         handle.node.port.postMessage({
           type: PARAM_MESSAGE_SINGLE,
           index: binding.index,
-          value
+          value: adjustedValue
         });
       }
     },
@@ -685,7 +765,11 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
         );
       }
 
-      const validationResult = validateGraph(document.graph);
+      const { graph: normalizedGraph, updatedValues } = normalizeDelayNodes(
+        document.graph,
+        document.graph.oversampling
+      );
+      const validationResult = validateGraph(normalizedGraph);
       if (!validationResult.isValid) {
         const firstIssue = validationResult.issues[0];
         const detail = firstIssue
@@ -694,11 +778,14 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
         throw new Error(detail);
       }
 
-      applyGraphChange(document.graph, {
+      applyGraphChange(normalizedGraph, {
         changeType: "topology",
         selectNode: null,
         afterCommit: (_prev, updated) => {
           const derivedValues = buildParameterValuesForGraph(updated);
+          for (const [nodeId, value] of Object.entries(updatedValues)) {
+            derivedValues[makeParameterKey(nodeId, DELAY_CONTROL_ID)] = value;
+          }
           setParameterValues(derivedValues);
           parameterValuesRef.current = derivedValues;
         }

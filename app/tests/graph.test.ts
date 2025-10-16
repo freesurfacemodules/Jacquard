@@ -294,6 +294,48 @@ describe("graph", () => {
     expect(() => updatePatchSettings(graph, { oversampling: 3 as 1 })).toThrow(/Invalid oversampling/);
   });
 
+  it("allows feedback loops when delayed", () => {
+    let graph = createGraph();
+    const gain = instantiateNode("utility.gain", "gain1");
+    const delay = instantiateNode("delay.ddl", "delay1");
+    const out = instantiateNode("io.output", "out1");
+
+    graph = addNode(graph, gain);
+    graph = addNode(graph, delay);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: gain.id,
+      fromPortId: "out",
+      toNodeId: delay.id,
+      toPortId: "in"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: delay.id,
+      fromPortId: "out",
+      toNodeId: gain.id,
+      toPortId: "in"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: gain.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: gain.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "right"
+    });
+
+    const validation = validateGraph(graph);
+    expect(validation.isValid).toBe(true);
+  });
+
   it("updates node parameters immutably", () => {
     const osc = instantiateNode("osc.sine", "osc1");
     const graph = addNode(createGraph(), osc);

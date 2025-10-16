@@ -143,4 +143,42 @@ describe("code generation", () => {
     expect(source).toContain("// Gain (gain1)");
     expect(source).toMatch(/scaled: f32 = \(wire\d+\) \* \(getParameterValue\(0\)\)/);
   });
+
+  it("emits delay node with oversampling-aware logic", () => {
+    let graph = createGraph({ oversampling: 4 });
+    const osc = instantiateNode("osc.sine", "osc1");
+    const delay = instantiateNode("delay.ddl", "delay1");
+    const out = instantiateNode("io.output", "out1");
+
+    graph = addNode(graph, osc);
+    graph = addNode(graph, delay);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: osc.id,
+      fromPortId: "out",
+      toNodeId: delay.id,
+      toPortId: "in"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: delay.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: delay.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "right"
+    });
+
+    const { source } = emitAssemblyScript(graph);
+    expect(source).toContain("const delay_delay1 = new DdlDelay();");
+    expect(source).toMatch(/const delay_delay1_prefetch: f32 = delay_delay1\.prepare\(\);/);
+    expect(source).toMatch(/delay_delay1\.commit\(inputSample, internalSamples\);/);
+    expect(source).toContain("const MIN_DELAY_SAMPLES");
+  });
 });
