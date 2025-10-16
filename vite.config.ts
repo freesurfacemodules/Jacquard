@@ -13,5 +13,17 @@ export default defineConfig({
       "@dsp": "/app/dsp",
       "@tests": "/app/tests"
     }
+  },
+  optimizeDeps: {
+    exclude: ["assemblyscript", "binaryen"],
+    esbuildOptions: {
+      target: "esnext",
+      supported: {
+        "top-level-await": true
+      }
+    }
+  },
+  build: {
+    target: "esnext"
   }
 });
