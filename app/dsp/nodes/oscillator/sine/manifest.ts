@@ -1,0 +1,85 @@
+import { audioPort } from "../../common";
+import { NodeImplementation } from "@dsp/types";
+import type { PlanInput } from "@codegen/plan";
+import sineOscDeclarations from "./sine.as?raw";
+
+const CHANNEL_OUT = "out";
+const PITCH_INPUT = "pitch";
+
+const sineManifest: NodeImplementation = {
+  manifest: {
+    kind: "osc.sine",
+    category: "oscillator",
+    label: "Sine Oscillator",
+    inputs: [audioPort(PITCH_INPUT, "Pitch (oct)")],
+    outputs: [audioPort(CHANNEL_OUT, "Out")],
+    defaultParams: {
+      pitch: 0
+    },
+    appearance: {
+      width: 160,
+      height: 120,
+      icon: "wave-sine"
+    }
+  },
+  assembly: {
+    declarations: sineOscDeclarations,
+    emit(planNode, helpers) {
+      const identifier = helpers.sanitizeIdentifier(planNode.node.id);
+      const output = planNode.outputs.find((port) => port.port.id === CHANNEL_OUT);
+
+      const autoRouteMatchesLeft = helpers.autoRoute.left === planNode.node.id;
+      const autoRouteMatchesRight = helpers.autoRoute.right === planNode.node.id;
+      const isAutoRouted = autoRouteMatchesLeft || autoRouteMatchesRight;
+
+      if (!output || (output.wires.length === 0 && !isAutoRouted)) {
+        return `// ${planNode.node.label} (${planNode.node.id}) has no outgoing connections.`;
+      }
+
+      const pitchInput = findInput(planNode.inputs, PITCH_INPUT);
+      const pitchExpr = pitchInput
+        ? helpers.buildInputExpression(pitchInput)
+        : helpers.numberLiteral(0);
+
+      const assignments = output.wires
+        .map((wire) => `${wire.varName} = sample;`)
+        .join("\n");
+
+      const autoAssignments: string[] = [];
+      if (autoRouteMatchesLeft) {
+        autoAssignments.push(`${helpers.autoLeftVar} = sample;`);
+      }
+      if (autoRouteMatchesRight) {
+        autoAssignments.push(`${helpers.autoRightVar} = sample;`);
+      }
+
+      const lines = [
+        `// ${planNode.node.label} (${planNode.node.id})`,
+        "{",
+        helpers.indentLines(`let pitch: f32 = ${pitchExpr};`, 1),
+        helpers.indentLines(
+          "let frequency: f32 = FREQ_C4 * Mathf.pow(2.0, pitch);",
+          1
+        ),
+        helpers.indentLines(`let sample: f32 = node_${identifier}.step(frequency);`, 1),
+        assignments
+          ? helpers.indentLines(assignments, 1)
+          : !isAutoRouted
+          ? helpers.indentLines("// No destinations for oscillator output.", 1)
+          : "",
+        autoAssignments.length > 0
+          ? helpers.indentLines(autoAssignments.join("\n"), 1)
+          : "",
+        "}"
+      ];
+
+      return lines.filter(Boolean).join("\n");
+    }
+  }
+};
+
+function findInput(inputs: PlanInput[], id: string): PlanInput | undefined {
+  return inputs.find((input) => input.port.id === id);
+}
+
+export const sineOscNode = sineManifest;
