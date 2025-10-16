@@ -76,6 +76,7 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [parameterBindings, setParameterBindings] = useState<PlanControl[]>([]);
   const [parameterValues, setParameterValues] = useState<Record<string, number>>({});
+  const [topologyVersion, setTopologyVersion] = useState(0);
 
   const viewModel = useMemo(() => graphViewModelFromGraph(graph), [graph]);
   const validation = useMemo(() => validateGraph(graph), [graph]);
@@ -105,14 +106,17 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
 
   const addNodeToGraph = useCallback((node: NodeDescriptor) => {
     setGraph((prev) => addNode(prev, node));
+    setTopologyVersion((version) => version + 1);
   }, []);
 
   const connectNodes = useCallback((params: ConnectNodesParams) => {
     setGraph((prev) => connectGraphNodes(prev, params));
+    setTopologyVersion((version) => version + 1);
   }, []);
 
   const disconnectConnection = useCallback((connectionId: string) => {
     setGraph((prev) => removeConnection(prev, connectionId));
+    setTopologyVersion((version) => version + 1);
   }, []);
 
   const updateNodePosition = useCallback(
@@ -218,7 +222,7 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       setAudioState("idle");
       setAudioError(null);
     })();
-  }, [graph, audioSupported, stopAudioInternal]);
+  }, [topologyVersion, audioSupported, stopAudioInternal]);
 
   const createAudioContext = useCallback((): AudioContext => {
     if (!audioSupported) {
