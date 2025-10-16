@@ -91,6 +91,18 @@
   overflow: auto;
 }
 
+.inspector-section {
+  margin-bottom: 1.25rem;
+}
+
+.inspector-section h3 {
+  margin: 0 0 0.65rem;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #7f8aa8;
+}
+
 .placeholder {
   color: #8289a1;
 }
@@ -349,4 +361,71 @@
 
 .validation-list li {
   margin-bottom: 0.5rem;
+}
+
+.inspector-node {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  border: 1px solid #222a37;
+  border-radius: 8px;
+  padding: 0.75rem;
+  background: #181d27;
+}
+
+.inspector-node__header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: #aab4d2;
+}
+
+.inspector-node__header strong {
+  font-size: 0.95rem;
+  color: #f5f5f5;
+}
+
+.inspector-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.inspector-control {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.inspector-control__label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #d9e1ff;
+  font-weight: 500;
+}
+
+.inspector-control__label small {
+  font-size: 0.75rem;
+  color: #90a0d0;
+}
+
+.inspector-control input[type="range"] {
+  width: 100%;
+  accent-color: #5d7cff;
+}
+
+.inspector-control__hint {
+  margin: 0;
+  font-size: 0.7rem;
+  color: #8c94b0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.inspector-placeholder {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #8f98b7;
 }

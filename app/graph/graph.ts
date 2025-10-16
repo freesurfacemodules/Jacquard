@@ -149,6 +149,40 @@ export function updateNodePosition(
 
   if (!changed) {
     return graph;
+}
+
+  return {
+    ...graph,
+    nodes
+  };
+}
+
+export function updateNodeParameter(
+  graph: PatchGraph,
+  nodeId: string,
+  parameterId: string,
+  value: number
+): PatchGraph {
+  let changed = false;
+  const nodes = graph.nodes.map((node) => {
+    if (node.id !== nodeId) {
+      return node;
+    }
+    if (node.parameters[parameterId] === value) {
+      return node;
+    }
+    changed = true;
+    return {
+      ...node,
+      parameters: {
+        ...node.parameters,
+        [parameterId]: value
+      }
+    };
+  });
+
+  if (!changed) {
+    return graph;
   }
 
   return {

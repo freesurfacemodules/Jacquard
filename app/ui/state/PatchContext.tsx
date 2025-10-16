@@ -13,7 +13,8 @@ import {
   connectNodes as connectGraphNodes,
   createGraph,
   removeConnection,
-  updateNodePosition as updateGraphNodePosition
+  updateNodePosition as updateGraphNodePosition,
+  updateNodeParameter as updateGraphNodeParameter
 } from "@graph/graph";
 import {
   GraphViewModel,
@@ -53,6 +54,9 @@ export interface PatchController {
   connectNodes(params: ConnectNodesParams): void;
   disconnectConnection(connectionId: string): void;
   updateNodePosition(nodeId: string, position: NodePosition): void;
+  updateNodeParameter(nodeId: string, parameterId: string, value: number): void;
+  selectedNodeId: string | null;
+  selectNode(nodeId: string | null): void;
 }
 
 const PatchContext = createContext<PatchController | null>(null);
@@ -60,6 +64,7 @@ const PatchContext = createContext<PatchController | null>(null);
 export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
   const [graph, setGraph] = useState<PatchGraph>(() => createGraph());
   const [artifact, setArtifact] = useState<CompileResult | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const viewModel = useMemo(() => graphViewModelFromGraph(graph), [graph]);
   const validation = useMemo(() => validateGraph(graph), [graph]);
   const audioSupported =
@@ -93,6 +98,17 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
     },
     []
   );
+
+  const updateNodeParameter = useCallback(
+    (nodeId: string, parameterId: string, value: number) => {
+      setGraph((prev) => updateGraphNodeParameter(prev, nodeId, parameterId, value));
+    },
+    []
+  );
+
+  const selectNode = useCallback((nodeId: string | null) => {
+    setSelectedNodeId(nodeId);
+  }, []);
 
   const stopAudioInternal = useCallback(async () => {
     const handle = workletHandleRef.current;
@@ -273,7 +289,10 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       addNode: addNodeToGraph,
       connectNodes,
       disconnectConnection,
-      updateNodePosition
+      updateNodePosition,
+      updateNodeParameter,
+      selectedNodeId,
+      selectNode
     }),
     [
       graph,
@@ -289,7 +308,10 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       addNodeToGraph,
       connectNodes,
       disconnectConnection,
-      updateNodePosition
+      updateNodePosition,
+      updateNodeParameter,
+      selectedNodeId,
+      selectNode
     ]
   );
 

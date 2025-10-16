@@ -4,7 +4,8 @@ import {
   addNode,
   connectNodes,
   removeConnection,
-  updateNodePosition
+  updateNodePosition,
+  updateNodeParameter
 } from "@graph/graph";
 import { validateGraph } from "@graph/validation";
 import { instantiateNode } from "@dsp/nodes";
@@ -172,5 +173,14 @@ describe("graph", () => {
 
     expect(graphWithConnection.connections).toHaveLength(1);
     expect(trimmed.connections).toHaveLength(0);
+  });
+
+  it("updates node parameters immutably", () => {
+    const osc = instantiateNode("osc.sine", "osc1");
+    const graph = addNode(createGraph(), osc);
+    const updated = updateNodeParameter(graph, osc.id, "pitch", 0.5);
+
+    expect(graph.nodes[0].parameters.pitch).toBe(0);
+    expect(updated.nodes[0].parameters.pitch).toBe(0.5);
   });
 });

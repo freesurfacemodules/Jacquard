@@ -106,4 +106,41 @@ describe("code generation", () => {
     expect(source).toMatch(/wire\d+ = mix_mix1_left;/);
     expect(source).toMatch(/wire\d+ = mix_mix1_right;/);
   });
+
+  it("emits gain node with parameter fallback", () => {
+    let graph = createGraph();
+    const osc = instantiateNode("osc.sine", "osc1");
+    const gain = instantiateNode("utility.gain", "gain1");
+    gain.parameters.gain = 2.5;
+    const out = instantiateNode("io.output", "out1");
+
+    graph = addNode(graph, osc);
+    graph = addNode(graph, gain);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: osc.id,
+      fromPortId: "out",
+      toNodeId: gain.id,
+      toPortId: "in"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: gain.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: gain.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "right"
+    });
+
+    const source = emitAssemblyScript(graph);
+    expect(source).toContain("// Gain (gain1)");
+    expect(source).toMatch(/scaled: f32 = \(wire\d+\) \* \(2.5\)/);
+  });
 });

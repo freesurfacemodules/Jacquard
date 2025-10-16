@@ -89,11 +89,12 @@ export function Canvas(): JSX.Element {
     viewModel,
     addNode,
     connectNodes,
-    updateNodePosition
+    updateNodePosition,
+    selectedNodeId,
+    selectNode
   } = usePatch();
 
   const canvasRef = useRef<HTMLDivElement>(null);
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [pendingConnection, setPendingConnection] = useState<PendingConnection | null>(
     null
   );
@@ -159,10 +160,10 @@ export function Canvas(): JSX.Element {
         position
       };
       addNode(node);
-      setSelectedNodeId(node.id);
+      selectNode(node.id);
       setConnectionError(null);
     },
-    [addNode, viewModel.nodes]
+    [addNode, viewModel.nodes, selectNode]
   );
 
   const translatePointerToCanvas = useCallback(
@@ -180,11 +181,11 @@ export function Canvas(): JSX.Element {
   );
 
   const handleCanvasPointerDown = useCallback(() => {
-    setSelectedNodeId(null);
+    selectNode(null);
     setPendingConnection(null);
     setPointerPosition(null);
     setConnectionError(null);
-  }, []);
+  }, [selectNode]);
 
   const handleCanvasPointerMove = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
@@ -342,7 +343,7 @@ export function Canvas(): JSX.Element {
               position={position}
               width={width}
               selected={selectedNodeId === node.id}
-              onSelect={setSelectedNodeId}
+              onSelect={selectNode}
               onDragStart={handleDragStart}
               onDrag={handleDrag}
               onDragEnd={handleDragEnd}

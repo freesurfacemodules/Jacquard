@@ -13,6 +13,7 @@ export interface DspNodeManifest {
     height?: number;
     icon?: string;
   };
+  controls?: NodeControl[];
 }
 
 export interface AutoRoute {
@@ -38,4 +39,13 @@ export interface NodeAssembly {
 export interface NodeImplementation {
   manifest: DspNodeManifest;
   assembly?: NodeAssembly;
+}
+
+export interface NodeControl {
+  id: string;
+  label: string;
+  type: "slider";
+  min: number;
+  max: number;
+  step?: number;
 }
