@@ -63,7 +63,10 @@ export async function loadPatchProcessor(
 }
 
 async function ensureWorkletModule(context: AudioContext): Promise<void> {
-  const moduleUrl = new URL("./processors/patch-processor.js", import.meta.url);
+  const moduleUrl = new URL(
+    "./processors/patch-processor.ts",
+    import.meta.url
+  );
   if (!context.audioWorklet) {
     throw new Error("AudioWorklet is not available in this environment.");
   }
@@ -79,11 +82,27 @@ async function ensureWorkletModule(context: AudioContext): Promise<void> {
   }
 
   try {
-    console.info("[MaxWasm] Loading worklet module", moduleUrl.href);
-    await context.audioWorklet.addModule(moduleUrl.href);
+    const href = moduleUrl.href;
+    console.info("[MaxWasm] Loading worklet module", href);
+    await context.audioWorklet.addModule(href);
     console.info("[MaxWasm] Worklet module loaded");
   } catch (error) {
-    console.error("[MaxWasm] Failed to load worklet module", error, moduleUrl.href);
+    const href = moduleUrl.href;
+    console.error("[MaxWasm] Failed to load worklet module", href, error);
+    try {
+      const response = await fetch(href);
+      console.error(
+        "[MaxWasm] Worklet module fetch status",
+        response.status,
+        response.statusText
+      );
+      if (!response.ok) {
+        const snippet = (await response.text()).slice(0, 2000);
+        console.error("[MaxWasm] Worklet module response body (trimmed)", snippet);
+      }
+    } catch (probeError) {
+      console.error("[MaxWasm] Error probing worklet module URL", probeError);
+    }
     throw error;
   }
   registry.add(moduleUrl.href);
