@@ -244,49 +244,23 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
   }, [audioSupported]);
 
   const compileGraph = useCallback(async (): Promise<CompileResult> => {
-    const parameterMap = parameterValuesRef.current;
-    const graphWithParameters: PatchGraph = {
-      ...graph,
-      nodes: graph.nodes.map((node) => {
-        const implementation = getNodeImplementation(node.kind);
-        const controls = implementation?.manifest.controls ?? [];
-        if (!controls.length) {
-          return node;
-        }
-        const parameters = { ...node.parameters };
-        let changed = false;
-        for (const control of controls) {
-          const key = makeParameterKey(node.id, control.id);
-          if (parameterMap[key] !== undefined) {
-            parameters[control.id] = parameterMap[key];
-            changed = true;
-          }
-        }
-        return changed ? { ...node, parameters } : node;
-      })
-    };
-
     console.info("[MaxWasm] compile start", {
-      nodes: graphWithParameters.nodes.length,
-      connections: graphWithParameters.connections.length
+      nodes: graph.nodes.length,
+      connections: graph.connections.length
     });
-    const result = await compilePatch(graphWithParameters);
+    const result = await compilePatch(graph);
     console.info("[MaxWasm] compile finished", {
       wasmBytes: result.wasmBinary.byteLength,
       parameters: result.parameterBindings.length
     });
     await stopAudioInternal();
-    setGraph(graphWithParameters);
     setArtifact(result);
     setParameterBindings(result.parameterBindings);
-
     setParameterValues((prev) => {
       const next = { ...prev };
       for (const binding of result.parameterBindings) {
         const key = makeParameterKey(binding.nodeId, binding.controlId);
-        const node = graphWithParameters.nodes.find(
-          (candidate) => candidate.id === binding.nodeId
-        );
+        const node = graph.nodes.find((candidate) => candidate.id === binding.nodeId);
         if (node && typeof node.parameters[binding.controlId] === "number") {
           next[key] = node.parameters[binding.controlId];
         } else {
