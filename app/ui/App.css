@@ -593,3 +593,46 @@
   font-size: 0.7rem;
   color: #8896c5;
 }
+
+.patch-node__widget {
+  padding: 0.5rem 0.75rem 0.75rem;
+  border-top: 1px solid #202534;
+}
+
+.envelope-visualizer {
+  width: 100%;
+}
+
+.envelope-visualizer__svg {
+  display: block;
+  width: 100%;
+  height: 100px;
+}
+
+.envelope-visualizer__background {
+  fill: rgba(22, 26, 38, 0.85);
+  stroke: rgba(67, 78, 110, 0.6);
+  stroke-width: 1;
+}
+
+.envelope-visualizer__curve {
+  stroke: #7cc0ff;
+}
+
+.envelope-visualizer__cursor {
+  stroke: rgba(255, 255, 255, 0.6);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+}
+
+.envelope-visualizer__marker {
+  fill: #ffffff;
+  stroke: #1c2130;
+  stroke-width: 1;
+}
+
+.envelope-visualizer__value {
+  fill: #ff9b5e;
+  stroke: #1c2130;
+  stroke-width: 1;
+}

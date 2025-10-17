@@ -1,5 +1,6 @@
 import { NodeDescriptor } from "@graph/types";
 import { memo } from "react";
+import type { ReactNode } from "react";
 import type { NodeImplementation } from "@dsp/types";
 import { getNodeImplementation } from "@dsp/library";
 import { Knob } from "./Knob";
@@ -36,6 +37,7 @@ interface PatchNodeProps {
     step: number;
   }>;
   onControlChange(nodeId: string, controlId: string, value: number): void;
+  widget?: ReactNode;
 }
 
 export const PatchNode = memo(function PatchNode({
@@ -50,7 +52,8 @@ export const PatchNode = memo(function PatchNode({
   onOutputPointerDown,
   onInputPointerUp,
   controls,
-  onControlChange
+  onControlChange,
+  widget
 }: PatchNodeProps): JSX.Element {
   const implementation: NodeImplementation | undefined = getNodeImplementation(node.kind);
 
@@ -154,6 +157,7 @@ export const PatchNode = memo(function PatchNode({
           ))}
         </div>
       ) : null}
+      {widget ? <div className="patch-node__widget">{widget}</div> : null}
     </div>
   );
 });

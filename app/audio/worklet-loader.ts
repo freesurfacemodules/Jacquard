@@ -33,7 +33,8 @@ export async function loadPatchProcessor(
     outputChannelCount: [2],
     processorOptions: {
       wasmBinary,
-      moduleSource: artifact.moduleSource
+      moduleSource: artifact.moduleSource,
+      envelopeMonitors: artifact.envelopeMonitors
     }
   });
 

@@ -38,7 +38,7 @@ import {
   WorkletHandle
 } from "@audio/worklet-loader";
 import { getNodeImplementation } from "@dsp/nodes";
-import type { PlanControl } from "@codegen/plan";
+import type { PlanControl, EnvelopeMonitor } from "@codegen/plan";
 import {
   createPatchDocument,
   normalizePatchDocument,
@@ -70,6 +70,11 @@ interface PatchSnapshot {
   parameterValues: Record<string, number>;
   selectedNodeId: string | null;
   changeType: PatchChangeType;
+}
+
+interface EnvelopeSnapshot {
+  value: number;
+  progress: number;
 }
 
 const filterParameterValuesForGraph = (
@@ -183,6 +188,8 @@ export interface PatchController {
   selectedNodeId: string | null;
   selectNode(nodeId: string | null): void;
   getParameterValue(nodeId: string, controlId: string): number;
+  envelopeSnapshots: Record<string, EnvelopeSnapshot>;
+  getEnvelopeSnapshot(nodeId: string): EnvelopeSnapshot;
   undo(): void;
   redo(): void;
   canUndo: boolean;
@@ -199,6 +206,9 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
   const [artifact, setArtifact] = useState<CompileResult | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [parameterBindings, setParameterBindings] = useState<PlanControl[]>([]);
+  const [envelopeSnapshots, setEnvelopeSnapshots] = useState<Record<string, EnvelopeSnapshot>>(
+    {}
+  );
   const [parameterValues, setParameterValues] = useState<Record<string, number>>({});
   const [topologyVersion, setTopologyVersion] = useState(0);
   const [undoStack, setUndoStack] = useState<PatchSnapshot[]>([]);
@@ -220,6 +230,9 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
   const workletHandleRef = useRef<WorkletHandle | null>(null);
   const portListenerRef = useRef<((event: MessageEvent) => void) | null>(null);
   const parameterBindingsRef = useRef<PlanControl[]>([]);
+  const envelopeSnapshotsRef = useRef<Record<string, EnvelopeSnapshot>>({});
+  const envelopeBindingsRef = useRef<EnvelopeMonitor[]>([]);
+  const artifactRef = useRef<CompileResult | null>(null);
   const parameterValuesRef = useRef<Record<string, number>>({});
   const graphRef = useRef<PatchGraph>(graph);
   const selectedNodeIdRef = useRef<string | null>(selectedNodeId);
@@ -227,6 +240,40 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
   useEffect(() => {
     parameterBindingsRef.current = parameterBindings;
   }, [parameterBindings]);
+
+  useEffect(() => {
+    artifactRef.current = artifact;
+    const bindings = artifact?.envelopeMonitors ?? [];
+    envelopeBindingsRef.current = bindings;
+    if (bindings.length === 0) {
+      if (Object.keys(envelopeSnapshotsRef.current).length !== 0) {
+        envelopeSnapshotsRef.current = {};
+        setEnvelopeSnapshots({});
+      }
+      return;
+    }
+
+    setEnvelopeSnapshots((prev) => {
+      const next: Record<string, EnvelopeSnapshot> = {};
+      let changed = false;
+      for (const binding of bindings) {
+        const existing = prev[binding.nodeId] ?? { value: 0, progress: -1 };
+        next[binding.nodeId] = existing;
+        if (!prev[binding.nodeId]) {
+          changed = true;
+        }
+      }
+      if (Object.keys(prev).length !== bindings.length) {
+        changed = true;
+      }
+      if (changed) {
+        envelopeSnapshotsRef.current = next;
+        return next;
+      }
+      envelopeSnapshotsRef.current = prev;
+      return prev;
+    });
+  }, [artifact]);
 
   useEffect(() => {
     parameterValuesRef.current = parameterValues;
@@ -443,6 +490,13 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
     [graph.nodes, parameterValues]
   );
 
+  const getEnvelopeSnapshot = useCallback(
+    (nodeId: string): EnvelopeSnapshot => {
+      return envelopeSnapshotsRef.current[nodeId] ?? { value: 0, progress: -1 };
+    },
+    []
+  );
+
   const updateNodeParameter = useCallback(
     (nodeId: string, parameterId: string, value: number) => {
       const currentGraph = graphRef.current;
@@ -651,6 +705,19 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
     await stopAudioInternal();
     setArtifact(result);
     setParameterBindings(result.parameterBindings);
+    envelopeBindingsRef.current = result.envelopeMonitors;
+    if (result.envelopeMonitors.length === 0) {
+      envelopeSnapshotsRef.current = {};
+      setEnvelopeSnapshots({});
+    } else {
+      const initialSnapshots: Record<string, EnvelopeSnapshot> = {};
+      for (const binding of result.envelopeMonitors) {
+        initialSnapshots[binding.nodeId] =
+          envelopeSnapshotsRef.current[binding.nodeId] ?? { value: 0, progress: -1 };
+      }
+      envelopeSnapshotsRef.current = initialSnapshots;
+      setEnvelopeSnapshots(initialSnapshots);
+    }
     setParameterValues((prev) => {
       const next = { ...prev };
       for (const binding of result.parameterBindings) {
@@ -726,6 +793,53 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
           })();
         } else if (data.type === "stopped") {
           setAudioState("idle");
+        } else if (data.type === "envelopes") {
+          const bindings = envelopeBindingsRef.current;
+          if (!bindings || bindings.length === 0) {
+            return;
+          }
+
+          const rawValues = (data as { values?: unknown }).values;
+          if (!rawValues) {
+            return;
+          }
+
+          let payload: Float32Array | null = null;
+          if (rawValues instanceof Float32Array) {
+            payload = rawValues;
+          } else if (rawValues instanceof ArrayBuffer) {
+            payload = new Float32Array(rawValues);
+          } else if (Array.isArray(rawValues)) {
+            payload = Float32Array.from(rawValues as number[]);
+          }
+
+          if (!payload) {
+            return;
+          }
+
+          const next: Record<string, EnvelopeSnapshot> = {};
+          let changed = false;
+          for (const binding of bindings) {
+            const baseIndex = binding.index * 2;
+            if (baseIndex + 1 >= payload.length) {
+              continue;
+            }
+            const value = payload[baseIndex];
+            const progress = payload[baseIndex + 1];
+            next[binding.nodeId] = { value, progress };
+            const previous = envelopeSnapshotsRef.current[binding.nodeId];
+            if (!previous || previous.value !== value || previous.progress !== progress) {
+              changed = true;
+            }
+          }
+
+          if (
+            changed ||
+            Object.keys(next).length !== Object.keys(envelopeSnapshotsRef.current).length
+          ) {
+            envelopeSnapshotsRef.current = next;
+            setEnvelopeSnapshots(next);
+          }
         }
       };
 
@@ -833,6 +947,8 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       selectedNodeId,
       selectNode,
       getParameterValue,
+      envelopeSnapshots,
+      getEnvelopeSnapshot,
       undo,
       redo,
       canUndo,
@@ -863,6 +979,8 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       selectedNodeId,
       selectNode,
       getParameterValue,
+      envelopeSnapshots,
+      getEnvelopeSnapshot,
       undo,
       redo,
       canUndo,

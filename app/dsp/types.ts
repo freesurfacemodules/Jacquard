@@ -25,7 +25,7 @@ export interface NodeEmitHelpers {
 }
 
 export interface NodeAssembly {
-  declarations?: string;
+  declarations?: string | string[];
   emit?(planNode: PlanNode, helpers: NodeEmitHelpers): string;
 }
 

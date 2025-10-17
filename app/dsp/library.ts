@@ -9,6 +9,7 @@ import { clockNode } from "@dsp/nodes/clock/manifest";
 import { biquadNode } from "@dsp/nodes/filter/biquad/manifest";
 import { ladderFilterNode } from "@dsp/nodes/filter/ladder/manifest";
 import { noiseNode } from "@dsp/nodes/noise/basic/manifest";
+import { adEnvelopeNode } from "@dsp/nodes/envelope/ad/manifest";
 
 const implementations: NodeImplementation[] = [
   sineOscNode,
@@ -18,6 +19,7 @@ const implementations: NodeImplementation[] = [
   ddlDelayNode,
   biquadNode,
   ladderFilterNode,
+  adEnvelopeNode,
   noiseNode,
   outputNode
 ];

@@ -1,12 +1,13 @@
 import { instantiate } from "@assemblyscript/loader";
 import { emitAssemblyScript } from "@codegen/assemblyscript";
-import type { PlanControl } from "@codegen/plan";
+import type { PlanControl, EnvelopeMonitor } from "@codegen/plan";
 import { PatchGraph } from "@graph/types";
 
 export interface CompileResult {
   moduleSource: string;
   wasmBinary: Uint8Array;
   parameterBindings: PlanControl[];
+  envelopeMonitors: EnvelopeMonitor[];
 }
 
 /**
@@ -57,6 +58,7 @@ export async function compilePatch(graph: PatchGraph): Promise<CompileResult> {
   return {
     moduleSource,
     wasmBinary,
-    parameterBindings: plan.controls
+    parameterBindings: plan.controls,
+    envelopeMonitors: plan.envelopeMonitors
   };
 }

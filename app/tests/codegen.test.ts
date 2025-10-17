@@ -244,6 +244,38 @@ describe("code generation", () => {
     expect(source).toMatch(/if \(noise_hasSpare_noise1\)/);
   });
 
+  it("emits AD envelope node wiring", () => {
+    let graph = createGraph();
+    const envelope = instantiateNode("envelope.ad", "env1");
+    const out = instantiateNode("io.output", "out1");
+
+    graph = addNode(graph, envelope);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: envelope.id,
+      fromPortId: "envelope",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: envelope.id,
+      fromPortId: "envelope",
+      toNodeId: out.id,
+      toPortId: "right"
+    });
+
+    const { source } = emitAssemblyScript(graph);
+    expect(source).toContain("class SchmittTrigger");
+    expect(source).toContain("class AdEnvelope");
+    expect(source).toContain("setEnvelopeMonitor(");
+    expect(source).toMatch(/const schmitt_env1 = new SchmittTrigger/);
+    expect(source).toMatch(/env_env1\.start/);
+    expect(source).toMatch(/const envelopeValue: f32 = env_env1\.step\(\);/);
+    expect(source).toMatch(/setEnvelopeMonitor\(0, envelopeValue, env_env1\.getProgress\(\)\);/);
+  });
+
   it("emits ladder filter node wiring", () => {
     let graph = createGraph({ oversampling: 2 });
     const osc = instantiateNode("osc.sine", "osc1");

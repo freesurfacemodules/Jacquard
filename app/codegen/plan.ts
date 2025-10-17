@@ -34,6 +34,7 @@ export interface PlanNode {
   inputs: PlanInput[];
   outputs: PlanOutput[];
   controls: PlanControl[];
+  monitorIndex?: number;
 }
 
 export interface ExecutionPlan {
@@ -42,6 +43,7 @@ export interface ExecutionPlan {
   outputNode: PlanNode;
   controls: PlanControl[];
   parameterCount: number;
+  envelopeMonitors: EnvelopeMonitor[];
 }
 
 export interface PlanControl {
@@ -49,6 +51,12 @@ export interface PlanControl {
   controlId: string;
   index: number;
   defaultValue: number;
+}
+
+export interface EnvelopeMonitor {
+  nodeId: string;
+  kind: string;
+  index: number;
 }
 
 export function createExecutionPlan(graph: PatchGraph): ExecutionPlan {
@@ -69,6 +77,8 @@ export function createExecutionPlan(graph: PatchGraph): ExecutionPlan {
   const outputMap = new Map<string, PlanWire[]>();
   const controls: PlanControl[] = [];
   let parameterCounter = 0;
+  const envelopeMonitors: EnvelopeMonitor[] = [];
+  let envelopeMonitorCounter = 0;
 
   graph.connections.forEach((connection, index) => {
     const fromNode = nodesById.get(connection.from.node);
@@ -164,6 +174,18 @@ export function createExecutionPlan(graph: PatchGraph): ExecutionPlan {
     };
   });
 
+  for (const planNode of planNodes) {
+    if (planNode.node.kind === "envelope.ad") {
+      const monitorIndex = envelopeMonitorCounter++;
+      planNode.monitorIndex = monitorIndex;
+      envelopeMonitors.push({
+        nodeId: planNode.node.id,
+        kind: planNode.node.kind,
+        index: monitorIndex
+      });
+    }
+  }
+
   const outputNode = planNodes.find((planNode) => planNode.node.kind === "io.output");
   if (!outputNode) {
     throw new Error("Execution plan requires a single io.output node.");
@@ -174,7 +196,8 @@ export function createExecutionPlan(graph: PatchGraph): ExecutionPlan {
     nodes: planNodes,
     outputNode,
     controls,
-    parameterCount: parameterCounter
+    parameterCount: parameterCounter,
+    envelopeMonitors
   };
 }
 

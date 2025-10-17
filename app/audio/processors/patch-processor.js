@@ -10,7 +10,12 @@ if (typeof globalThis.AudioWorkletProcessor === "undefined") {
       super(options);
       this.state = null;
       this.ready = false;
-       this.pendingParameters = [];
+      this.pendingParameters = [];
+      this.envelopeMonitorCount = 0;
+      this.envelopeMonitorValues = null;
+      this.envelopeMonitorPointer = 0;
+      this.envelopeUpdateCounter = 0;
+      this.envelopeUpdateInterval = 4;
 
       if (this.port && typeof this.port.start === "function") {
         this.port.start();
@@ -108,6 +113,27 @@ if (typeof globalThis.AudioWorkletProcessor === "undefined") {
       const left = new Float32Array(buffer, ptrL, blockSize);
       const right = new Float32Array(buffer, ptrR, blockSize);
 
+      let envelopeMonitorCount = 0;
+      let envelopeMonitorPointer = 0;
+      let envelopeMonitorValues = null;
+      if (
+        typeof exports.getEnvelopeMonitorCount === "function" &&
+        typeof exports.getEnvelopeMonitorPointer === "function"
+      ) {
+        envelopeMonitorCount = Number(exports.getEnvelopeMonitorCount()) | 0;
+        if (envelopeMonitorCount > 0) {
+          const pointer = exports.getEnvelopeMonitorPointer();
+          if (typeof pointer === "number" && pointer >= 0) {
+            envelopeMonitorPointer = pointer;
+            envelopeMonitorValues = new Float32Array(
+              memory.buffer,
+              pointer,
+              envelopeMonitorCount * 2
+            );
+          }
+        }
+      }
+
       this.state = {
         exports,
         memory,
@@ -117,6 +143,13 @@ if (typeof globalThis.AudioWorkletProcessor === "undefined") {
         left,
         right
       };
+      this.envelopeMonitorCount = envelopeMonitorCount;
+      this.envelopeMonitorPointer = envelopeMonitorPointer;
+      this.envelopeMonitorValues = envelopeMonitorValues;
+      this.envelopeUpdateCounter = 0;
+      const updatesPerSecond = 60;
+      const framesPerUpdate = Math.max(1, Math.floor(sampleRate / (blockSize * updatesPerSecond)));
+      this.envelopeUpdateInterval = framesPerUpdate;
       this.ready = true;
       this.flushPendingParameters();
       this.port?.postMessage({ type: "ready" });
@@ -158,6 +191,8 @@ if (typeof globalThis.AudioWorkletProcessor === "undefined") {
         return true;
       }
 
+      this.refreshEnvelopeView();
+
       const destination = outputs[0];
       const frames = destination && destination[0] ? destination[0].length : 0;
       if (!destination || frames === 0) {
@@ -182,7 +217,57 @@ if (typeof globalThis.AudioWorkletProcessor === "undefined") {
         offset += chunk;
       }
 
+      this.maybeEmitEnvelopeUpdate();
+
       return true;
+    }
+
+    refreshEnvelopeView() {
+      if (!this.state || this.envelopeMonitorCount === 0) {
+        return;
+      }
+      const pointerFn = this.state.exports.getEnvelopeMonitorPointer;
+      if (typeof pointerFn !== "function") {
+        return;
+      }
+      const pointer = pointerFn();
+      if (typeof pointer === "number" && pointer >= 0) {
+        if (
+          !this.envelopeMonitorValues ||
+          this.envelopeMonitorValues.buffer !== this.state.memory.buffer ||
+          this.envelopeMonitorPointer !== pointer
+        ) {
+          this.envelopeMonitorPointer = pointer;
+          this.envelopeMonitorValues = new Float32Array(
+            this.state.memory.buffer,
+            pointer,
+            this.envelopeMonitorCount * 2
+          );
+        }
+      }
+    }
+
+    maybeEmitEnvelopeUpdate() {
+      if (
+        this.envelopeMonitorCount === 0 ||
+        !this.envelopeMonitorValues ||
+        !this.port
+      ) {
+        return;
+      }
+
+      this.envelopeUpdateCounter++;
+      if (this.envelopeUpdateCounter < this.envelopeUpdateInterval) {
+        return;
+      }
+      this.envelopeUpdateCounter = 0;
+
+      try {
+        const snapshot = new Float32Array(this.envelopeMonitorValues);
+        this.port.postMessage({ type: "envelopes", values: snapshot }, [snapshot.buffer]);
+      } catch (error) {
+        console.warn("[MaxWasm] Failed to post envelope monitors", error);
+      }
     }
   }
 

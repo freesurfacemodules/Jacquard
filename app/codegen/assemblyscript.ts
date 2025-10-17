@@ -71,6 +71,7 @@ export function emitAssemblyScript(
   ].join("\n");
 
   const parameterSection = collectParameterSection(plan);
+  const envelopeMonitorSection = collectEnvelopeMonitors(plan);
   const declarations = collectAssemblyDeclarations();
   const stateLines = collectStateDeclarations(plan);
 
@@ -152,6 +153,7 @@ export function emitAssemblyScript(
     header,
     constants,
     parameterSection,
+    envelopeMonitorSection,
     declarations,
     stateLines,
     processFunction
@@ -399,6 +401,32 @@ function collectParameterSection(plan: ExecutionPlan): string {
     .join("\n");
 }
 
+function collectEnvelopeMonitors(plan: ExecutionPlan): string {
+  const count = plan.envelopeMonitors.length;
+  if (count === 0) {
+    return "";
+  }
+
+  const lines: string[] = [];
+  lines.push(`const ENVELOPE_MONITOR_COUNT: i32 = ${count};`);
+  lines.push("const envelopeMonitorValues = new StaticArray<f32>(ENVELOPE_MONITOR_COUNT * 2);");
+  lines.push("");
+  lines.push("@inline function setEnvelopeMonitor(index: i32, value: f32, progress: f32): void {");
+  lines.push("  const base = index * 2;");
+  lines.push("  unchecked(envelopeMonitorValues[base] = value);");
+  lines.push("  unchecked(envelopeMonitorValues[base + 1] = progress);");
+  lines.push("}");
+  lines.push("");
+  lines.push("export function getEnvelopeMonitorPointer(): i32 {");
+  lines.push("  return changetype<i32>(envelopeMonitorValues);");
+  lines.push("}");
+  lines.push("");
+  lines.push("export function getEnvelopeMonitorCount(): i32 {");
+  lines.push("  return ENVELOPE_MONITOR_COUNT;");
+  lines.push("}");
+  return lines.join("\n");
+}
+
 function collectAssemblyDeclarations(): string {
   const declarations = new Set<string>();
 
@@ -407,7 +435,17 @@ function collectAssemblyDeclarations(): string {
 
   for (const implementation of nodeImplementations) {
     const snippet = implementation.assembly?.declarations;
-    if (snippet && snippet.trim().length > 0) {
+    if (!snippet) {
+      continue;
+    }
+
+    if (Array.isArray(snippet)) {
+      for (const entry of snippet) {
+        if (entry && entry.trim().length > 0) {
+          declarations.add(entry.trim());
+        }
+      }
+    } else if (snippet.trim().length > 0) {
       declarations.add(snippet.trim());
     }
   }
@@ -452,6 +490,11 @@ function collectStateDeclarations(plan: ExecutionPlan): string {
         const seedB = `0xD1B54A32D192ED03 ^ (<u64>${index + 0x5678})`;
         lines.push(`const ladder_${identifier} = new LadderFilter();`);
         lines.push(`const ladder_rng_${identifier} = new Xoroshiro128Plus(${seedA}, ${seedB});`);
+        break;
+      }
+      case "envelope.ad": {
+        lines.push(`const schmitt_${identifier} = new SchmittTrigger(0.2, 0.1);`);
+        lines.push(`const env_${identifier} = new AdEnvelope();`);
         break;
       }
       case "clock.basic": {

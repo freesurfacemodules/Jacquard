@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { usePatch } from "../state/PatchContext";
 import { getNodeImplementation, instantiateNode } from "@dsp/nodes";
 import { nanoid } from "@codegen/utils/nanoid";
 import { NodePalette } from "./NodePalette";
 import { PatchNode } from "./PatchNode";
+import { EnvelopeVisualizer } from "./EnvelopeVisualizer";
 import type { NodeDescriptor, NodeMetadata, NodePosition } from "@graph/types";
 
 type Point = { x: number; y: number };
@@ -96,7 +98,9 @@ export function Canvas(): JSX.Element {
     updateNodeParameter,
     selectedNodeId,
     selectNode,
-    getParameterValue
+    getParameterValue,
+    envelopeSnapshots,
+    getEnvelopeSnapshot
   } = usePatch();
 
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -417,6 +421,26 @@ export function Canvas(): JSX.Element {
               step
             };
           });
+          let widget: ReactNode | null = null;
+          if (node.kind === "envelope.ad") {
+            const riseValue =
+              controlConfigs.find((control) => control.id === "rise")?.value ?? 0.05;
+            const fallValue =
+              controlConfigs.find((control) => control.id === "fall")?.value ?? 0.25;
+            const shapeValue =
+              controlConfigs.find((control) => control.id === "shape")?.value ?? 0.5;
+            const snapshot = envelopeSnapshots[node.id] ?? getEnvelopeSnapshot(node.id);
+            widget = (
+              <EnvelopeVisualizer
+                rise={riseValue}
+                fall={fallValue}
+                curve={shapeValue}
+                value={snapshot.value}
+                progress={snapshot.progress}
+              />
+            );
+          }
+
           return (
             <PatchNode
               key={node.id}
@@ -432,6 +456,7 @@ export function Canvas(): JSX.Element {
               onInputPointerUp={handleInputPointerUp}
               controls={controlConfigs}
               onControlChange={handleControlChange}
+              widget={widget}
             />
           );
         })}
