@@ -422,7 +422,8 @@ function collectStateDeclarations(plan: ExecutionPlan): string {
   const biquadNodes = plan.nodes.filter((planNode) => planNode.node.kind === "filter.biquad");
   for (const planNode of biquadNodes) {
     const identifier = sanitizeIdentifier(planNode.node.id);
-    lines.push(`const biquad_${identifier} = new BiquadState();`);
+    lines.push(`const biquad_low_${identifier} = new BiquadState();`);
+    lines.push(`const biquad_high_${identifier} = new BiquadState();`);
   }
 
   const clockNodes = plan.nodes.filter((planNode) => planNode.node.kind === "clock.basic");

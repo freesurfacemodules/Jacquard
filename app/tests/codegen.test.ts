@@ -214,8 +214,9 @@ describe("code generation", () => {
     });
 
     const { source } = emitAssemblyScript(graph);
-    expect(source).toContain("const biquad_flt1 = new BiquadState();");
-    expect(source).toMatch(/updateCoefficients\(cutoffHz, resonance\)/);
-    expect(source).toMatch(/const highSample: f32 = sampleIn - lowSample;/);
+    expect(source).toContain("const biquad_low_flt1 = new BiquadState();");
+    expect(source).toContain("const biquad_high_flt1 = new BiquadState();");
+    expect(source).toMatch(/biquad_low_flt1\.updateCoefficients/);
+    expect(source).toMatch(/biquad_high_flt1\.process/);
   });
 });

@@ -92,6 +92,7 @@ describe("compiler", () => {
 
     const result = await compilePatch(graph);
     expect(result.wasmBinary.byteLength).toBeGreaterThan(0);
-    expect(result.moduleSource).toContain("const biquad_flt1 = new BiquadState()");
+    expect(result.moduleSource).toContain("const biquad_low_flt1 = new BiquadState()");
+    expect(result.moduleSource).toContain("const biquad_high_flt1 = new BiquadState()");
   });
 });

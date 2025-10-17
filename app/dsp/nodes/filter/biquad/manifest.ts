@@ -66,7 +66,8 @@ export const biquadNode: NodeImplementation = {
       }
 
       const identifier = helpers.sanitizeIdentifier(planNode.node.id);
-      const stateVar = `biquad_${identifier}`;
+      const lowVar = `biquad_low_${identifier}`;
+      const highVar = `biquad_high_${identifier}`;
       const inputExpr = helpers.buildInputExpression(input);
       const cutoffExpr = cutoffIn && cutoffIn.wires.length > 0
         ? helpers.buildInputExpression(cutoffIn)
@@ -96,9 +97,28 @@ export const biquadNode: NodeImplementation = {
         helpers.indentLines(`let resonance: f32 = ${resExpr};`, 1),
         helpers.indentLines("if (resonance < 0.1) resonance = 0.1;", 1),
         helpers.indentLines("if (resonance > 20.0) resonance = 20.0;", 1),
-        helpers.indentLines(`${stateVar}.updateCoefficients(cutoffHz, resonance);`, 1),
-        helpers.indentLines(`const lowSample: f32 = ${stateVar}.process(sampleIn);`, 1),
-        helpers.indentLines("const highSample: f32 = sampleIn - lowSample;", 1),
+        helpers.indentLines(
+          [
+            "const w0: f32 = TWO_PI * cutoffHz / (SAMPLE_RATE * (<f32>OVERSAMPLING));",
+            "const cosW0: f32 = Mathf.cos(w0);",
+            "const sinW0: f32 = Mathf.sin(w0);",
+            "const alpha: f32 = sinW0 / (2.0 * resonance);",
+            "const a0: f32 = 1.0 + alpha;",
+            "const a1: f32 = -2.0 * cosW0;",
+            "const a2: f32 = 1.0 - alpha;",
+            "const lp_b0: f32 = (1.0 - cosW0) * 0.5;",
+            "const lp_b1: f32 = 1.0 - cosW0;",
+            "const lp_b2: f32 = (1.0 - cosW0) * 0.5;",
+            "const hp_b0: f32 = (1.0 + cosW0) * 0.5;",
+            "const hp_b1: f32 = -(1.0 + cosW0);",
+            "const hp_b2: f32 = (1.0 + cosW0) * 0.5;",
+            `${lowVar}.updateCoefficients(lp_b0 / a0, lp_b1 / a0, lp_b2 / a0, a1 / a0, a2 / a0);`,
+            `${highVar}.updateCoefficients(hp_b0 / a0, hp_b1 / a0, hp_b2 / a0, a1 / a0, a2 / a0);`,
+            `const lowSample: f32 = ${lowVar}.process(sampleIn);`,
+            `const highSample: f32 = ${highVar}.process(sampleIn);`
+          ].join("\n"),
+          1
+        ),
         lowAssignments ? helpers.indentLines(lowAssignments, 1) : "",
         highAssignments ? helpers.indentLines(highAssignments, 1) : "",
         autoAssignments.length ? helpers.indentLines(autoAssignments.join("\n"), 1) : "",
