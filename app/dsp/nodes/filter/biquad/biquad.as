@@ -36,5 +36,3 @@ class BiquadState {
     return output;
   }
 }
-
-const TWO_PI: f32 = 6.283185307179586;
