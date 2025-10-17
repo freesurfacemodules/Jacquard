@@ -29,23 +29,6 @@ export interface PlanOutput {
   wires: PlanWire[];
 }
 
-export interface PlanNode {
-  node: NodeDescriptor;
-  inputs: PlanInput[];
-  outputs: PlanOutput[];
-  controls: PlanControl[];
-  monitorIndex?: number;
-}
-
-export interface ExecutionPlan {
-  wires: PlanWire[];
-  nodes: PlanNode[];
-  outputNode: PlanNode;
-  controls: PlanControl[];
-  parameterCount: number;
-  envelopeMonitors: EnvelopeMonitor[];
-}
-
 export interface PlanControl {
   nodeId: string;
   controlId: string;
@@ -57,6 +40,32 @@ export interface EnvelopeMonitor {
   nodeId: string;
   kind: string;
   index: number;
+}
+
+export interface ScopeMonitor {
+  nodeId: string;
+  kind: string;
+  index: number;
+  capacity: number;
+}
+
+export interface PlanNode {
+  node: NodeDescriptor;
+  inputs: PlanInput[];
+  outputs: PlanOutput[];
+  controls: PlanControl[];
+  envelopeMonitorIndex?: number;
+  scopeMonitorIndex?: number;
+}
+
+export interface ExecutionPlan {
+  wires: PlanWire[];
+  nodes: PlanNode[];
+  outputNode: PlanNode;
+  controls: PlanControl[];
+  parameterCount: number;
+  envelopeMonitors: EnvelopeMonitor[];
+  scopeMonitors: ScopeMonitor[];
 }
 
 export function createExecutionPlan(graph: PatchGraph): ExecutionPlan {
@@ -78,7 +87,9 @@ export function createExecutionPlan(graph: PatchGraph): ExecutionPlan {
   const controls: PlanControl[] = [];
   let parameterCounter = 0;
   const envelopeMonitors: EnvelopeMonitor[] = [];
+  const scopeMonitors: ScopeMonitor[] = [];
   let envelopeMonitorCounter = 0;
+  let scopeMonitorCounter = 0;
 
   graph.connections.forEach((connection, index) => {
     const fromNode = nodesById.get(connection.from.node);
@@ -174,15 +185,33 @@ export function createExecutionPlan(graph: PatchGraph): ExecutionPlan {
     };
   });
 
+  const SCOPE_MONITOR_CAPACITY = 1024;
+
   for (const planNode of planNodes) {
-    if (planNode.node.kind === "envelope.ad") {
-      const monitorIndex = envelopeMonitorCounter++;
-      planNode.monitorIndex = monitorIndex;
-      envelopeMonitors.push({
-        nodeId: planNode.node.id,
-        kind: planNode.node.kind,
-        index: monitorIndex
-      });
+    switch (planNode.node.kind) {
+      case "envelope.ad": {
+        const monitorIndex = envelopeMonitorCounter++;
+        planNode.envelopeMonitorIndex = monitorIndex;
+        envelopeMonitors.push({
+          nodeId: planNode.node.id,
+          kind: planNode.node.kind,
+          index: monitorIndex
+        });
+        break;
+      }
+      case "utility.scope": {
+        const monitorIndex = scopeMonitorCounter++;
+        planNode.scopeMonitorIndex = monitorIndex;
+        scopeMonitors.push({
+          nodeId: planNode.node.id,
+          kind: planNode.node.kind,
+          index: monitorIndex,
+          capacity: SCOPE_MONITOR_CAPACITY
+        });
+        break;
+      }
+      default:
+        break;
     }
   }
 
@@ -197,7 +226,8 @@ export function createExecutionPlan(graph: PatchGraph): ExecutionPlan {
     outputNode,
     controls,
     parameterCount: parameterCounter,
-    envelopeMonitors
+    envelopeMonitors,
+    scopeMonitors
   };
 }
 

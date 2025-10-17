@@ -31,6 +31,7 @@ describe("compiler", () => {
     expect(result.moduleSource).toContain("class Downsampler");
     expect(result.moduleSource).toContain("INV_SAMPLE_RATE_OVERSAMPLED");
     expect(result.envelopeMonitors.length).toBe(0);
+    expect(result.scopeMonitors.length).toBe(0);
   });
 
   it("produces a wasm binary for the clock node", async () => {
@@ -123,6 +124,7 @@ describe("compiler", () => {
     expect(result.wasmBinary.byteLength).toBeGreaterThan(0);
     expect(result.moduleSource).toContain("const noise_rng_noise1 = new Xoroshiro128Plus");
     expect(result.envelopeMonitors.length).toBe(0);
+    expect(result.scopeMonitors.length).toBe(0);
   });
 
   it("produces a wasm binary for the AD envelope node", async () => {
@@ -153,6 +155,45 @@ describe("compiler", () => {
     expect(result.moduleSource).toContain("class AdEnvelope");
     expect(result.envelopeMonitors.length).toBe(1);
     expect(result.envelopeMonitors[0]).toMatchObject({ nodeId: "env1", index: 0 });
+    expect(result.scopeMonitors.length).toBe(0);
+  });
+
+  it("produces a wasm binary for the oscilloscope node", async () => {
+    let graph = createGraph();
+    const osc = instantiateNode("osc.sine", "osc1");
+    const scope = instantiateNode("utility.scope", "scope1");
+    const out = instantiateNode("io.output", "out1");
+
+    graph = addNode(graph, osc);
+    graph = addNode(graph, scope);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: osc.id,
+      fromPortId: "out",
+      toNodeId: scope.id,
+      toPortId: "signal"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: osc.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: osc.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "right"
+    });
+
+    const result = await compilePatch(graph);
+    expect(result.wasmBinary.byteLength).toBeGreaterThan(0);
+    expect(result.moduleSource).toContain("const scopeMonitorBuffers");
+    expect(result.scopeMonitors.length).toBe(1);
+    expect(result.scopeMonitors[0]).toMatchObject({ nodeId: "scope1", index: 0 });
   });
 
   it("produces a wasm binary for the ladder filter node", async () => {

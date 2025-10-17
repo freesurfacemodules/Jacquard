@@ -71,7 +71,9 @@ export const adEnvelopeNode: NodeImplementation = {
       const schmittVar = `schmitt_${identifier}`;
       const envelopeVar = `env_${identifier}`;
       const monitorIndex =
-        typeof planNode.monitorIndex === "number" ? planNode.monitorIndex : -1;
+        typeof planNode.envelopeMonitorIndex === "number"
+          ? planNode.envelopeMonitorIndex
+          : -1;
 
       const triggerExpr = triggerInput
         ? helpers.buildInputExpression(triggerInput)

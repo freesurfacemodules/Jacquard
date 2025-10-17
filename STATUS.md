@@ -4,6 +4,7 @@
 - **Graph Editing**: Registry-driven node palette with drag/drop placement, connection drawing, and node selection. Interactive knobs live on the nodes themselves.
 - **Realtime Audio**: AssemblyScript codegen → Wasm compile in-browser → AudioWorklet playback. Parameter updates stream to the worklet with smoothing so audio keeps running while knobs move.
 - **Envelopes**: AD envelope generator with Schmitt-triggered gating feeds a live SVG visualizer so users can watch attack/decay progress in real time.
+- **Debugging**: Oscilloscope node captures patch signals with trigger support and streams history into the UI for real-time waveform inspection.
 - **Compilation Flow**: Compile logs surface module sizes and parameter counts. Topology changes invalidate the running artifact; parameter/position changes do not.
 - **Validation & Tests**: DAG validation, duplicate detection, control bindings, and codegen snippets are covered by Vitest; linting enforces TS/React style.
 

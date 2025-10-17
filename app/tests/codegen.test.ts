@@ -320,4 +320,42 @@ describe("code generation", () => {
     expect(source).toMatch(/const lowpassSample: f32 = ladder_lad1\.lowpass/);
     expect(source).toMatch(/const highpassSample: f32 = ladder_lad1\.highpass/);
   });
+
+  it("emits oscilloscope monitor wiring", () => {
+    let graph = createGraph();
+    const osc = instantiateNode("osc.sine", "osc1");
+    const scope = instantiateNode("utility.scope", "scope1");
+    const out = instantiateNode("io.output", "out1");
+
+    graph = addNode(graph, osc);
+    graph = addNode(graph, scope);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: osc.id,
+      fromPortId: "out",
+      toNodeId: scope.id,
+      toPortId: "signal"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: osc.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: osc.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "right"
+    });
+
+    const { source } = emitAssemblyScript(graph);
+    expect(source).toContain("const SCOPE_MONITOR_COUNT");
+    expect(source).toContain("scopeMonitorBuffers");
+    expect(source).toMatch(/scopeMonitorWriteIndex\[0\]/);
+    expect(source).toMatch(/scopeMonitorMeta\[.*\+ 5\]/);
+  });
 });

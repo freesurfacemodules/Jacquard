@@ -16,6 +16,14 @@ if (typeof globalThis.AudioWorkletProcessor === "undefined") {
       this.envelopeMonitorPointer = 0;
       this.envelopeUpdateCounter = 0;
       this.envelopeUpdateInterval = 4;
+      this.scopeMonitorCount = 0;
+      this.scopeMonitorCapacity = 0;
+      this.scopeMonitorBufferPointer = 0;
+      this.scopeMonitorMetaPointer = 0;
+      this.scopeMonitorBuffers = null;
+      this.scopeMonitorMeta = null;
+      this.scopeUpdateCounter = 0;
+      this.scopeUpdateInterval = 4;
 
       if (this.port && typeof this.port.start === "function") {
         this.port.start();
@@ -134,6 +142,42 @@ if (typeof globalThis.AudioWorkletProcessor === "undefined") {
         }
       }
 
+      let scopeMonitorCount = 0;
+      let scopeMonitorCapacity = 0;
+      let scopeMonitorBufferPointer = 0;
+      let scopeMonitorMetaPointer = 0;
+      let scopeMonitorBuffers = null;
+      let scopeMonitorMeta = null;
+      if (
+        typeof exports.getScopeMonitorCount === "function" &&
+        typeof exports.getScopeMonitorCapacity === "function" &&
+        typeof exports.getScopeMonitorBufferPointer === "function" &&
+        typeof exports.getScopeMonitorMetaPointer === "function"
+      ) {
+        scopeMonitorCount = Number(exports.getScopeMonitorCount()) | 0;
+        scopeMonitorCapacity = Number(exports.getScopeMonitorCapacity()) | 0;
+        if (scopeMonitorCount > 0 && scopeMonitorCapacity > 0) {
+          const bufferPtr = exports.getScopeMonitorBufferPointer();
+          const metaPtr = exports.getScopeMonitorMetaPointer();
+          if (typeof bufferPtr === "number" && bufferPtr >= 0) {
+            scopeMonitorBufferPointer = bufferPtr;
+            scopeMonitorBuffers = new Float32Array(
+              memory.buffer,
+              bufferPtr,
+              scopeMonitorCount * scopeMonitorCapacity
+            );
+          }
+          if (typeof metaPtr === "number" && metaPtr >= 0) {
+            scopeMonitorMetaPointer = metaPtr;
+            scopeMonitorMeta = new Float32Array(
+              memory.buffer,
+              metaPtr,
+              scopeMonitorCount * 5
+            );
+          }
+        }
+      }
+
       this.state = {
         exports,
         memory,
@@ -150,6 +194,14 @@ if (typeof globalThis.AudioWorkletProcessor === "undefined") {
       const updatesPerSecond = 60;
       const framesPerUpdate = Math.max(1, Math.floor(sampleRate / (blockSize * updatesPerSecond)));
       this.envelopeUpdateInterval = framesPerUpdate;
+      this.scopeMonitorCount = scopeMonitorCount;
+      this.scopeMonitorCapacity = scopeMonitorCapacity;
+      this.scopeMonitorBufferPointer = scopeMonitorBufferPointer;
+      this.scopeMonitorMetaPointer = scopeMonitorMetaPointer;
+      this.scopeMonitorBuffers = scopeMonitorBuffers;
+      this.scopeMonitorMeta = scopeMonitorMeta;
+      this.scopeUpdateCounter = 0;
+      this.scopeUpdateInterval = framesPerUpdate;
       this.ready = true;
       this.flushPendingParameters();
       this.port?.postMessage({ type: "ready" });
@@ -192,6 +244,7 @@ if (typeof globalThis.AudioWorkletProcessor === "undefined") {
       }
 
       this.refreshEnvelopeView();
+      this.refreshScopeView();
 
       const destination = outputs[0];
       const frames = destination && destination[0] ? destination[0].length : 0;
@@ -218,6 +271,7 @@ if (typeof globalThis.AudioWorkletProcessor === "undefined") {
       }
 
       this.maybeEmitEnvelopeUpdate();
+      this.maybeEmitScopeUpdate();
 
       return true;
     }
@@ -267,6 +321,104 @@ if (typeof globalThis.AudioWorkletProcessor === "undefined") {
         this.port.postMessage({ type: "envelopes", values: snapshot }, [snapshot.buffer]);
       } catch (error) {
         console.warn("[MaxWasm] Failed to post envelope monitors", error);
+      }
+    }
+
+    refreshScopeView() {
+      if (!this.state || this.scopeMonitorCount === 0) {
+        return;
+      }
+      const bufferFn = this.state.exports.getScopeMonitorBufferPointer;
+      const metaFn = this.state.exports.getScopeMonitorMetaPointer;
+      if (typeof bufferFn === "function") {
+        const pointer = bufferFn();
+        if (typeof pointer === "number" && pointer >= 0) {
+          if (
+            !this.scopeMonitorBuffers ||
+            this.scopeMonitorBuffers.buffer !== this.state.memory.buffer ||
+            this.scopeMonitorBufferPointer !== pointer
+          ) {
+            this.scopeMonitorBufferPointer = pointer;
+            this.scopeMonitorBuffers = new Float32Array(
+              this.state.memory.buffer,
+              pointer,
+              this.scopeMonitorCount * this.scopeMonitorCapacity
+            );
+          }
+        }
+      }
+      if (typeof metaFn === "function") {
+        const pointer = metaFn();
+        if (typeof pointer === "number" && pointer >= 0) {
+          if (
+            !this.scopeMonitorMeta ||
+            this.scopeMonitorMeta.buffer !== this.state.memory.buffer ||
+            this.scopeMonitorMetaPointer !== pointer
+          ) {
+            this.scopeMonitorMetaPointer = pointer;
+            this.scopeMonitorMeta = new Float32Array(
+              this.state.memory.buffer,
+              pointer,
+              this.scopeMonitorCount * 5
+            );
+          }
+        }
+      }
+    }
+
+    maybeEmitScopeUpdate() {
+      if (
+        this.scopeMonitorCount === 0 ||
+        !this.scopeMonitorBuffers ||
+        !this.scopeMonitorMeta ||
+        !this.port
+      ) {
+        return;
+      }
+
+      this.scopeUpdateCounter++;
+      if (this.scopeUpdateCounter < this.scopeUpdateInterval) {
+        return;
+      }
+      this.scopeUpdateCounter = 0;
+
+      try {
+        const transferables = [];
+        const monitors = [];
+        const capacity = this.scopeMonitorCapacity;
+        for (let index = 0; index < this.scopeMonitorCount; index++) {
+          const bufferBase = index * capacity;
+          const slice = this.scopeMonitorBuffers.subarray(bufferBase, bufferBase + capacity);
+          const samples = new Float32Array(slice);
+          transferables.push(samples.buffer);
+          const metaBase = index * 5;
+          const count = this.scopeMonitorMeta[metaBase] ?? 0;
+          const writeIndex = this.scopeMonitorMeta[metaBase + 1] ?? 0;
+          const scale = this.scopeMonitorMeta[metaBase + 2] ?? 1;
+          const time = this.scopeMonitorMeta[metaBase + 3] ?? 0.01;
+          const mode = this.scopeMonitorMeta[metaBase + 4] ?? 0;
+          const captured = this.scopeMonitorMeta[metaBase + 5] ?? count;
+          monitors.push({
+            index,
+            samples,
+            count,
+            writeIndex,
+            scale,
+            time,
+            mode,
+            captured
+          });
+        }
+        this.port.postMessage(
+          {
+            type: "scopes",
+            capacity,
+            monitors
+          },
+          transferables
+        );
+      } catch (error) {
+        console.warn("[MaxWasm] Failed to post scope monitors", error);
       }
     }
   }

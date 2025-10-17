@@ -71,7 +71,7 @@ export function emitAssemblyScript(
   ].join("\n");
 
   const parameterSection = collectParameterSection(plan);
-  const envelopeMonitorSection = collectEnvelopeMonitors(plan);
+  const monitorSection = collectMonitorSections(plan);
   const declarations = collectAssemblyDeclarations();
   const stateLines = collectStateDeclarations(plan);
 
@@ -153,7 +153,7 @@ export function emitAssemblyScript(
     header,
     constants,
     parameterSection,
-    envelopeMonitorSection,
+    monitorSection,
     declarations,
     stateLines,
     processFunction
@@ -401,7 +401,20 @@ function collectParameterSection(plan: ExecutionPlan): string {
     .join("\n");
 }
 
-function collectEnvelopeMonitors(plan: ExecutionPlan): string {
+function collectMonitorSections(plan: ExecutionPlan): string {
+  const sections: string[] = [];
+  const envelopeSection = collectEnvelopeSection(plan);
+  if (envelopeSection) {
+    sections.push(envelopeSection);
+  }
+  const scopeSection = collectScopeSection(plan);
+  if (scopeSection) {
+    sections.push(scopeSection);
+  }
+  return sections.join("\n\n");
+}
+
+function collectEnvelopeSection(plan: ExecutionPlan): string {
   const count = plan.envelopeMonitors.length;
   if (count === 0) {
     return "";
@@ -423,6 +436,41 @@ function collectEnvelopeMonitors(plan: ExecutionPlan): string {
   lines.push("");
   lines.push("export function getEnvelopeMonitorCount(): i32 {");
   lines.push("  return ENVELOPE_MONITOR_COUNT;");
+  lines.push("}");
+  return lines.join("\n");
+}
+
+function collectScopeSection(plan: ExecutionPlan): string {
+  const count = plan.scopeMonitors.length;
+  if (count === 0) {
+    return "";
+  }
+
+  const capacity = plan.scopeMonitors[0]?.capacity ?? 1024;
+  const lines: string[] = [];
+  lines.push(`const SCOPE_MONITOR_COUNT: i32 = ${count};`);
+  lines.push(`const SCOPE_MONITOR_CAPACITY: i32 = ${capacity};`);
+  lines.push("const SCOPE_MONITOR_META_STRIDE: i32 = 6;");
+  lines.push("const scopeMonitorBuffers = new StaticArray<f32>(SCOPE_MONITOR_COUNT * SCOPE_MONITOR_CAPACITY);");
+  lines.push("const scopeMonitorMeta = new StaticArray<f32>(SCOPE_MONITOR_COUNT * SCOPE_MONITOR_META_STRIDE);");
+  lines.push("const scopeMonitorWriteIndex = new StaticArray<i32>(SCOPE_MONITOR_COUNT);");
+  lines.push("const scopeMonitorMode = new StaticArray<i32>(SCOPE_MONITOR_COUNT);");
+  lines.push("const scopeMonitorCaptured = new StaticArray<i32>(SCOPE_MONITOR_COUNT);");
+  lines.push("");
+  lines.push("export function getScopeMonitorBufferPointer(): i32 {");
+  lines.push("  return changetype<i32>(scopeMonitorBuffers);");
+  lines.push("}");
+  lines.push("");
+  lines.push("export function getScopeMonitorMetaPointer(): i32 {");
+  lines.push("  return changetype<i32>(scopeMonitorMeta);");
+  lines.push("}");
+  lines.push("");
+  lines.push("export function getScopeMonitorCount(): i32 {");
+  lines.push("  return SCOPE_MONITOR_COUNT;");
+  lines.push("}");
+  lines.push("");
+  lines.push("export function getScopeMonitorCapacity(): i32 {");
+  lines.push("  return SCOPE_MONITOR_CAPACITY;");
   lines.push("}");
   return lines.join("\n");
 }
@@ -490,6 +538,10 @@ function collectStateDeclarations(plan: ExecutionPlan): string {
         const seedB = `0xD1B54A32D192ED03 ^ (<u64>${index + 0x5678})`;
         lines.push(`const ladder_${identifier} = new LadderFilter();`);
         lines.push(`const ladder_rng_${identifier} = new Xoroshiro128Plus(${seedA}, ${seedB});`);
+        break;
+      }
+      case "utility.scope": {
+        lines.push(`const scope_trig_${identifier} = new SchmittTrigger(0.2, 0.1);`);
         break;
       }
       case "envelope.ad": {

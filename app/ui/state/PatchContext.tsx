@@ -33,6 +33,7 @@ import {
 } from "@graph/types";
 import { GraphValidationResult, validateGraph } from "@graph/validation";
 import { compilePatch, CompileResult } from "@compiler/compiler";
+import type { ScopeMonitor } from "@codegen/plan";
 import {
   loadPatchProcessor,
   WorkletHandle
@@ -75,6 +76,17 @@ interface PatchSnapshot {
 interface EnvelopeSnapshot {
   value: number;
   progress: number;
+}
+
+interface ScopeSnapshot {
+  samples: Float32Array;
+  count: number;
+  writeIndex: number;
+  scale: number;
+  time: number;
+  mode: number;
+  capacity: number;
+  captured: number;
 }
 
 const filterParameterValuesForGraph = (
@@ -190,6 +202,8 @@ export interface PatchController {
   getParameterValue(nodeId: string, controlId: string): number;
   envelopeSnapshots: Record<string, EnvelopeSnapshot>;
   getEnvelopeSnapshot(nodeId: string): EnvelopeSnapshot;
+  scopeSnapshots: Record<string, ScopeSnapshot>;
+  getScopeSnapshot(nodeId: string): ScopeSnapshot;
   undo(): void;
   redo(): void;
   canUndo: boolean;
@@ -209,6 +223,7 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
   const [envelopeSnapshots, setEnvelopeSnapshots] = useState<Record<string, EnvelopeSnapshot>>(
     {}
   );
+  const [scopeSnapshots, setScopeSnapshots] = useState<Record<string, ScopeSnapshot>>({});
   const [parameterValues, setParameterValues] = useState<Record<string, number>>({});
   const [topologyVersion, setTopologyVersion] = useState(0);
   const [undoStack, setUndoStack] = useState<PatchSnapshot[]>([]);
@@ -232,6 +247,8 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
   const parameterBindingsRef = useRef<PlanControl[]>([]);
   const envelopeSnapshotsRef = useRef<Record<string, EnvelopeSnapshot>>({});
   const envelopeBindingsRef = useRef<EnvelopeMonitor[]>([]);
+  const scopeSnapshotsRef = useRef<Record<string, ScopeSnapshot>>({});
+  const scopeBindingsRef = useRef<ScopeMonitor[]>([]);
   const artifactRef = useRef<CompileResult | null>(null);
   const parameterValuesRef = useRef<Record<string, number>>({});
   const graphRef = useRef<PatchGraph>(graph);
@@ -245,6 +262,8 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
     artifactRef.current = artifact;
     const bindings = artifact?.envelopeMonitors ?? [];
     envelopeBindingsRef.current = bindings;
+    const scopeBindings = artifact?.scopeMonitors ?? [];
+    scopeBindingsRef.current = scopeBindings;
     if (bindings.length === 0) {
       if (Object.keys(envelopeSnapshotsRef.current).length !== 0) {
         envelopeSnapshotsRef.current = {};
@@ -273,7 +292,49 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       envelopeSnapshotsRef.current = prev;
       return prev;
     });
+
+    if (scopeBindings.length === 0) {
+      if (Object.keys(scopeSnapshotsRef.current).length !== 0) {
+        scopeSnapshotsRef.current = {};
+        setScopeSnapshots({});
+      }
+    } else {
+      setScopeSnapshots((prev) => {
+        const next: Record<string, ScopeSnapshot> = {};
+        let changed = false;
+        for (const binding of scopeBindings) {
+          const existing = prev[binding.nodeId];
+          if (existing) {
+            next[binding.nodeId] = existing;
+          } else {
+            changed = true;
+            next[binding.nodeId] = {
+              samples: new Float32Array(binding.capacity),
+              count: 0,
+              writeIndex: 0,
+              scale: 1,
+              time: 0.01,
+              mode: 0,
+              capacity: binding.capacity
+            };
+          }
+        }
+        if (Object.keys(prev).length !== scopeBindings.length) {
+          changed = true;
+        }
+        if (changed) {
+          scopeSnapshotsRef.current = next;
+          return next;
+        }
+        scopeSnapshotsRef.current = prev;
+        return prev;
+      });
+    }
   }, [artifact]);
+
+  useEffect(() => {
+    scopeSnapshotsRef.current = scopeSnapshots;
+  }, [scopeSnapshots]);
 
   useEffect(() => {
     parameterValuesRef.current = parameterValues;
@@ -497,6 +558,22 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
     []
   );
 
+  const getScopeSnapshot = useCallback(
+    (nodeId: string): ScopeSnapshot => {
+      return scopeSnapshotsRef.current[nodeId] ?? {
+        samples: new Float32Array(0),
+        count: 0,
+        writeIndex: 0,
+        scale: 1,
+        time: 0.01,
+        mode: 0,
+        capacity: 0,
+        captured: 0
+      };
+    },
+    []
+  );
+
   const updateNodeParameter = useCallback(
     (nodeId: string, parameterId: string, value: number) => {
       const currentGraph = graphRef.current;
@@ -706,6 +783,7 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
     setArtifact(result);
     setParameterBindings(result.parameterBindings);
     envelopeBindingsRef.current = result.envelopeMonitors;
+    scopeBindingsRef.current = result.scopeMonitors;
     if (result.envelopeMonitors.length === 0) {
       envelopeSnapshotsRef.current = {};
       setEnvelopeSnapshots({});
@@ -717,6 +795,27 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       }
       envelopeSnapshotsRef.current = initialSnapshots;
       setEnvelopeSnapshots(initialSnapshots);
+    }
+    if (result.scopeMonitors.length === 0) {
+      scopeSnapshotsRef.current = {};
+      setScopeSnapshots({});
+    } else {
+      const initialScopes: Record<string, ScopeSnapshot> = {};
+      for (const binding of result.scopeMonitors) {
+        initialScopes[binding.nodeId] =
+          scopeSnapshotsRef.current[binding.nodeId] ?? {
+            samples: new Float32Array(binding.capacity),
+            count: binding.capacity,
+            writeIndex: 0,
+            scale: 1,
+            time: 0.01,
+            mode: 0,
+            capacity: binding.capacity,
+            captured: 0
+          };
+      }
+      scopeSnapshotsRef.current = initialScopes;
+      setScopeSnapshots(initialScopes);
     }
     setParameterValues((prev) => {
       const next = { ...prev };
@@ -840,6 +939,61 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
             envelopeSnapshotsRef.current = next;
             setEnvelopeSnapshots(next);
           }
+        } else if (data.type === "scopes") {
+          const bindings = scopeBindingsRef.current;
+          if (!bindings || bindings.length === 0) {
+            return;
+          }
+
+          const monitors = (data as { monitors?: unknown; capacity?: unknown }).monitors;
+          if (!Array.isArray(monitors)) {
+            return;
+          }
+
+          const next: Record<string, ScopeSnapshot> = { ...scopeSnapshotsRef.current };
+          let changed = false;
+          const capacity = typeof (data as { capacity?: unknown }).capacity === "number"
+            ? (data as { capacity: number }).capacity
+            : bindings[0]?.capacity ?? 0;
+
+          for (const monitor of monitors as Array<Record<string, unknown>>) {
+            const index = typeof monitor.index === "number" ? monitor.index : -1;
+            if (index < 0 || index >= bindings.length) {
+              continue;
+            }
+            const binding = bindings[index];
+            const samples = monitor.samples instanceof Float32Array
+              ? monitor.samples
+              : Array.isArray(monitor.samples)
+              ? Float32Array.from(monitor.samples as number[])
+              : null;
+            if (!samples) {
+              continue;
+            }
+            const count = typeof monitor.count === "number" ? monitor.count : 0;
+            const writeIndex = typeof monitor.writeIndex === "number" ? monitor.writeIndex : 0;
+            const scale = typeof monitor.scale === "number" ? monitor.scale : 1;
+            const time = typeof monitor.time === "number" ? monitor.time : 0.01;
+            const mode = typeof monitor.mode === "number" ? monitor.mode : 0;
+            const captured = typeof monitor.captured === "number" ? monitor.captured : count;
+            const snapshot: ScopeSnapshot = {
+              samples,
+              count,
+              writeIndex,
+              scale,
+              time,
+              mode,
+              capacity: capacity || binding.capacity,
+              captured
+            };
+            next[binding.nodeId] = snapshot;
+            changed = true;
+          }
+
+          if (changed) {
+            scopeSnapshotsRef.current = next;
+            setScopeSnapshots(next);
+          }
         }
       };
 
@@ -949,6 +1103,8 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       getParameterValue,
       envelopeSnapshots,
       getEnvelopeSnapshot,
+      scopeSnapshots,
+      getScopeSnapshot,
       undo,
       redo,
       canUndo,
@@ -981,6 +1137,8 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       getParameterValue,
       envelopeSnapshots,
       getEnvelopeSnapshot,
+      scopeSnapshots,
+      getScopeSnapshot,
       undo,
       redo,
       canUndo,

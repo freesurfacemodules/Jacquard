@@ -6,6 +6,7 @@ import { nanoid } from "@codegen/utils/nanoid";
 import { NodePalette } from "./NodePalette";
 import { PatchNode } from "./PatchNode";
 import { EnvelopeVisualizer } from "./EnvelopeVisualizer";
+import { ScopeVisualizer } from "./ScopeVisualizer";
 import type { NodeDescriptor, NodeMetadata, NodePosition } from "@graph/types";
 
 type Point = { x: number; y: number };
@@ -100,7 +101,9 @@ export function Canvas(): JSX.Element {
     selectNode,
     getParameterValue,
     envelopeSnapshots,
-    getEnvelopeSnapshot
+    getEnvelopeSnapshot,
+    scopeSnapshots,
+    getScopeSnapshot
   } = usePatch();
 
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -437,6 +440,24 @@ export function Canvas(): JSX.Element {
                 curve={shapeValue}
                 value={snapshot.value}
                 progress={snapshot.progress}
+              />
+            );
+          } else if (node.kind === "utility.scope") {
+            const scaleValue =
+              controlConfigs.find((control) => control.id === "scale")?.value ?? 5;
+            const timeValue =
+              controlConfigs.find((control) => control.id === "time")?.value ?? 0.05;
+            const snapshot = scopeSnapshots[node.id] ?? getScopeSnapshot(node.id);
+            widget = (
+              <ScopeVisualizer
+                samples={snapshot.samples}
+                count={snapshot.count || Math.floor(timeValue * viewModel.sampleRate)}
+                writeIndex={snapshot.writeIndex}
+                scale={snapshot.scale || scaleValue}
+                time={snapshot.time || timeValue}
+                mode={snapshot.mode}
+                captured={snapshot.captured}
+                capacity={snapshot.capacity || snapshot.samples.length}
               />
             );
           }

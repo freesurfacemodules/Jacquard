@@ -636,3 +636,33 @@
   stroke: #1c2130;
   stroke-width: 1;
 }
+
+.scope-visualizer {
+  width: 100%;
+}
+
+.scope-visualizer__svg {
+  display: block;
+  width: 100%;
+  height: 140px;
+}
+
+.scope-visualizer__background {
+  fill: rgba(17, 21, 32, 0.85);
+  stroke: rgba(67, 78, 110, 0.6);
+  stroke-width: 1;
+}
+
+.scope-visualizer__grid {
+  stroke: rgba(102, 112, 153, 0.3);
+  stroke-width: 1;
+}
+
+.scope-visualizer__grid--vertical {
+  stroke-dasharray: 4 4;
+}
+
+.scope-visualizer__curve {
+  stroke: #c3ff7c;
+  fill: none;
+}

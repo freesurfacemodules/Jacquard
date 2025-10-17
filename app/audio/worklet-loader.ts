@@ -34,7 +34,8 @@ export async function loadPatchProcessor(
     processorOptions: {
       wasmBinary,
       moduleSource: artifact.moduleSource,
-      envelopeMonitors: artifact.envelopeMonitors
+      envelopeMonitors: artifact.envelopeMonitors,
+      scopeMonitors: artifact.scopeMonitors
     }
   });
 
