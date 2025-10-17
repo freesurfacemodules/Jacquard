@@ -130,14 +130,25 @@ const buildParameterValuesForGraph = (graph: PatchGraph): Record<string, number>
       const key = makeParameterKey(node.id, control.id);
       const nodeValue = node.parameters?.[control.id];
       if (typeof nodeValue === "number") {
-        values[key] = nodeValue;
+        values[key] =
+          node.kind === DELAY_NODE_KIND && control.id === DELAY_CONTROL_ID
+            ? clampDelayParameter(nodeValue, graph.oversampling)
+            : nodeValue;
       } else if (
         implementation?.manifest.defaultParams &&
         typeof implementation.manifest.defaultParams[control.id] === "number"
       ) {
-        values[key] = implementation.manifest.defaultParams[control.id]!;
+        const fallbackValue = implementation.manifest.defaultParams[control.id]!;
+        values[key] =
+          node.kind === DELAY_NODE_KIND && control.id === DELAY_CONTROL_ID
+            ? clampDelayParameter(fallbackValue, graph.oversampling)
+            : fallbackValue;
       } else {
-        values[key] = control.min ?? 0;
+        const minValue = control.min ?? 0;
+        values[key] =
+          node.kind === DELAY_NODE_KIND && control.id === DELAY_CONTROL_ID
+            ? clampDelayParameter(minValue, graph.oversampling)
+            : minValue;
       }
     }
   }

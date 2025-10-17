@@ -407,29 +407,22 @@ function collectStateDeclarations(plan: ExecutionPlan): string {
   lines.push("  downsampleRight.push(right);");
   lines.push("}");
   lines.push("");
-  const sineNodes = plan.nodes.filter(
-    (planNode) => planNode.node.kind === "osc.sine"
-  );
-
-  if (sineNodes.length === 0) {
-    // continue gathering additional state below
-  }
-  const sineLines = sineNodes.map((planNode) => {
+  const oscNodes = plan.nodes.filter((planNode) => planNode.node.kind === "osc.sine");
+  for (const planNode of oscNodes) {
     const identifier = sanitizeIdentifier(planNode.node.id);
-    return `const node_${identifier} = new SineOsc();`;
-  });
-  lines.push(...sineLines);
+    lines.push(`const node_${identifier} = new SineOsc();`);
+  }
 
   const delayNodes = plan.nodes.filter((planNode) => planNode.node.kind === "delay.ddl");
-  if (delayNodes.length > 0) {
-    if (lines[lines.length - 1] !== "") {
-      lines.push("");
-    }
-    const delayLines = delayNodes.map((planNode) => {
-      const identifier = sanitizeIdentifier(planNode.node.id);
-      return `const delay_${identifier} = new DdlDelay();`;
-    });
-    lines.push(...delayLines);
+  for (const planNode of delayNodes) {
+    const identifier = sanitizeIdentifier(planNode.node.id);
+    lines.push(`const delay_${identifier} = new DdlDelay();`);
+  }
+
+  const clockNodes = plan.nodes.filter((planNode) => planNode.node.kind === "clock.basic");
+  for (const planNode of clockNodes) {
+    const identifier = sanitizeIdentifier(planNode.node.id);
+    lines.push(`let clock_phase_${identifier}: f32 = 0.0;`);
   }
 
   return lines.join("\n");
