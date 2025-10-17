@@ -7,6 +7,7 @@ import { gainNode } from "@dsp/nodes/utility/gain/manifest";
 import { ddlDelayNode } from "@dsp/nodes/delay/ddl/manifest";
 import { clockNode } from "@dsp/nodes/clock/manifest";
 import { biquadNode } from "@dsp/nodes/filter/biquad/manifest";
+import { noiseNode } from "@dsp/nodes/noise/basic/manifest";
 
 const implementations: NodeImplementation[] = [
   sineOscNode,
@@ -15,6 +16,7 @@ const implementations: NodeImplementation[] = [
   clockNode,
   ddlDelayNode,
   biquadNode,
+  noiseNode,
   outputNode
 ];
 

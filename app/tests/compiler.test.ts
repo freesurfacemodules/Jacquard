@@ -95,4 +95,31 @@ describe("compiler", () => {
     expect(result.moduleSource).toContain("const biquad_low_flt1 = new BiquadState()");
     expect(result.moduleSource).toContain("const biquad_high_flt1 = new BiquadState()");
   });
+
+  it("produces a wasm binary for the noise node", async () => {
+    let graph = createGraph();
+    const noise = instantiateNode("noise.basic", "noise1");
+    const out = instantiateNode("io.output", "out1");
+
+    graph = addNode(graph, noise);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: noise.id,
+      fromPortId: "uniform",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: noise.id,
+      fromPortId: "normal",
+      toNodeId: out.id,
+      toPortId: "right"
+    });
+
+    const result = await compilePatch(graph);
+    expect(result.wasmBinary.byteLength).toBeGreaterThan(0);
+    expect(result.moduleSource).toContain("const noise_rng_noise1 = new Xoroshiro128Plus");
+  });
 });

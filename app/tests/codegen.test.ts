@@ -214,4 +214,33 @@ describe("code generation", () => {
     expect(source).toMatch(/biquad_low_flt1\.updateCoefficients/);
     expect(source).toMatch(/biquad_high_flt1\.process/);
   });
+
+  it("emits noise node outputs", () => {
+    let graph = createGraph();
+    const noise = instantiateNode("noise.basic", "noise1");
+    const out = instantiateNode("io.output", "out1");
+
+    graph = addNode(graph, noise);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: noise.id,
+      fromPortId: "uniform",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: noise.id,
+      fromPortId: "normal",
+      toNodeId: out.id,
+      toPortId: "right"
+    });
+
+    const { source } = emitAssemblyScript(graph);
+    expect(source).toContain("const noise_rng_noise1 = new Xoroshiro128Plus");
+    expect(source).toMatch(/const uniformSample: f32 = noise_rng_noise1\.uniform/);
+    expect(source).toMatch(/let normalSample: f32 = 0.0;/);
+    expect(source).toMatch(/if \(noise_hasSpare_noise1\)/);
+  });
 });

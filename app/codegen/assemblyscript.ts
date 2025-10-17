@@ -302,6 +302,47 @@ class Downsampler {
 }
 `;
 
+const XOROSHIRO_DECLARATION = `
+class Xoroshiro128Plus {
+  private s0: u64 = 0x0123456789abcdef;
+  private s1: u64 = 0xfedcba9876543210;
+
+  constructor(seed0: u64 = 0x0123456789abcdef, seed1: u64 = 0xfedcba9876543210) {
+    this.seed(seed0, seed1);
+  }
+
+  seed(seed0: u64, seed1: u64): void {
+    if (seed0 == 0 && seed1 == 0) {
+      seed1 = 0x1;
+    }
+    this.s0 = seed0;
+    this.s1 = seed1;
+    this.next();
+  }
+
+  private rotl(x: u64, k: i32): u64 {
+    return (x << k) | (x >> (64 - k));
+  }
+
+  next(): u64 {
+    let s0 = this.s0;
+    let s1 = this.s1;
+    const result = s0 + s1;
+
+    s1 ^= s0;
+    this.s0 = this.rotl(s0, 55) ^ s1 ^ (s1 << 14);
+    this.s1 = this.rotl(s1, 36);
+
+    return result;
+  }
+
+  uniform(): f32 {
+    const value: u32 = <u32>(this.next() >> 32);
+    return <f32>value * 2.3283064365386963e-10;
+  }
+}
+`;
+
 function createEmitHelpers(): NodeEmitHelpers {
   return {
     indentLines,
@@ -362,6 +403,7 @@ function collectAssemblyDeclarations(): string {
   const declarations = new Set<string>();
 
   declarations.add(DOWNSAMPLER_DECLARATION.trim());
+  declarations.add(XOROSHIRO_DECLARATION.trim());
 
   for (const implementation of nodeImplementations) {
     const snippet = implementation.assembly?.declarations;
@@ -387,29 +429,39 @@ function collectStateDeclarations(plan: ExecutionPlan): string {
   lines.push("  downsampleRight.push(right);");
   lines.push("}");
   lines.push("");
-  const oscNodes = plan.nodes.filter((planNode) => planNode.node.kind === "osc.sine");
-  for (const planNode of oscNodes) {
-    const identifier = sanitizeIdentifier(planNode.node.id);
-    lines.push(`const node_${identifier} = new SineOsc();`);
-  }
 
-  const delayNodes = plan.nodes.filter((planNode) => planNode.node.kind === "delay.ddl");
-  for (const planNode of delayNodes) {
+  for (let index = 0; index < plan.nodes.length; index++) {
+    const planNode = plan.nodes[index];
     const identifier = sanitizeIdentifier(planNode.node.id);
-    lines.push(`const delay_${identifier} = new DdlDelay();`);
-  }
-
-  const biquadNodes = plan.nodes.filter((planNode) => planNode.node.kind === "filter.biquad");
-  for (const planNode of biquadNodes) {
-    const identifier = sanitizeIdentifier(planNode.node.id);
-    lines.push(`const biquad_low_${identifier} = new BiquadState();`);
-    lines.push(`const biquad_high_${identifier} = new BiquadState();`);
-  }
-
-  const clockNodes = plan.nodes.filter((planNode) => planNode.node.kind === "clock.basic");
-  for (const planNode of clockNodes) {
-    const identifier = sanitizeIdentifier(planNode.node.id);
-    lines.push(`let clock_phase_${identifier}: f32 = 0.0;`);
+    switch (planNode.node.kind) {
+      case "osc.sine": {
+        lines.push(`const node_${identifier} = new SineOsc();`);
+        break;
+      }
+      case "delay.ddl": {
+        lines.push(`const delay_${identifier} = new DdlDelay();`);
+        break;
+      }
+      case "filter.biquad": {
+        lines.push(`const biquad_low_${identifier} = new BiquadState();`);
+        lines.push(`const biquad_high_${identifier} = new BiquadState();`);
+        break;
+      }
+      case "clock.basic": {
+        lines.push(`let clock_phase_${identifier}: f32 = 0.0;`);
+        break;
+      }
+      case "noise.basic": {
+        const seedA = `0x9E3779B97F4A7C15 ^ (<u64>${index + 1})`;
+        const seedB = `0xD1B54A32D192ED03 ^ (<u64>${index + 0xABCDEF})`;
+        lines.push(`const noise_rng_${identifier} = new Xoroshiro128Plus(${seedA}, ${seedB});`);
+        lines.push(`let noise_spare_${identifier}: f32 = 0.0;`);
+        lines.push(`let noise_hasSpare_${identifier}: bool = false;`);
+        break;
+      }
+      default:
+        break;
+    }
   }
 
   return lines.join("\n");
