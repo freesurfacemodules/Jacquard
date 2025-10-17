@@ -86,7 +86,7 @@ All ports are **`f32` sample streams**.
 
 ```ts
 type Port = { id: string; label: string; role: "in" | "out"; };
-type NodeKind = "osc.sine" | "filter.biquad" | "delay.ddl" | "math.add" | "custom.as" | ...;
+type NodeKind = "osc.sine" | "filter.biquad" | "delay.ddl" | "utility.gain" | "clock.basic" | "custom.as" | ...;
 
 type NodeManifest = {
   kind: NodeKind;

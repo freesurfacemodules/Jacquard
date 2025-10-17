@@ -419,6 +419,12 @@ function collectStateDeclarations(plan: ExecutionPlan): string {
     lines.push(`const delay_${identifier} = new DdlDelay();`);
   }
 
+  const biquadNodes = plan.nodes.filter((planNode) => planNode.node.kind === "filter.biquad");
+  for (const planNode of biquadNodes) {
+    const identifier = sanitizeIdentifier(planNode.node.id);
+    lines.push(`const biquad_${identifier} = new BiquadState();`);
+  }
+
   const clockNodes = plan.nodes.filter((planNode) => planNode.node.kind === "clock.basic");
   for (const planNode of clockNodes) {
     const identifier = sanitizeIdentifier(planNode.node.id);

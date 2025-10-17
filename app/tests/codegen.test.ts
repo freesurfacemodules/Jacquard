@@ -181,4 +181,41 @@ describe("code generation", () => {
     expect(source).toMatch(/delay_delay1\.commit\(inputSample, internalSamples\);/);
     expect(source).toContain("const MIN_DELAY_SAMPLES");
   });
+
+  it("emits biquad filter wiring", () => {
+    let graph = createGraph({ oversampling: 2 });
+    const osc = instantiateNode("osc.sine", "osc1");
+    const biquad = instantiateNode("filter.biquad", "flt1");
+    const out = instantiateNode("io.output", "out1");
+
+    graph = addNode(graph, osc);
+    graph = addNode(graph, biquad);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: osc.id,
+      fromPortId: "out",
+      toNodeId: biquad.id,
+      toPortId: "in"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: biquad.id,
+      fromPortId: "low",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: biquad.id,
+      fromPortId: "high",
+      toNodeId: out.id,
+      toPortId: "right"
+    });
+
+    const { source } = emitAssemblyScript(graph);
+    expect(source).toContain("const biquad_flt1 = new BiquadState();");
+    expect(source).toMatch(/updateCoefficients\(cutoffHz, resonance\)/);
+    expect(source).toMatch(/const highSample: f32 = sampleIn - lowSample;/);
+  });
 });
