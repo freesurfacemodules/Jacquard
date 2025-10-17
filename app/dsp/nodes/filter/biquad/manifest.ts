@@ -79,14 +79,6 @@ export const biquadNode: NodeImplementation = {
       const lowAssignments = lowOut.wires.map((wire) => `${wire.varName} = lowSample;`).join("\n");
       const highAssignments = highOut.wires.map((wire) => `${wire.varName} = highSample;`).join("\n");
 
-      const autoAssignments: string[] = [];
-      if (helpers.autoRoute.left === planNode.node.id) {
-        autoAssignments.push(`${helpers.autoLeftVar} = lowSample;`);
-      }
-      if (helpers.autoRoute.right === planNode.node.id) {
-        autoAssignments.push(`${helpers.autoRightVar} = highSample;`);
-      }
-
       return [
         `// ${planNode.node.label} (${planNode.node.id})`,
         "{",
@@ -124,7 +116,6 @@ export const biquadNode: NodeImplementation = {
         ),
         lowAssignments ? helpers.indentLines(lowAssignments, 1) : "",
         highAssignments ? helpers.indentLines(highAssignments, 1) : "",
-        autoAssignments.length ? helpers.indentLines(autoAssignments.join("\n"), 1) : "",
         "}"
       ].filter(Boolean).join("\n");
     }

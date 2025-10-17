@@ -66,14 +66,6 @@ export const clockNode: NodeImplementation = {
         .map((wire) => `${wire.varName} = clockSample;`)
         .join("\n");
 
-      const autoAssignments: string[] = [];
-      if (helpers.autoRoute.left === planNode.node.id) {
-        autoAssignments.push(`${helpers.autoLeftVar} = clockSample;`);
-      }
-      if (helpers.autoRoute.right === planNode.node.id) {
-        autoAssignments.push(`${helpers.autoRightVar} = clockSample;`);
-      }
-
       return [
         `// ${planNode.node.label} (${planNode.node.id})`,
         "{",
@@ -98,7 +90,6 @@ export const clockNode: NodeImplementation = {
           1
         ),
         outputAssignments ? helpers.indentLines(outputAssignments, 1) : "",
-        autoAssignments.length ? helpers.indentLines(autoAssignments.join("\n"), 1) : "",
         "}"
       ]
         .filter(Boolean)

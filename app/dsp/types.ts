@@ -16,19 +16,12 @@ export interface DspNodeManifest {
   controls?: NodeControl[];
 }
 
-export interface AutoRoute {
-  left?: string;
-  right?: string;
-}
-
 export interface NodeEmitHelpers {
   indentLines(block: string, level?: number): string;
   numberLiteral(value: number): string;
   sanitizeIdentifier(identifier: string): string;
-  buildInputExpression(input: PlanInput, options?: { autoVar?: string }): string;
-  autoRoute: AutoRoute;
-  autoLeftVar: string;
-  autoRightVar: string;
+  buildInputExpression(input: PlanInput): string;
+  parameterRef(index: number): string;
 }
 
 export interface NodeAssembly {

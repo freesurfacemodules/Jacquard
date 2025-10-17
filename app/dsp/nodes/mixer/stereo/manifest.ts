@@ -95,13 +95,6 @@ export const stereoMixerNode: NodeImplementation = {
         lines.push(helpers.indentLines(rightAssignments, 1));
       }
 
-      if (helpers.autoRoute.left === planNode.node.id) {
-        lines.push(helpers.indentLines(`${helpers.autoLeftVar} = ${leftVar};`, 1));
-      }
-      if (helpers.autoRoute.right === planNode.node.id) {
-        lines.push(helpers.indentLines(`${helpers.autoRightVar} = ${rightVar};`, 1));
-      }
-
       lines.push("}");
 
       return lines.join("\n");

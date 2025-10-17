@@ -80,13 +80,6 @@ export const gainNode: NodeImplementation = {
         )
       ];
 
-      if (helpers.autoRoute.left === planNode.node.id) {
-        lines.push(helpers.indentLines(`${helpers.autoLeftVar} = result;`, 1));
-      }
-      if (helpers.autoRoute.right === planNode.node.id) {
-        lines.push(helpers.indentLines(`${helpers.autoRightVar} = result;`, 1));
-      }
-
       lines.push("}");
       return lines.join("\n");
     }

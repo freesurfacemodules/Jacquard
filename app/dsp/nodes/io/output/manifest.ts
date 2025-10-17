@@ -20,25 +20,11 @@ export const outputNode: NodeImplementation = {
       const rightInput = planNode.inputs.find((input) => input.port.id === "right");
 
       const leftExpr = leftInput
-        ? helpers.buildInputExpression(leftInput, {
-            autoVar:
-              leftInput.wires.length === 0 && helpers.autoRoute.left
-                ? helpers.autoLeftVar
-                : undefined
-          })
-        : helpers.autoRoute.left
-        ? helpers.autoLeftVar
+        ? helpers.buildInputExpression(leftInput)
         : helpers.numberLiteral(0);
 
       const rightExpr = rightInput
-        ? helpers.buildInputExpression(rightInput, {
-            autoVar:
-              rightInput.wires.length === 0 && helpers.autoRoute.right
-                ? helpers.autoRightVar
-                : undefined
-          })
-        : helpers.autoRoute.right
-        ? helpers.autoRightVar
+        ? helpers.buildInputExpression(rightInput)
         : helpers.numberLiteral(0);
 
       return [

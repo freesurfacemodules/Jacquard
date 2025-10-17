@@ -28,11 +28,7 @@ const sineManifest: NodeImplementation = {
       const identifier = helpers.sanitizeIdentifier(planNode.node.id);
       const output = planNode.outputs.find((port) => port.port.id === CHANNEL_OUT);
 
-      const autoRouteMatchesLeft = helpers.autoRoute.left === planNode.node.id;
-      const autoRouteMatchesRight = helpers.autoRoute.right === planNode.node.id;
-      const isAutoRouted = autoRouteMatchesLeft || autoRouteMatchesRight;
-
-      if (!output || (output.wires.length === 0 && !isAutoRouted)) {
+      if (!output || output.wires.length === 0) {
         return `// ${planNode.node.label} (${planNode.node.id}) has no outgoing connections.`;
       }
 
@@ -45,14 +41,6 @@ const sineManifest: NodeImplementation = {
         .map((wire) => `${wire.varName} = sample;`)
         .join("\n");
 
-      const autoAssignments: string[] = [];
-      if (autoRouteMatchesLeft) {
-        autoAssignments.push(`${helpers.autoLeftVar} = sample;`);
-      }
-      if (autoRouteMatchesRight) {
-        autoAssignments.push(`${helpers.autoRightVar} = sample;`);
-      }
-
       const lines = [
         `// ${planNode.node.label} (${planNode.node.id})`,
         "{",
@@ -62,14 +50,7 @@ const sineManifest: NodeImplementation = {
           1
         ),
         helpers.indentLines(`let sample: f32 = node_${identifier}.step(frequency);`, 1),
-        assignments
-          ? helpers.indentLines(assignments, 1)
-          : !isAutoRouted
-          ? helpers.indentLines("// No destinations for oscillator output.", 1)
-          : "",
-        autoAssignments.length > 0
-          ? helpers.indentLines(autoAssignments.join("\n"), 1)
-          : "",
+        assignments ? helpers.indentLines(assignments, 1) : "",
         "}"
       ];
 

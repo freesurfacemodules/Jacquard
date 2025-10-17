@@ -42,7 +42,7 @@ describe("code generation", () => {
     expect(() => emitAssemblyScript(graph)).toThrow(/Graph validation failed/);
   });
 
-  it("auto routes an unconnected oscillator to both output channels", () => {
+  it("skips oscillator output when not connected", () => {
     let graph = createGraph();
     const osc = instantiateNode("osc.sine", "osc1");
     const out = instantiateNode("io.output", "out1");
@@ -52,12 +52,7 @@ describe("code generation", () => {
 
     const { source } = emitAssemblyScript(graph);
 
-    expect(source).toContain("let auto_out_left: f32 = 0.0;");
-    expect(source).toContain("let auto_out_right: f32 = 0.0;");
-    expect(source).toMatch(/auto_out_left = sample;/);
-    expect(source).toMatch(/auto_out_right = sample;/);
-    expect(source).toContain("let outLeft: f32 = auto_out_left;");
-    expect(source).toContain("let outRight: f32 = auto_out_right;");
+    expect(source).toContain("// Sine Oscillator (osc1) has no outgoing connections.");
   });
 
   it("emits stereo mixer node wiring", () => {

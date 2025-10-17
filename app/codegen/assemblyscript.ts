@@ -30,7 +30,6 @@ export function emitAssemblyScript(
 ): EmitResult {
   const moduleName = options.moduleName ?? "maxwasm_patch";
   const plan = createExecutionPlan(graph);
-  const autoRoute = determineAutoRoute(plan);
 
   const delayPrefetchLines: string[] = [];
   for (const planNode of plan.nodes) {
@@ -46,12 +45,6 @@ export function emitAssemblyScript(
       for (const wire of output.wires) {
         assignments.push(`${wire.varName} = ${prefetchVar};`);
       }
-    }
-    if (autoRoute.left === planNode.node.id) {
-      assignments.push(`${AUTO_LEFT_VAR} = ${prefetchVar};`);
-    }
-    if (autoRoute.right === planNode.node.id) {
-      assignments.push(`${AUTO_RIGHT_VAR} = ${prefetchVar};`);
     }
     if (assignments.length > 0) {
       delayPrefetchLines.push(`const ${prefetchVar}: f32 = ${delayVar}.prepare();`);
@@ -111,13 +104,6 @@ export function emitAssemblyScript(
     processBodyLines.push(indentLines(wireLines.join("\n"), 2));
   }
 
-  if (autoRoute.left) {
-    processBodyLines.push(indentLines(`let ${AUTO_LEFT_VAR}: f32 = 0.0;`, 2));
-  }
-  if (autoRoute.right) {
-    processBodyLines.push(indentLines(`let ${AUTO_RIGHT_VAR}: f32 = 0.0;`, 2));
-  }
-
   if (delayPrefetchLines.length > 0) {
     processBodyLines.push(indentLines(delayPrefetchLines.join("\n"), 2));
   }
@@ -132,7 +118,7 @@ export function emitAssemblyScript(
 
     const snippet = implementation.assembly.emit(
       planNode,
-      createEmitHelpers(autoRoute)
+      createEmitHelpers()
     );
 
     if (snippet && snippet.trim().length > 0) {
@@ -178,8 +164,6 @@ export function emitAssemblyScript(
   return { source, plan };
 }
 
-const AUTO_LEFT_VAR = "auto_out_left";
-const AUTO_RIGHT_VAR = "auto_out_right";
 const DOWNSAMPLER_DECLARATION = `
 const DOWNSAMPLE_TAPS = [
   -0.0002176010,
@@ -318,17 +302,13 @@ class Downsampler {
 }
 `;
 
-function createEmitHelpers(autoRoute: AutoRoute): NodeEmitHelpers {
+function createEmitHelpers(): NodeEmitHelpers {
   return {
     indentLines,
     numberLiteral,
     sanitizeIdentifier,
-    buildInputExpression: (input: PlanInput, options?: { autoVar?: string }) =>
-      buildInputExpression(input, options),
-    parameterRef: (index: number) => `getParameterValue(${index})`,
-    autoRoute,
-    autoLeftVar: AUTO_LEFT_VAR,
-    autoRightVar: AUTO_RIGHT_VAR
+    buildInputExpression: (input: PlanInput) => buildInputExpression(input),
+    parameterRef: (index: number) => `getParameterValue(${index})`
   };
 }
 
@@ -435,10 +415,7 @@ function collectStateDeclarations(plan: ExecutionPlan): string {
   return lines.join("\n");
 }
 
-function buildInputExpression(
-  input: PlanInput,
-  options: { autoVar?: string } = {}
-): string {
+function buildInputExpression(input: PlanInput): string {
   const terms: string[] = [];
 
   if (
@@ -452,10 +429,6 @@ function buildInputExpression(
    terms.push(wire.varName);
   }
 
-  if (input.wires.length === 0 && options.autoVar) {
-    terms.push(options.autoVar);
-  }
-
   if (terms.length === 0) {
     terms.push(numberLiteral(input.fallbackValue));
   }
@@ -463,67 +436,4 @@ function buildInputExpression(
   return terms.length === 1 ? terms[0] : terms.join(" + ");
 }
 
-function determineAutoRoute(plan: ExecutionPlan): AutoRoute {
-  const stereoCandidates = plan.nodes.filter((node) =>
-    node.outputs.some((output) => output.port.id === "left") &&
-    node.outputs.some((output) => output.port.id === "right")
-  );
-
-  const stereoWithFreeOutputs = stereoCandidates.filter((node) => {
-    const left = node.outputs.find((output) => output.port.id === "left");
-    const right = node.outputs.find((output) => output.port.id === "right");
-    return (
-      !!left &&
-      !!right &&
-      left.wires.length === 0 &&
-      right.wires.length === 0
-    );
-  });
-
-  const stereoPick = stereoWithFreeOutputs[0] ?? stereoCandidates[0];
-  if (stereoPick) {
-    return {
-      left: stereoPick.node.id,
-      right: stereoPick.node.id
-    };
-  }
-
-  const outputInputs = plan.outputNode.inputs;
-  const leftInput = outputInputs.find((input) => input.port.id === "left");
-  const rightInput = outputInputs.find((input) => input.port.id === "right");
-
-  const oscillatorNodes = plan.nodes.filter(
-    (node) => node.node.kind === "osc.sine"
-  );
-
-  if (oscillatorNodes.length === 0) {
-    return {};
-  }
-
-  const oscillatorsWithFreeOutput = oscillatorNodes.filter((node) =>
-    node.outputs.some(
-      (output) => output.port.id === "out" && output.wires.length === 0
-    )
-  );
-
-  const candidates =
-    oscillatorsWithFreeOutput.length > 0
-      ? oscillatorsWithFreeOutput
-      : oscillatorNodes;
-
-  const autoRoute: AutoRoute = {};
-
-  if (leftInput && leftInput.wires.length === 0 && candidates[0]) {
-    autoRoute.left = candidates[0].node.id;
-  }
-
-  if (rightInput && rightInput.wires.length === 0) {
-    const candidate =
-      candidates.length > 1 ? candidates[1] : candidates[0] ?? null;
-    if (candidate) {
-      autoRoute.right = candidate.node.id;
-    }
-  }
-
-  return autoRoute;
-}
+// Auto-routing has been removed; connections must be explicitly defined by the user.
