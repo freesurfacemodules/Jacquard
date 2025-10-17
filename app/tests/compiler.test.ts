@@ -122,4 +122,41 @@ describe("compiler", () => {
     expect(result.wasmBinary.byteLength).toBeGreaterThan(0);
     expect(result.moduleSource).toContain("const noise_rng_noise1 = new Xoroshiro128Plus");
   });
+
+  it("produces a wasm binary for the ladder filter node", async () => {
+    let graph = createGraph({ oversampling: 2 });
+    const osc = instantiateNode("osc.sine", "osc1");
+    const ladder = instantiateNode("filter.ladder", "lad1");
+    const out = instantiateNode("io.output", "out1");
+
+    graph = addNode(graph, osc);
+    graph = addNode(graph, ladder);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: osc.id,
+      fromPortId: "out",
+      toNodeId: ladder.id,
+      toPortId: "in"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: ladder.id,
+      fromPortId: "lowpass",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: ladder.id,
+      fromPortId: "highpass",
+      toNodeId: out.id,
+      toPortId: "right"
+    });
+
+    const result = await compilePatch(graph);
+    expect(result.wasmBinary.byteLength).toBeGreaterThan(0);
+    expect(result.moduleSource).toContain("const ladder_lad1 = new LadderFilter()");
+    expect(result.moduleSource).toContain("ladder_rng_lad1 = new Xoroshiro128Plus");
+  });
 });

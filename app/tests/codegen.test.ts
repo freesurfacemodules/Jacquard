@@ -243,4 +243,48 @@ describe("code generation", () => {
     expect(source).toMatch(/let normalSample: f32 = 0.0;/);
     expect(source).toMatch(/if \(noise_hasSpare_noise1\)/);
   });
+
+  it("emits ladder filter node wiring", () => {
+    let graph = createGraph({ oversampling: 2 });
+    const osc = instantiateNode("osc.sine", "osc1");
+    const ladder = instantiateNode("filter.ladder", "lad1");
+    const out = instantiateNode("io.output", "out1");
+
+    ladder.parameters.frequency = 800;
+    ladder.parameters.resonance = 0.6;
+    ladder.parameters.drive = 0.25;
+
+    graph = addNode(graph, osc);
+    graph = addNode(graph, ladder);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: osc.id,
+      fromPortId: "out",
+      toNodeId: ladder.id,
+      toPortId: "in"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: ladder.id,
+      fromPortId: "lowpass",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: ladder.id,
+      fromPortId: "highpass",
+      toNodeId: out.id,
+      toPortId: "right"
+    });
+
+    const { source } = emitAssemblyScript(graph);
+    expect(source).toContain("const ladder_lad1 = new LadderFilter();");
+    expect(source).toContain("// Ladder Filter (lad1)");
+    expect(source).toMatch(/ladder_lad1\.process\(inputSample\)/);
+    expect(source).toMatch(/ladder_rng_lad1\.uniform/);
+    expect(source).toMatch(/const lowpassSample: f32 = ladder_lad1\.lowpass/);
+    expect(source).toMatch(/const highpassSample: f32 = ladder_lad1\.highpass/);
+  });
 });

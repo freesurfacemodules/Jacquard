@@ -447,6 +447,13 @@ function collectStateDeclarations(plan: ExecutionPlan): string {
         lines.push(`const biquad_high_${identifier} = new BiquadState();`);
         break;
       }
+      case "filter.ladder": {
+        const seedA = `0x9E3779B97F4A7C15 ^ (<u64>${index + 0x1234})`;
+        const seedB = `0xD1B54A32D192ED03 ^ (<u64>${index + 0x5678})`;
+        lines.push(`const ladder_${identifier} = new LadderFilter();`);
+        lines.push(`const ladder_rng_${identifier} = new Xoroshiro128Plus(${seedA}, ${seedB});`);
+        break;
+      }
       case "clock.basic": {
         lines.push(`let clock_phase_${identifier}: f32 = 0.0;`);
         break;
