@@ -31,4 +31,31 @@ describe("compiler", () => {
     expect(result.moduleSource).toContain("class Downsampler");
     expect(result.moduleSource).toContain("INV_SAMPLE_RATE_OVERSAMPLED");
   });
+
+  it("produces a wasm binary for the clock node", async () => {
+    let graph = createGraph({ oversampling: 2 });
+    const clock = instantiateNode("clock.basic", "clock1");
+    const out = instantiateNode("io.output", "out1");
+
+    graph = addNode(graph, clock);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: clock.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: clock.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "right"
+    });
+
+    const result = await compilePatch(graph);
+    expect(result.wasmBinary.byteLength).toBeGreaterThan(0);
+    expect(result.moduleSource).toContain("clock_phase_clock1");
+  });
 });

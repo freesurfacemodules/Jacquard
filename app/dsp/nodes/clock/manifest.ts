@@ -79,9 +79,15 @@ export const clockNode: NodeImplementation = {
         "{",
         helpers.indentLines(
           [
-            `const bpm: f32 = Mathf.clamp(${helpers.parameterRef(bpmControl.index)}, 30.0, 300.0);`,
-            `const multiplier: f32 = Mathf.max(1.0, Mathf.round(${helpers.parameterRef(multControl.index)}));`,
-            `const division: f32 = Mathf.max(1.0, Mathf.round(${helpers.parameterRef(divControl.index)}));`,
+            `let bpm: f32 = ${helpers.parameterRef(bpmControl.index)};`,
+            "if (bpm < 30.0) bpm = 30.0;",
+            "if (bpm > 300.0) bpm = 300.0;",
+            `let multiplier: f32 = Mathf.round(${helpers.parameterRef(multControl.index)});`,
+            "if (multiplier < 1.0) multiplier = 1.0;",
+            "if (multiplier > 32.0) multiplier = 32.0;",
+            `let division: f32 = Mathf.round(${helpers.parameterRef(divControl.index)});`,
+            "if (division < 1.0) division = 1.0;",
+            "if (division > 32.0) division = 32.0;",
             "const beatsPerSecond: f32 = bpm / 60.0;",
             "const frequency: f32 = beatsPerSecond * multiplier / division;",
             "const phaseDelta: f32 = frequency * INV_SAMPLE_RATE_OVERSAMPLED * TAU;",
