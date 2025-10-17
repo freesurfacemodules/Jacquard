@@ -86,9 +86,10 @@ export const ladderFilterNode: NodeImplementation = {
       const inputExpr = input
         ? helpers.buildInputExpression(input)
         : helpers.numberLiteral(0);
-      const freqExpr = freqInput && freqInput.wires.length > 0
+      const baseCutoffExpr = helpers.parameterRef(freqControl.index);
+      const pitchExpr = freqInput && freqInput.wires.length > 0
         ? helpers.buildInputExpression(freqInput)
-        : helpers.parameterRef(freqControl.index);
+        : helpers.numberLiteral(0);
       const resExpr = resInput && resInput.wires.length > 0
         ? helpers.buildInputExpression(resInput)
         : helpers.parameterRef(resControl.index);
@@ -109,9 +110,15 @@ export const ladderFilterNode: NodeImplementation = {
         helpers.indentLines(
           [
             `let inputSample: f32 = ${inputExpr};`,
-            `let cutoffHz: f32 = ${freqExpr};`,
+            `let cutoffHz: f32 = ${baseCutoffExpr};`,
             "if (cutoffHz < 20.0) cutoffHz = 20.0;",
             "const maxCutoff: f32 = SAMPLE_RATE * 0.45;",
+            "if (cutoffHz > maxCutoff) cutoffHz = maxCutoff;",
+            `let pitchOffset: f32 = ${pitchExpr};`,
+            "if (pitchOffset < -10.0) pitchOffset = -10.0;",
+            "if (pitchOffset > 10.0) pitchOffset = 10.0;",
+            "cutoffHz *= Mathf.pow(2.0, pitchOffset);",
+            "if (cutoffHz < 20.0) cutoffHz = 20.0;",
             "if (cutoffHz > maxCutoff) cutoffHz = maxCutoff;",
             `${filterVar}.setCutoff(cutoffHz);`,
             `let resonanceParam: f32 = ${resExpr};`,

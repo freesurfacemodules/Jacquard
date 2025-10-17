@@ -316,6 +316,7 @@ describe("code generation", () => {
     expect(source).toContain("// Ladder Filter (lad1)");
     expect(source).toMatch(/ladder_lad1\.process\(inputSample\)/);
     expect(source).toMatch(/ladder_rng_lad1\.uniform/);
+    expect(source).toMatch(/cutoffHz \*= Mathf\.pow\(2\.0, pitchOffset\);/);
     expect(source).toMatch(/const lowpassSample: f32 = ladder_lad1\.lowpass/);
     expect(source).toMatch(/const highpassSample: f32 = ladder_lad1\.highpass/);
   });
