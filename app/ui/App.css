@@ -84,6 +84,17 @@
   padding: 0;
   user-select: none;
   touch-action: none;
+  cursor: grab;
+}
+
+.canvas-body:active {
+  cursor: grabbing;
+}
+
+.canvas-content {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 0;
 }
 
 .inspector-body {

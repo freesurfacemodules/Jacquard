@@ -308,13 +308,13 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
           } else {
             changed = true;
             next[binding.nodeId] = {
-              samples: new Float32Array(binding.capacity),
-              count: 0,
-              writeIndex: 0,
+              samples: new Float32Array(0),
+              sampleInterval: 1 / Math.max(1, graph.sampleRate),
               scale: 1,
-              time: 0.01,
+              requestedTime: 0.01,
               mode: 0,
-              capacity: binding.capacity
+              factor: binding.levelFactors?.[0] ?? 1,
+              coverage: 0
             };
           }
         }

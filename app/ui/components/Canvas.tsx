@@ -20,6 +20,9 @@ const GRID_X = 240;
 const GRID_Y = 200;
 const GRID_ORIGIN_X = 80;
 const GRID_ORIGIN_Y = 80;
+const MIN_SCALE = 0.3;
+const MAX_SCALE = 2.5;
+const ZOOM_SENSITIVITY = 0.0015;
 
 interface PendingConnection {
   fromNodeId: string;
@@ -113,6 +116,13 @@ export function Canvas(): JSX.Element {
   const [pointerPosition, setPointerPosition] = useState<Point | null>(null);
   const dragStateRef = useRef<DragState | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [viewScale, setViewScale] = useState(1);
+  const [viewOffset, setViewOffset] = useState<Point>({ x: 0, y: 0 });
+  const panStateRef = useRef<{
+    pointerId: number;
+    origin: Point;
+    startOffset: Point;
+  } | null>(null);
 
   const nodePositions = useMemo(() => {
     return new Map<string, Point>(
@@ -184,23 +194,50 @@ export function Canvas(): JSX.Element {
       if (!rect) {
         return null;
       }
+      const screenX = event.clientX - rect.left;
+      const screenY = event.clientY - rect.top;
       return {
-        x: event.clientX - rect.left,
-        y: event.clientY - rect.top
+        x: (screenX - viewOffset.x) / viewScale,
+        y: (screenY - viewOffset.y) / viewScale
       };
     },
-    []
+    [viewOffset.x, viewOffset.y, viewScale]
   );
 
-  const handleCanvasPointerDown = useCallback(() => {
-    selectNode(null);
-    setPendingConnection(null);
-    setPointerPosition(null);
-    setConnectionError(null);
-  }, [selectNode]);
+  const handleCanvasPointerDown = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      selectNode(null);
+      setPendingConnection(null);
+      setPointerPosition(null);
+      setConnectionError(null);
+
+      if (event.button !== 0) {
+        return;
+      }
+
+      panStateRef.current = {
+        pointerId: event.pointerId,
+        origin: { x: event.clientX, y: event.clientY },
+        startOffset: { ...viewOffset }
+      };
+      event.currentTarget.setPointerCapture(event.pointerId);
+    },
+    [selectNode, viewOffset]
+  );
 
   const handleCanvasPointerMove = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
+      const panState = panStateRef.current;
+      if (panState && panState.pointerId === event.pointerId) {
+        const dx = event.clientX - panState.origin.x;
+        const dy = event.clientY - panState.origin.y;
+        setViewOffset({
+          x: panState.startOffset.x + dx,
+          y: panState.startOffset.y + dy
+        });
+        return;
+      }
+
       if (!pendingConnection) {
         return;
       }
@@ -212,12 +249,53 @@ export function Canvas(): JSX.Element {
     [pendingConnection, translatePointerToCanvas]
   );
 
-  const handleCanvasPointerUp = useCallback(() => {
-    if (pendingConnection) {
-      setPendingConnection(null);
-      setPointerPosition(null);
-    }
-  }, [pendingConnection]);
+  const handleCanvasPointerUp = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      const panState = panStateRef.current;
+      if (panState && panState.pointerId === event.pointerId) {
+        panStateRef.current = null;
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+
+      if (pendingConnection) {
+        setPendingConnection(null);
+        setPointerPosition(null);
+      }
+    },
+    [pendingConnection]
+  );
+
+  const handleCanvasPointerLeave = useCallback(() => {
+    panStateRef.current = null;
+  }, []);
+
+  const handleCanvasWheel = useCallback(
+    (event: React.WheelEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (!rect) {
+        return;
+      }
+
+      const screenX = event.clientX - rect.left;
+      const screenY = event.clientY - rect.top;
+      const worldX = (screenX - viewOffset.x) / viewScale;
+      const worldY = (screenY - viewOffset.y) / viewScale;
+
+      const delta = -event.deltaY * ZOOM_SENSITIVITY;
+      const factor = Math.exp(delta);
+      const nextScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, viewScale * factor));
+
+      const nextOffset = {
+        x: screenX - worldX * nextScale,
+        y: screenY - worldY * nextScale
+      };
+
+      setViewScale(nextScale);
+      setViewOffset(nextOffset);
+    },
+    [viewOffset, viewScale]
+  );
 
   const handleDragStart = useCallback(
     (nodeId: string, event: React.PointerEvent<HTMLDivElement>) => {
@@ -385,20 +463,28 @@ export function Canvas(): JSX.Element {
         onPointerDown={handleCanvasPointerDown}
         onPointerMove={handleCanvasPointerMove}
         onPointerUp={handleCanvasPointerUp}
+        onPointerLeave={handleCanvasPointerLeave}
+        onWheel={handleCanvasWheel}
       >
-        <svg className="canvas-connections" aria-hidden="true">
-          {connectionPaths.map((connection) => (
-            <path key={connection.id} d={connection.path} />
-          ))}
-          {pendingConnection && pointerPosition ? (
-            <path
-              className="canvas-connections__pending"
-              d={createConnectionPath(pendingConnection.anchor, pointerPosition)}
-            />
-          ) : null}
-        </svg>
+        <div
+          className="canvas-content"
+          style={{
+            transform: `translate(${viewOffset.x}px, ${viewOffset.y}px) scale(${viewScale})`
+          }}
+        >
+          <svg className="canvas-connections" aria-hidden="true">
+            {connectionPaths.map((connection) => (
+              <path key={connection.id} d={connection.path} />
+            ))}
+            {pendingConnection && pointerPosition ? (
+              <path
+                className="canvas-connections__pending"
+                d={createConnectionPath(pendingConnection.anchor, pointerPosition)}
+              />
+            ) : null}
+          </svg>
 
-        {viewModel.nodes.map((node) => {
+          {viewModel.nodes.map((node) => {
           const position = nodePositions.get(node.id) ?? getNodePosition(node);
           const { width } = getNodeDimensions(node);
           const implementation = getNodeImplementation(node.kind);
@@ -486,15 +572,16 @@ export function Canvas(): JSX.Element {
           );
         })}
 
-        {viewModel.nodes.length === 0 ? (
-          <div className="canvas-placeholder">
-            <p>Add nodes from the palette to start building a patch.</p>
-          </div>
-        ) : null}
+          {viewModel.nodes.length === 0 ? (
+            <div className="canvas-placeholder">
+              <p>Add nodes from the palette to start building a patch.</p>
+            </div>
+          ) : null}
 
-        {connectionError ? (
-          <div className="canvas-message canvas-message--error">{connectionError}</div>
-        ) : null}
+          {connectionError ? (
+            <div className="canvas-message canvas-message--error">{connectionError}</div>
+          ) : null}
+        </div>
       </div>
     </section>
   );
