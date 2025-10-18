@@ -1,4 +1,11 @@
-import { ChangeEvent, useCallback, useEffect, useRef, useState } from "react";
+import {
+  ChangeEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react";
 import { usePatch } from "../state/PatchContext";
 
 export function Toolbar(): JSX.Element {
@@ -21,6 +28,48 @@ export function Toolbar(): JSX.Element {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const previousAudioState = useRef(audio.state);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [isMac, setIsMac] = useState(false);
+
+  useEffect(() => {
+    if (typeof navigator !== "undefined") {
+      setIsMac(/Mac|iPhone|iPad/.test(navigator.platform));
+    }
+  }, []);
+
+  const closeMenu = useCallback(() => {
+    setMenuOpen(false);
+  }, []);
+
+  const toggleMenu = useCallback(() => {
+    setMenuOpen((previous) => !previous);
+  }, []);
+
+  useEffect(() => {
+    if (!menuOpen) {
+      return;
+    }
+    const handlePointerDown = (event: PointerEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    window.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [menuOpen]);
+
+  const hotkeyLabels = useMemo(
+    () => ({
+      undo: isMac ? "⌘Z" : "Ctrl+Z",
+      redo: isMac ? "⇧⌘Z" : "Ctrl+Y",
+      save: isMac ? "⌘S" : "Ctrl+S",
+      load: isMac ? "⌘O" : "Ctrl+O"
+    }),
+    [isMac]
+  );
 
   const handleCompile = useCallback(async () => {
     if (!validation.isValid) {
@@ -162,42 +211,138 @@ export function Toolbar(): JSX.Element {
     }
   }, [audio.error]);
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && menuOpen) {
+        event.preventDefault();
+        closeMenu();
+        return;
+      }
+
+      const primaryModifier = isMac ? event.metaKey : event.ctrlKey;
+      if (!primaryModifier) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+
+      if (key === "z") {
+        event.preventDefault();
+        closeMenu();
+        if (event.shiftKey) {
+          handleRedo();
+        } else {
+          handleUndo();
+        }
+        return;
+      }
+
+      if (!isMac && key === "y") {
+        event.preventDefault();
+        closeMenu();
+        handleRedo();
+        return;
+      }
+
+      if (key === "s") {
+        event.preventDefault();
+        closeMenu();
+        handleSavePatch();
+        return;
+      }
+
+      if (key === "o") {
+        event.preventDefault();
+        closeMenu();
+        handleLoadClick();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [
+    closeMenu,
+    handleLoadClick,
+    handleRedo,
+    handleSavePatch,
+    handleUndo,
+    isMac,
+    menuOpen
+  ]);
+
+  const menuItems = [
+    {
+      id: "undo",
+      label: "Undo",
+      action: handleUndo,
+      disabled: !canUndo,
+      hotkey: hotkeyLabels.undo
+    },
+    {
+      id: "redo",
+      label: "Redo",
+      action: handleRedo,
+      disabled: !canRedo,
+      hotkey: hotkeyLabels.redo
+    },
+    {
+      id: "save",
+      label: "Save Patch…",
+      action: handleSavePatch,
+      disabled: false,
+      hotkey: hotkeyLabels.save
+    },
+    {
+      id: "load",
+      label: "Load Patch…",
+      action: handleLoadClick,
+      disabled: false,
+      hotkey: hotkeyLabels.load
+    }
+  ];
+
   return (
     <header className="toolbar" aria-label="Application controls">
-      <div className="toolbar-section">
+      <div className="toolbar-section toolbar-section--brand">
         <strong>MaxWasm</strong>
+        <div className="toolbar-menubar" ref={menuRef}>
+          <button
+            type="button"
+            className={`toolbar-menu-button${menuOpen ? " toolbar-menu-button--open" : ""}`}
+            aria-haspopup="true"
+            aria-expanded={menuOpen}
+            onClick={toggleMenu}
+          >
+            Patch <span aria-hidden="true">▾</span>
+          </button>
+          {menuOpen ? (
+            <div className="toolbar-menu" role="menu">
+              {menuItems.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="menuitem"
+                  className="toolbar-menu__item"
+                  onClick={() => {
+                    if (item.disabled) {
+                      return;
+                    }
+                    closeMenu();
+                    item.action();
+                  }}
+                  disabled={item.disabled}
+                >
+                  <span>{item.label}</span>
+                  <span className="toolbar-menu__hint">{item.hotkey}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
       </div>
-      <div className="toolbar-section">
-        <button
-          type="button"
-          onClick={handleUndo}
-          className="toolbar-button"
-          disabled={!canUndo}
-        >
-          Undo
-        </button>
-        <button
-          type="button"
-          onClick={handleRedo}
-          className="toolbar-button"
-          disabled={!canRedo}
-        >
-          Redo
-        </button>
-        <button
-          type="button"
-          onClick={handleSavePatch}
-          className="toolbar-button"
-        >
-          Save
-        </button>
-        <button
-          type="button"
-          onClick={handleLoadClick}
-          className="toolbar-button"
-        >
-          Load
-        </button>
+      <div className="toolbar-section toolbar-section--actions">
         <button
           type="button"
           onClick={handleCompile}
@@ -209,7 +354,7 @@ export function Toolbar(): JSX.Element {
         <button
           type="button"
           onClick={handleRunToggle}
-          className="toolbar-button"
+          className="toolbar-button toolbar-button--accent"
           disabled={runDisabled}
         >
           {runLabel}
