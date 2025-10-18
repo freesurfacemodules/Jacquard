@@ -10,6 +10,8 @@ function Workspace(): JSX.Element {
   const [inspectorWidth, setInspectorWidth] = useState(360);
   const inspectorWidthRef = useRef(inspectorWidth);
   const inspectorRef = useRef<HTMLDivElement | null>(null);
+  const pendingWidthRef = useRef<number | null>(null);
+  const resizeFrameRef = useRef<number | null>(null);
   const [isResizing, setIsResizing] = useState(false);
 
   const toggleInspector = useCallback(() => {
@@ -40,8 +42,14 @@ function Workspace(): JSX.Element {
       const next = viewportWidth - event.clientX;
       const clamped = Math.max(minWidth, Math.min(maxWidth, next));
       inspectorWidthRef.current = clamped;
-      if (inspectorRef.current) {
-        inspectorRef.current.style.width = `${clamped}px`;
+      pendingWidthRef.current = clamped;
+      if (resizeFrameRef.current === null) {
+        resizeFrameRef.current = requestAnimationFrame(() => {
+          resizeFrameRef.current = null;
+          if (pendingWidthRef.current !== null && inspectorRef.current) {
+            inspectorRef.current.style.width = `${pendingWidthRef.current}px`;
+          }
+        });
       }
     },
     [isResizing, inspectorVisible]
@@ -79,7 +87,21 @@ function Workspace(): JSX.Element {
     if (inspectorVisible && inspectorRef.current) {
       inspectorRef.current.style.width = `${inspectorWidth}px`;
     }
+    inspectorWidthRef.current = inspectorWidth;
+    pendingWidthRef.current = null;
+    if (resizeFrameRef.current !== null) {
+      cancelAnimationFrame(resizeFrameRef.current);
+      resizeFrameRef.current = null;
+    }
   }, [inspectorVisible, inspectorWidth]);
+
+  useEffect(() => {
+    return () => {
+      if (resizeFrameRef.current !== null) {
+        cancelAnimationFrame(resizeFrameRef.current);
+      }
+    };
+  }, []);
 
   return (
     <div
