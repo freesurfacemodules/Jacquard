@@ -1,6 +1,6 @@
-import { NodeDescriptor } from "@graph/types";
 import { memo } from "react";
 import type { ReactNode } from "react";
+import type { NodeDescriptor } from "@graph/types";
 import type { NodeImplementation } from "@dsp/types";
 import { getNodeImplementation } from "@dsp/library";
 import { Knob } from "./Knob";
@@ -37,9 +37,22 @@ interface PatchNodeProps {
     step: number;
     defaultValue: number;
   }>;
+  inputConnections: Record<string, number>;
+  outputConnections: Record<string, number>;
+  activeOutputPortId: string | null;
   onControlChange(nodeId: string, controlId: string, value: number): void;
   widget?: ReactNode;
 }
+
+const classNames = (
+  base: string,
+  options: Array<[boolean, string]>
+): string => {
+  return options.reduce(
+    (acc, [condition, token]) => (condition ? `${acc} ${token}` : acc),
+    base
+  );
+};
 
 export const PatchNode = memo(function PatchNode({
   node,
@@ -53,6 +66,9 @@ export const PatchNode = memo(function PatchNode({
   onOutputPointerDown,
   onInputPointerUp,
   controls,
+  inputConnections,
+  outputConnections,
+  activeOutputPortId,
   onControlChange,
   widget
 }: PatchNodeProps): JSX.Element {
@@ -113,32 +129,64 @@ export const PatchNode = memo(function PatchNode({
       </div>
       <div className="patch-node__ports">
         <div className="patch-node__ports-column">
-          {node.inputs.map((port, index) => (
-            <button
-              key={port.id}
-              type="button"
-              className="patch-node__port patch-node__port--input"
-              onPointerUp={(event) =>
-                onInputPointerUp(node.id, port.id, index, event)
-              }
-            >
-              <span className="patch-node__port-label">{port.name}</span>
-            </button>
-          ))}
+          {node.inputs.map((port, index) => {
+            const isConnected = (inputConnections[port.id] ?? 0) > 0;
+            const portClassName = classNames("patch-node__port patch-node__port--input", [
+              [isConnected, "patch-node__port--connected"]
+            ]);
+            return (
+              <button
+                key={port.id}
+                type="button"
+                className={portClassName}
+                data-node-id={node.id}
+                data-port-id={port.id}
+                data-port-kind="input"
+                onPointerUp={(event) =>
+                  onInputPointerUp(node.id, port.id, index, event)
+                }
+              >
+                <span
+                  className="patch-node__port-indicator"
+                  data-node-id={node.id}
+                  data-port-id={port.id}
+                  data-port-kind="input"
+                />
+                <span className="patch-node__port-label">{port.name}</span>
+              </button>
+            );
+          })}
         </div>
         <div className="patch-node__ports-column patch-node__ports-column--outputs">
-          {node.outputs.map((port, index) => (
-            <button
-              key={port.id}
-              type="button"
-              className="patch-node__port patch-node__port--output"
-              onPointerDown={(event) =>
-                onOutputPointerDown(node.id, port.id, index, event)
-              }
-            >
-              <span className="patch-node__port-label">{port.name}</span>
-            </button>
-          ))}
+          {node.outputs.map((port, index) => {
+            const isConnected = (outputConnections[port.id] ?? 0) > 0;
+            const isActive = activeOutputPortId === port.id;
+            const portClassName = classNames("patch-node__port patch-node__port--output", [
+              [isConnected, "patch-node__port--connected"],
+              [isActive, "patch-node__port--active"]
+            ]);
+            return (
+              <button
+                key={port.id}
+                type="button"
+                className={portClassName}
+                data-node-id={node.id}
+                data-port-id={port.id}
+                data-port-kind="output"
+                onPointerDown={(event) =>
+                  onOutputPointerDown(node.id, port.id, index, event)
+                }
+              >
+                <span className="patch-node__port-label">{port.name}</span>
+                <span
+                  className="patch-node__port-indicator"
+                  data-node-id={node.id}
+                  data-port-id={port.id}
+                  data-port-kind="output"
+                />
+              </button>
+            );
+          })}
         </div>
       </div>
       {controls.length > 0 ? (

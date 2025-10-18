@@ -4,7 +4,7 @@ import { usePatch } from "../state/PatchContext";
 import { getNodeImplementation, instantiateNode } from "@dsp/nodes";
 import { nanoid } from "@codegen/utils/nanoid";
 import { NodePalette } from "./NodePalette";
-import { PatchNode } from "./PatchNode";
+import { PatchNode, type PortKind } from "./PatchNode";
 import { EnvelopeVisualizer } from "./EnvelopeVisualizer";
 import { ScopeVisualizer } from "./ScopeVisualizer";
 import type { NodeDescriptor, NodeMetadata, NodePosition } from "@graph/types";
@@ -24,6 +24,13 @@ const MIN_SCALE = 0.3;
 const MAX_SCALE = 2.5;
 const ZOOM_SENSITIVITY = 0.0015;
 
+const cssEscape = (value: string): string => {
+  if (typeof window !== "undefined" && window.CSS && typeof window.CSS.escape === "function") {
+    return window.CSS.escape(value);
+  }
+  return value.replace(/([ !"#$%&'()*+,./:;<=>?@[\\\]^`{|}~])/g, "\\$1");
+};
+
 interface PendingConnection {
   fromNodeId: string;
   fromPortId: string;
@@ -40,6 +47,11 @@ interface DragState {
 interface CanvasProps {
   inspectorVisible: boolean;
   toggleInspector: () => void;
+}
+
+interface NodeConnectionSummary {
+  inputs: Record<string, number>;
+  outputs: Record<string, number>;
 }
 
 function getNodeMetadata(node: NodeDescriptor): NodeMetadata | undefined {
@@ -129,6 +141,37 @@ export function Canvas({ inspectorVisible, toggleInspector }: CanvasProps): JSX.
     startOffset: Point;
   } | null>(null);
 
+  const screenToCanvas = useCallback(
+    (screenX: number, screenY: number): Point | null => {
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (!rect) {
+        return null;
+      }
+      const localX = screenX - rect.left;
+      const localY = screenY - rect.top;
+      return {
+        x: (localX - viewOffset.x) / viewScale,
+        y: (localY - viewOffset.y) / viewScale
+      };
+    },
+    [viewOffset.x, viewOffset.y, viewScale]
+  );
+
+  const getDomPortAnchor = useCallback(
+    (nodeId: string, portId: string, kind: PortKind): Point | null => {
+      if (typeof document === "undefined") {
+        return null;
+      }
+      const selector = `.patch-node__port-indicator[data-node-id="${cssEscape(nodeId)}"][data-port-id="${cssEscape(portId)}"][data-port-kind="${kind}"]`;
+      const element = document.querySelector(selector) as HTMLElement | null;
+      if (!element) {
+        return null;
+      }
+      const rect = element.getBoundingClientRect();
+      return screenToCanvas(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    },
+    [screenToCanvas]
+  );
   const nodePositions = useMemo(() => {
     return new Map<string, Point>(
       viewModel.nodes.map((node) => [node.id, getNodePosition(node)])
@@ -140,6 +183,34 @@ export function Canvas({ inspectorVisible, toggleInspector }: CanvasProps): JSX.
       viewModel.nodes.map((node) => [node.id, node])
     );
   }, [viewModel.nodes]);
+
+  const portConnectionMap = useMemo(() => {
+    const map = new Map<string, NodeConnectionSummary>();
+    for (const node of viewModel.nodes) {
+      const inputs: Record<string, number> = {};
+      const outputs: Record<string, number> = {};
+      for (const port of node.inputs) {
+        inputs[port.id] = 0;
+      }
+      for (const port of node.outputs) {
+        outputs[port.id] = 0;
+      }
+      map.set(node.id, { inputs, outputs });
+    }
+
+    for (const connection of viewModel.connections) {
+      const source = map.get(connection.from.node);
+      const target = map.get(connection.to.node);
+      if (source && source.outputs[connection.from.port] !== undefined) {
+        source.outputs[connection.from.port] += 1;
+      }
+      if (target && target.inputs[connection.to.port] !== undefined) {
+        target.inputs[connection.to.port] += 1;
+      }
+    }
+
+    return map;
+  }, [viewModel.connections, viewModel.nodes]);
 
   const connectionPaths = useMemo(() => {
     return viewModel.connections
@@ -167,8 +238,14 @@ export function Canvas({ inspectorVisible, toggleInspector }: CanvasProps): JSX.
           return null;
         }
 
-        const start = getPortAnchor(fromNode, "output", fromPortIndex, fromPosition);
-        const end = getPortAnchor(toNode, "input", toPortIndex, toPosition);
+        const fallbackStart = getPortAnchor(fromNode, "output", fromPortIndex, fromPosition);
+        const fallbackEnd = getPortAnchor(toNode, "input", toPortIndex, toPosition);
+
+        const startDom = getDomPortAnchor(fromNode.id, connection.from.port, "output");
+        const endDom = getDomPortAnchor(toNode.id, connection.to.port, "input");
+
+        const start = startDom ?? fallbackStart;
+        const end = endDom ?? fallbackEnd;
 
         return {
           id: connection.id,
@@ -176,7 +253,9 @@ export function Canvas({ inspectorVisible, toggleInspector }: CanvasProps): JSX.
         };
       })
       .filter(Boolean) as Array<{ id: string; path: string }>;
-  }, [viewModel.connections, nodesById, nodePositions]);
+  }, [viewModel.connections, nodesById, nodePositions, getDomPortAnchor]);
+
+  const activeOutputPortId = pendingConnection?.fromPortId ?? null;
 
   const handleCreateNode = useCallback(
     (kind: string) => {
@@ -195,18 +274,9 @@ export function Canvas({ inspectorVisible, toggleInspector }: CanvasProps): JSX.
 
   const translatePointerToCanvas = useCallback(
     (event: React.PointerEvent | PointerEvent): Point | null => {
-      const rect = canvasRef.current?.getBoundingClientRect();
-      if (!rect) {
-        return null;
-      }
-      const screenX = event.clientX - rect.left;
-      const screenY = event.clientY - rect.top;
-      return {
-        x: (screenX - viewOffset.x) / viewScale,
-        y: (screenY - viewOffset.y) / viewScale
-      };
+      return screenToCanvas(event.clientX, event.clientY);
     },
-    [viewOffset.x, viewOffset.y, viewScale]
+    [screenToCanvas]
   );
 
   const handleCanvasPointerDown = useCallback(
@@ -367,7 +437,9 @@ export function Canvas({ inspectorVisible, toggleInspector }: CanvasProps): JSX.
       if (!node || !position) {
         return;
       }
-      const anchor = getPortAnchor(node, "output", portIndex, position);
+      const domAnchor = getDomPortAnchor(nodeId, portId, "output");
+      const fallbackAnchor = getPortAnchor(node, "output", portIndex, position);
+      const anchor = domAnchor ?? fallbackAnchor;
       setPendingConnection({
         fromNodeId: nodeId,
         fromPortId: portId,
@@ -377,7 +449,7 @@ export function Canvas({ inspectorVisible, toggleInspector }: CanvasProps): JSX.
       setPointerPosition(anchor);
       setConnectionError(null);
     },
-    [nodesById, nodePositions, removeConnectionsFromPort]
+    [nodesById, nodePositions, removeConnectionsFromPort, getDomPortAnchor]
   );
 
   const handleInputPointerUp = useCallback(
@@ -487,18 +559,6 @@ export function Canvas({ inspectorVisible, toggleInspector }: CanvasProps): JSX.
             transform: `translate(${viewOffset.x}px, ${viewOffset.y}px) scale(${viewScale})`
           }}
         >
-          <svg className="canvas-connections" aria-hidden="true">
-            {connectionPaths.map((connection) => (
-              <path key={connection.id} d={connection.path} />
-            ))}
-            {pendingConnection && pointerPosition ? (
-              <path
-                className="canvas-connections__pending"
-                d={createConnectionPath(pendingConnection.anchor, pointerPosition)}
-              />
-            ) : null}
-          </svg>
-
           {viewModel.nodes.map((node) => {
           const position = nodePositions.get(node.id) ?? getNodePosition(node);
           const { width } = getNodeDimensions(node);
@@ -590,11 +650,26 @@ export function Canvas({ inspectorVisible, toggleInspector }: CanvasProps): JSX.
               onOutputPointerDown={handleOutputPointerDown}
               onInputPointerUp={handleInputPointerUp}
               controls={controlConfigs}
+              inputConnections={portConnectionMap.get(node.id)?.inputs ?? {}}
+              outputConnections={portConnectionMap.get(node.id)?.outputs ?? {}}
+              activeOutputPortId={activeOutputPortId && pendingConnection?.fromNodeId === node.id ? activeOutputPortId : null}
               onControlChange={handleControlChange}
               widget={widget}
             />
           );
         })}
+
+          <svg className="canvas-connections" aria-hidden="true">
+            {connectionPaths.map((connection) => (
+              <path key={connection.id} d={connection.path} />
+            ))}
+            {pendingConnection && pointerPosition ? (
+              <path
+                className="canvas-connections__pending"
+                d={createConnectionPath(pendingConnection.anchor, pointerPosition)}
+              />
+            ) : null}
+          </svg>
 
           {viewModel.nodes.length === 0 ? (
             <div className="canvas-placeholder">
