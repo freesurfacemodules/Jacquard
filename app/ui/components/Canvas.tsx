@@ -37,6 +37,11 @@ interface DragState {
   offset: Point;
 }
 
+interface CanvasProps {
+  inspectorVisible: boolean;
+  toggleInspector: () => void;
+}
+
 function getNodeMetadata(node: NodeDescriptor): NodeMetadata | undefined {
   return node.metadata as NodeMetadata | undefined;
 }
@@ -90,7 +95,7 @@ function createConnectionPath(start: Point, end: Point): string {
   return `M ${start.x} ${start.y} C ${start.x + dx} ${start.y} ${end.x - dx} ${end.y} ${end.x} ${end.y}`;
 }
 
-export function Canvas(): JSX.Element {
+export function Canvas({ inspectorVisible, toggleInspector }: CanvasProps): JSX.Element {
   const {
     viewModel,
     addNode,
@@ -455,7 +460,17 @@ export function Canvas(): JSX.Element {
     <section className="canvas-pane" aria-label="Patch editor">
       <header className="canvas-header">
         <h1>Patch</h1>
-        <NodePalette onCreateNode={handleCreateNode} />
+        <div className="canvas-header__controls">
+          <NodePalette onCreateNode={handleCreateNode} />
+          <button
+            type="button"
+            className="canvas-toggle-inspector"
+            onClick={toggleInspector}
+            aria-pressed={inspectorVisible}
+          >
+            {inspectorVisible ? "Hide Inspector" : "Show Inspector"}
+          </button>
+        </div>
       </header>
       <div
         ref={canvasRef}

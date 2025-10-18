@@ -7,12 +7,17 @@
   font-family: "Inter", system-ui, sans-serif;
 }
 
+main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .workspace {
   flex: 1;
-  display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr);
-  grid-template-rows: 1fr;
-  gap: 1px;
+  display: flex;
+  min-height: 0;
   background: #1b1f26;
 }
 
@@ -62,6 +67,11 @@
 .inspector-pane {
   display: flex;
   flex-direction: column;
+  min-width: 0;
+}
+
+.canvas-pane {
+  flex: 1;
 }
 
 .canvas-header,
@@ -72,6 +82,33 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+}
+
+.canvas-header__controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.canvas-toggle-inspector {
+  border: 1px solid #3a4254;
+  background: #263042;
+  color: inherit;
+  border-radius: 6px;
+  padding: 0.35rem 0.8rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.canvas-toggle-inspector:hover {
+  background: #2e3950;
+  border-color: #4b5670;
+}
+
+.canvas-toggle-inspector:focus-visible {
+  outline: 2px solid #7a89ff;
+  outline-offset: 2px;
 }
 
 .canvas-body {
@@ -98,6 +135,7 @@
 }
 
 .inspector-body {
+  flex: 1;
   padding: 1rem;
   overflow: auto;
 }
@@ -112,6 +150,53 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: #7f8aa8;
+}
+
+.inspector-wrapper {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  min-width: 240px;
+  max-width: 600px;
+  border-left: 1px solid #1f2430;
+  transition: width 0.2s ease, opacity 0.2s ease;
+  overflow: hidden;
+}
+
+.inspector-wrapper--hidden {
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.inspector-wrapper--hidden .inspector-pane {
+  display: none;
+}
+
+.inspector-wrapper--hidden .inspector-resizer {
+  display: none;
+}
+
+.inspector-resizer {
+  width: 6px;
+  background: #1f2430;
+  cursor: col-resize;
+  transition: background 0.2s ease;
+}
+
+.inspector-resizer:hover,
+.inspector-resizer:active {
+  background: #2f3647;
+}
+
+.inspector-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .placeholder {
