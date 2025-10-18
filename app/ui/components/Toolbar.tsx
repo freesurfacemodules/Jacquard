@@ -7,8 +7,21 @@ import {
   useState
 } from "react";
 import { usePatch } from "../state/PatchContext";
+import type { WindowKey, WindowVisibility } from "./Workspace";
 
-export function Toolbar(): JSX.Element {
+interface ToolbarProps {
+  windows: WindowVisibility;
+  onToggleWindow(key: WindowKey): void;
+}
+
+const WINDOW_MENU_ITEMS: Array<{ key: WindowKey; label: string }> = [
+  { key: "nodeBrowser", label: "Node Browser" },
+  { key: "nodeProperties", label: "Node Properties" },
+  { key: "assemblyView", label: "Assembly Script" },
+  { key: "audioSettings", label: "Audio Properties" }
+];
+
+export function Toolbar({ windows, onToggleWindow }: ToolbarProps): JSX.Element {
   const {
     validation,
     compile,
@@ -21,15 +34,16 @@ export function Toolbar(): JSX.Element {
     exportPatch,
     importPatch
   } = usePatch();
-  const [compileStatus, setCompileStatus] = useState<
-    "idle" | "compiling" | "ready" | "error"
-  >("idle");
+
+  const [compileStatus, setCompileStatus] = useState<"idle" | "compiling" | "ready" | "error">(
+    "idle"
+  );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const previousAudioState = useRef(audio.state);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const menuRef = useRef<HTMLDivElement | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const toolbarRef = useRef<HTMLDivElement | null>(null);
+  const [openMenu, setOpenMenu] = useState<"patch" | "window" | null>(null);
   const [isMac, setIsMac] = useState(false);
 
   useEffect(() => {
@@ -39,27 +53,27 @@ export function Toolbar(): JSX.Element {
   }, []);
 
   const closeMenu = useCallback(() => {
-    setMenuOpen(false);
+    setOpenMenu(null);
   }, []);
 
-  const toggleMenu = useCallback(() => {
-    setMenuOpen((previous) => !previous);
+  const toggleMenu = useCallback((menu: "patch" | "window") => {
+    setOpenMenu((current) => (current === menu ? null : menu));
   }, []);
 
   useEffect(() => {
-    if (!menuOpen) {
+    if (!openMenu) {
       return;
     }
     const handlePointerDown = (event: PointerEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setMenuOpen(false);
+      if (toolbarRef.current && !toolbarRef.current.contains(event.target as Node)) {
+        setOpenMenu(null);
       }
     };
     window.addEventListener("pointerdown", handlePointerDown);
     return () => {
       window.removeEventListener("pointerdown", handlePointerDown);
     };
-  }, [menuOpen]);
+  }, [openMenu]);
 
   const hotkeyLabels = useMemo(
     () => ({
@@ -77,9 +91,7 @@ export function Toolbar(): JSX.Element {
       setCompileStatus("error");
       setSuccessMessage(null);
       setErrorMessage(
-        firstIssue
-          ? `${firstIssue.code}: ${firstIssue.message}`
-          : "Graph has validation errors."
+        firstIssue ? `${firstIssue.code}: ${firstIssue.message}` : "Graph has validation errors."
       );
       return;
     }
@@ -93,8 +105,7 @@ export function Toolbar(): JSX.Element {
       setSuccessMessage("Compiled successfully.");
     } catch (error) {
       console.error(error);
-      const message =
-        error instanceof Error ? error.message : "Unknown compile error";
+      const message = error instanceof Error ? error.message : "Unknown compile error";
       setErrorMessage(message);
       setCompileStatus("error");
     }
@@ -112,10 +123,7 @@ export function Toolbar(): JSX.Element {
     if (previousAudioState.current !== audio.state) {
       if (audio.state === "running") {
         setSuccessMessage("Playback started.");
-      } else if (
-        previousAudioState.current === "running" &&
-        audio.state === "idle"
-      ) {
+      } else if (previousAudioState.current === "running" && audio.state === "idle") {
         setSuccessMessage("Playback stopped.");
       }
       previousAudioState.current = audio.state;
@@ -127,7 +135,6 @@ export function Toolbar(): JSX.Element {
       await audio.stop();
       return;
     }
-
     await audio.start();
   }, [audio]);
 
@@ -149,9 +156,7 @@ export function Toolbar(): JSX.Element {
       const blob = new Blob([json], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const anchor = window.document.createElement("a");
-      const timestamp = new Date()
-        .toISOString()
-        .replace(/[:.]/g, "-");
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
       anchor.href = url;
       anchor.download = `maxwasm-patch-${timestamp}.json`;
       anchor.click();
@@ -159,8 +164,7 @@ export function Toolbar(): JSX.Element {
       setSuccessMessage("Patch saved.");
       setErrorMessage(null);
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to save patch.";
+      const message = error instanceof Error ? error.message : "Failed to save patch.";
       setErrorMessage(message);
       setSuccessMessage(null);
     }
@@ -184,10 +188,7 @@ export function Toolbar(): JSX.Element {
         setSuccessMessage(`Loaded patch from ${file.name}.`);
         setErrorMessage(null);
       } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : "Failed to load patch file.";
+        const message = error instanceof Error ? error.message : "Failed to load patch file.";
         setErrorMessage(message);
         setSuccessMessage(null);
       } finally {
@@ -199,11 +200,8 @@ export function Toolbar(): JSX.Element {
 
   const isRunning = audio.state === "running";
   const runDisabled =
-    (!isRunning && compileStatus !== "ready") ||
-    audio.state === "starting" ||
-    !audio.isSupported;
-  const runLabel =
-    audio.state === "starting" ? "Starting…" : isRunning ? "Stop" : "Run";
+    (!isRunning && compileStatus !== "ready") || audio.state === "starting" || !audio.isSupported;
+  const runLabel = audio.state === "starting" ? "Starting…" : isRunning ? "Stop" : "Run";
 
   useEffect(() => {
     if (audio.error) {
@@ -213,7 +211,7 @@ export function Toolbar(): JSX.Element {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && menuOpen) {
+      if (event.key === "Escape" && openMenu) {
         event.preventDefault();
         closeMenu();
         return;
@@ -262,80 +260,77 @@ export function Toolbar(): JSX.Element {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [
-    closeMenu,
-    handleLoadClick,
-    handleRedo,
-    handleSavePatch,
-    handleUndo,
-    isMac,
-    menuOpen
-  ]);
+  }, [closeMenu, handleLoadClick, handleRedo, handleSavePatch, handleUndo, isMac, openMenu]);
 
-  const menuItems = [
-    {
-      id: "undo",
-      label: "Undo",
-      action: handleUndo,
-      disabled: !canUndo,
-      hotkey: hotkeyLabels.undo
-    },
-    {
-      id: "redo",
-      label: "Redo",
-      action: handleRedo,
-      disabled: !canRedo,
-      hotkey: hotkeyLabels.redo
-    },
-    {
-      id: "save",
-      label: "Save Patch…",
-      action: handleSavePatch,
-      disabled: false,
-      hotkey: hotkeyLabels.save
-    },
-    {
-      id: "load",
-      label: "Load Patch…",
-      action: handleLoadClick,
-      disabled: false,
-      hotkey: hotkeyLabels.load
-    }
-  ];
+  const patchMenuItems = useMemo(
+    () => [
+      { id: "undo", label: "Undo", disabled: !canUndo, action: handleUndo, hint: hotkeyLabels.undo },
+      { id: "redo", label: "Redo", disabled: !canRedo, action: handleRedo, hint: hotkeyLabels.redo },
+      { id: "save", label: "Save Patch…", disabled: false, action: handleSavePatch, hint: hotkeyLabels.save },
+      { id: "load", label: "Load Patch…", disabled: false, action: handleLoadClick, hint: hotkeyLabels.load }
+    ],
+    [canRedo, canUndo, handleLoadClick, handleRedo, handleSavePatch, handleUndo, hotkeyLabels]
+  );
 
   return (
-    <header className="toolbar" aria-label="Application controls">
+    <div className="toolbar" ref={toolbarRef} aria-label="Application controls">
       <div className="toolbar-section toolbar-section--brand">
         <strong>MaxWasm</strong>
-        <div className="toolbar-menubar" ref={menuRef}>
+        <div className="toolbar-menubar">
           <button
             type="button"
-            className={`toolbar-menu-button${menuOpen ? " toolbar-menu-button--open" : ""}`}
-            aria-haspopup="true"
-            aria-expanded={menuOpen}
-            onClick={toggleMenu}
+            className={`toolbar-menu-button${openMenu === "patch" ? " toolbar-menu-button--open" : ""}`}
+            onClick={() => toggleMenu("patch")}
           >
             Patch <span aria-hidden="true">▾</span>
           </button>
-          {menuOpen ? (
+          {openMenu === "patch" ? (
             <div className="toolbar-menu" role="menu">
-              {menuItems.map((item) => (
+              {patchMenuItems.map((item) => (
                 <button
                   key={item.id}
                   type="button"
-                  role="menuitem"
                   className="toolbar-menu__item"
+                  disabled={item.disabled}
                   onClick={() => {
                     if (item.disabled) {
                       return;
                     }
-                    closeMenu();
                     item.action();
+                    closeMenu();
                   }}
-                  disabled={item.disabled}
                 >
                   <span>{item.label}</span>
-                  <span className="toolbar-menu__hint">{item.hotkey}</span>
+                  <span className="toolbar-menu__hint">{item.hint}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+        <div className="toolbar-menubar">
+          <button
+            type="button"
+            className={`toolbar-menu-button${openMenu === "window" ? " toolbar-menu-button--open" : ""}`}
+            onClick={() => toggleMenu("window")}
+          >
+            Window <span aria-hidden="true">▾</span>
+          </button>
+          {openMenu === "window" ? (
+            <div className="toolbar-menu" role="menu">
+              {WINDOW_MENU_ITEMS.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  className="toolbar-menu__item"
+                  onClick={() => {
+                    onToggleWindow(item.key);
+                    closeMenu();
+                  }}
+                >
+                  <span>{item.label}</span>
+                  <span className="toolbar-menu__hint">
+                    {windows[item.key] ? "●" : "○"}
+                  </span>
                 </button>
               ))}
             </div>
@@ -343,6 +338,18 @@ export function Toolbar(): JSX.Element {
         </div>
       </div>
       <div className="toolbar-section toolbar-section--actions">
+        <button type="button" onClick={handleUndo} className="toolbar-button" disabled={!canUndo}>
+          Undo
+        </button>
+        <button type="button" onClick={handleRedo} className="toolbar-button" disabled={!canRedo}>
+          Redo
+        </button>
+        <button type="button" onClick={handleSavePatch} className="toolbar-button">
+          Save
+        </button>
+        <button type="button" onClick={handleLoadClick} className="toolbar-button">
+          Load
+        </button>
         <button
           type="button"
           onClick={handleCompile}
@@ -366,13 +373,9 @@ export function Toolbar(): JSX.Element {
       {compileStatus === "ready" && successMessage ? (
         <div className="toolbar-section success">{successMessage}</div>
       ) : null}
-      {audio.error ? (
-        <div className="toolbar-section error">{audio.error}</div>
-      ) : null}
+      {audio.error ? <div className="toolbar-section error">{audio.error}</div> : null}
       {!audio.isSupported ? (
-        <div className="toolbar-section error">
-          Audio playback is unavailable in this environment.
-        </div>
+        <div className="toolbar-section error">Audio playback is unavailable in this environment.</div>
       ) : null}
       <input
         ref={fileInputRef}
@@ -381,6 +384,6 @@ export function Toolbar(): JSX.Element {
         onChange={handleFileChange}
         style={{ display: "none" }}
       />
-    </header>
+    </div>
   );
 }

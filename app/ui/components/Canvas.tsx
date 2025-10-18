@@ -3,13 +3,12 @@ import type { ReactNode } from "react";
 import { usePatch } from "../state/PatchContext";
 import { getNodeImplementation, instantiateNode } from "@dsp/nodes";
 import { nanoid } from "@codegen/utils/nanoid";
-import { NodePalette } from "./NodePalette";
 import { PatchNode, type PortKind } from "./PatchNode";
 import { EnvelopeVisualizer } from "./EnvelopeVisualizer";
 import { ScopeVisualizer } from "./ScopeVisualizer";
 import type { NodeDescriptor, NodeMetadata, NodePosition } from "@graph/types";
 
-type Point = { x: number; y: number };
+export type Point = { x: number; y: number };
 
 const DEFAULT_NODE_WIDTH = 220;
 const DEFAULT_NODE_HEIGHT = 160;
@@ -23,6 +22,10 @@ const GRID_ORIGIN_Y = 80;
 const MIN_SCALE = 0.3;
 const MAX_SCALE = 2.5;
 const ZOOM_SENSITIVITY = 0.0015;
+const WORKSPACE_MIN = -2048;
+const WORKSPACE_MAX = 8192;
+const WORKSPACE_SIZE = WORKSPACE_MAX - WORKSPACE_MIN;
+const ORIGIN_OFFSET = -WORKSPACE_MIN;
 
 const cssEscape = (value: string): string => {
   if (typeof window !== "undefined" && window.CSS && typeof window.CSS.escape === "function") {
@@ -44,14 +47,15 @@ interface DragState {
   offset: Point;
 }
 
-interface CanvasProps {
-  inspectorVisible: boolean;
-  toggleInspector: () => void;
-}
-
 interface NodeConnectionSummary {
   inputs: Record<string, number>;
   outputs: Record<string, number>;
+}
+
+interface CanvasProps {
+  onOpenCommandPalette(canvasPoint: Point | null, screenPoint: { x: number; y: number } | null): void;
+  pendingNodeCreation: { kind: string; position: Point | null } | null;
+  onNodeCreationHandled(): void;
 }
 
 function getNodeMetadata(node: NodeDescriptor): NodeMetadata | undefined {
@@ -63,7 +67,7 @@ function getNodePosition(node: NodeDescriptor): NodePosition {
   if (metadata?.position) {
     return metadata.position;
   }
-  return { x: GRID_ORIGIN_X, y: GRID_ORIGIN_Y };
+  return { x: 0, y: 0 };
 }
 
 function getNodeDimensions(node: NodeDescriptor): { width: number; height: number } {
@@ -80,14 +84,14 @@ function computeSpawnPosition(nodes: NodeDescriptor[]): Point {
   const column = index % 4;
   const row = Math.floor(index / 4);
   return {
-    x: GRID_ORIGIN_X + column * GRID_X,
-    y: GRID_ORIGIN_Y + row * GRID_Y
+    x: clampCoordinate(column * GRID_X),
+    y: clampCoordinate(row * GRID_Y)
   };
 }
 
 function getPortAnchor(
   node: NodeDescriptor,
-  kind: "input" | "output",
+  kind: PortKind,
   portIndex: number,
   position: Point
 ): Point {
@@ -107,29 +111,60 @@ function createConnectionPath(start: Point, end: Point): string {
   return `M ${start.x} ${start.y} C ${start.x + dx} ${start.y} ${end.x - dx} ${end.y} ${end.x} ${end.y}`;
 }
 
-export function Canvas({ inspectorVisible, toggleInspector }: CanvasProps): JSX.Element {
+function clampCoordinate(value: number): number {
+  return Math.min(WORKSPACE_MAX, Math.max(WORKSPACE_MIN, value));
+}
+
+function toDisplay(point: Point): Point {
+  return {
+    x: clampCoordinate(point.x) + ORIGIN_OFFSET,
+    y: clampCoordinate(point.y) + ORIGIN_OFFSET
+  };
+}
+
+function getDomPortAnchor(
+  nodeId: string,
+  portId: string,
+  kind: PortKind,
+  screenToCanvas: (x: number, y: number) => Point | null
+): Point | null {
+  if (typeof document === "undefined") {
+    return null;
+  }
+  const selector = `.patch-node__port-indicator[data-node-id="${cssEscape(nodeId)}"][data-port-id="${cssEscape(portId)}"][data-port-kind="${kind}"]`;
+  const element = document.querySelector(selector) as HTMLElement | null;
+  if (!element) {
+    return null;
+  }
+  const rect = element.getBoundingClientRect();
+  return screenToCanvas(rect.left + rect.width / 2, rect.top + rect.height / 2);
+}
+
+export function Canvas({
+  onOpenCommandPalette,
+  pendingNodeCreation,
+  onNodeCreationHandled
+}: CanvasProps): JSX.Element {
   const {
     viewModel,
     addNode,
     connectNodes,
-    removeNode,
     removeConnectionsFromPort,
     removeConnectionsToPort,
+    removeNode,
     updateNodePosition,
     updateNodeParameter,
     selectedNodeId,
     selectNode,
-    getParameterValue,
     envelopeSnapshots,
     getEnvelopeSnapshot,
     scopeSnapshots,
-    getScopeSnapshot
+    getScopeSnapshot,
+    getParameterValue
   } = usePatch();
 
   const canvasRef = useRef<HTMLDivElement>(null);
-  const [pendingConnection, setPendingConnection] = useState<PendingConnection | null>(
-    null
-  );
+  const [pendingConnection, setPendingConnection] = useState<PendingConnection | null>(null);
   const [pointerPosition, setPointerPosition] = useState<Point | null>(null);
   const dragStateRef = useRef<DragState | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -140,6 +175,7 @@ export function Canvas({ inspectorVisible, toggleInspector }: CanvasProps): JSX.
     origin: Point;
     startOffset: Point;
   } | null>(null);
+  const initializedRef = useRef(false);
 
   const screenToCanvas = useCallback(
     (screenX: number, screenY: number): Point | null => {
@@ -149,29 +185,32 @@ export function Canvas({ inspectorVisible, toggleInspector }: CanvasProps): JSX.
       }
       const localX = screenX - rect.left;
       const localY = screenY - rect.top;
+      const workspaceX = ((localX - viewOffset.x) / viewScale) - ORIGIN_OFFSET;
+      const workspaceY = ((localY - viewOffset.y) / viewScale) - ORIGIN_OFFSET;
       return {
-        x: (localX - viewOffset.x) / viewScale,
-        y: (localY - viewOffset.y) / viewScale
+        x: clampCoordinate(workspaceX),
+        y: clampCoordinate(workspaceY)
       };
     },
     [viewOffset.x, viewOffset.y, viewScale]
   );
 
-  const getDomPortAnchor = useCallback(
-    (nodeId: string, portId: string, kind: PortKind): Point | null => {
-      if (typeof document === "undefined") {
-        return null;
-      }
-      const selector = `.patch-node__port-indicator[data-node-id="${cssEscape(nodeId)}"][data-port-id="${cssEscape(portId)}"][data-port-kind="${kind}"]`;
-      const element = document.querySelector(selector) as HTMLElement | null;
-      if (!element) {
-        return null;
-      }
-      const rect = element.getBoundingClientRect();
-      return screenToCanvas(rect.left + rect.width / 2, rect.top + rect.height / 2);
-    },
-    [screenToCanvas]
-  );
+  useEffect(() => {
+    if (initializedRef.current) {
+      return;
+    }
+    const element = canvasRef.current;
+    if (!element) {
+      return;
+    }
+    const rect = element.getBoundingClientRect();
+    initializedRef.current = true;
+    setViewOffset({
+      x: rect.width / 2 - ORIGIN_OFFSET * viewScale,
+      y: rect.height / 2 - ORIGIN_OFFSET * viewScale
+    });
+  }, [viewScale]);
+
   const nodePositions = useMemo(() => {
     return new Map<string, Point>(
       viewModel.nodes.map((node) => [node.id, getNodePosition(node)])
@@ -227,25 +266,24 @@ export function Canvas({ inspectorVisible, toggleInspector }: CanvasProps): JSX.
           return null;
         }
 
-        const fromPortIndex = fromNode.outputs.findIndex(
-          (port) => port.id === connection.from.port
-        );
-        const toPortIndex = toNode.inputs.findIndex(
-          (port) => port.id === connection.to.port
-        );
+        const fromPortIndex = fromNode.outputs.findIndex((port) => port.id === connection.from.port);
+        const toPortIndex = toNode.inputs.findIndex((port) => port.id === connection.to.port);
 
         if (fromPortIndex === -1 || toPortIndex === -1) {
           return null;
         }
 
-        const fallbackStart = getPortAnchor(fromNode, "output", fromPortIndex, fromPosition);
-        const fallbackEnd = getPortAnchor(toNode, "input", toPortIndex, toPosition);
+        const fromDisplay = toDisplay(fromPosition);
+        const toDisplayPos = toDisplay(toPosition);
 
-        const startDom = getDomPortAnchor(fromNode.id, connection.from.port, "output");
-        const endDom = getDomPortAnchor(toNode.id, connection.to.port, "input");
+        const fallbackStart = getPortAnchor(fromNode, "output", fromPortIndex, fromDisplay);
+        const fallbackEnd = getPortAnchor(toNode, "input", toPortIndex, toDisplayPos);
 
-        const start = startDom ?? fallbackStart;
-        const end = endDom ?? fallbackEnd;
+        const startDom = getDomPortAnchor(fromNode.id, connection.from.port, "output", screenToCanvas);
+        const endDom = getDomPortAnchor(toNode.id, connection.to.port, "input", screenToCanvas);
+
+        const start = startDom ? toDisplay(startDom) : fallbackStart;
+        const end = endDom ? toDisplay(endDom) : fallbackEnd;
 
         return {
           id: connection.id,
@@ -253,14 +291,21 @@ export function Canvas({ inspectorVisible, toggleInspector }: CanvasProps): JSX.
         };
       })
       .filter(Boolean) as Array<{ id: string; path: string }>;
-  }, [viewModel.connections, nodesById, nodePositions, getDomPortAnchor]);
+  }, [viewModel.connections, nodesById, nodePositions, screenToCanvas]);
 
   const activeOutputPortId = pendingConnection?.fromPortId ?? null;
 
   const handleCreateNode = useCallback(
-    (kind: string) => {
+    (kind: string, anchor?: Point | null) => {
       const node = instantiateNode(kind, nanoid());
-      const position = computeSpawnPosition(viewModel.nodes);
+      let position = computeSpawnPosition(viewModel.nodes);
+      if (anchor) {
+        const { width, height } = getNodeDimensions(node);
+        position = {
+          x: clampCoordinate(anchor.x - width / 2),
+          y: clampCoordinate(anchor.y - height / 2)
+        };
+      }
       node.metadata = {
         ...(node.metadata ?? {}),
         position
@@ -269,8 +314,16 @@ export function Canvas({ inspectorVisible, toggleInspector }: CanvasProps): JSX.
       selectNode(node.id);
       setConnectionError(null);
     },
-    [addNode, viewModel.nodes, selectNode]
+    [addNode, selectNode, viewModel.nodes]
   );
+
+  useEffect(() => {
+    if (!pendingNodeCreation) {
+      return;
+    }
+    handleCreateNode(pendingNodeCreation.kind, pendingNodeCreation.position);
+    onNodeCreationHandled();
+  }, [handleCreateNode, onNodeCreationHandled, pendingNodeCreation]);
 
   const translatePointerToCanvas = useCallback(
     (event: React.PointerEvent | PointerEvent): Point | null => {
@@ -318,7 +371,7 @@ export function Canvas({ inspectorVisible, toggleInspector }: CanvasProps): JSX.
       }
       const point = translatePointerToCanvas(event);
       if (point) {
-        setPointerPosition(point);
+        setPointerPosition(toDisplay(point));
       }
     },
     [pendingConnection, translatePointerToCanvas]
@@ -344,8 +397,8 @@ export function Canvas({ inspectorVisible, toggleInspector }: CanvasProps): JSX.
     panStateRef.current = null;
   }, []);
 
-  const handleCanvasWheel = useCallback(
-    (event: React.WheelEvent<HTMLDivElement>) => {
+  const handleWheelNative = useCallback(
+    (event: WheelEvent) => {
       event.preventDefault();
       const rect = canvasRef.current?.getBoundingClientRect();
       if (!rect) {
@@ -354,16 +407,16 @@ export function Canvas({ inspectorVisible, toggleInspector }: CanvasProps): JSX.
 
       const screenX = event.clientX - rect.left;
       const screenY = event.clientY - rect.top;
-      const worldX = (screenX - viewOffset.x) / viewScale;
-      const worldY = (screenY - viewOffset.y) / viewScale;
+      const worldX = ((screenX - viewOffset.x) / viewScale) - ORIGIN_OFFSET;
+      const worldY = ((screenY - viewOffset.y) / viewScale) - ORIGIN_OFFSET;
 
       const delta = -event.deltaY * ZOOM_SENSITIVITY;
       const factor = Math.exp(delta);
       const nextScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, viewScale * factor));
 
       const nextOffset = {
-        x: screenX - worldX * nextScale,
-        y: screenY - worldY * nextScale
+        x: screenX - (worldX + ORIGIN_OFFSET) * nextScale,
+        y: screenY - (worldY + ORIGIN_OFFSET) * nextScale
       };
 
       setViewScale(nextScale);
@@ -371,6 +424,18 @@ export function Canvas({ inspectorVisible, toggleInspector }: CanvasProps): JSX.
     },
     [viewOffset, viewScale]
   );
+
+  useEffect(() => {
+    const element = canvasRef.current;
+    if (!element) {
+      return;
+    }
+    const listener = (event: WheelEvent) => handleWheelNative(event);
+    element.addEventListener("wheel", listener, { passive: false });
+    return () => {
+      element.removeEventListener("wheel", listener);
+    };
+  }, [handleWheelNative]);
 
   const handleDragStart = useCallback(
     (nodeId: string, event: React.PointerEvent<HTMLDivElement>) => {
@@ -404,8 +469,8 @@ export function Canvas({ inspectorVisible, toggleInspector }: CanvasProps): JSX.
       }
 
       const nextPosition: Point = {
-        x: Math.max(0, point.x - state.offset.x),
-        y: Math.max(0, point.y - state.offset.y)
+        x: clampCoordinate(point.x - state.offset.x),
+        y: clampCoordinate(point.y - state.offset.y)
       };
 
       updateNodePosition(nodeId, nextPosition);
@@ -437,9 +502,9 @@ export function Canvas({ inspectorVisible, toggleInspector }: CanvasProps): JSX.
       if (!node || !position) {
         return;
       }
-      const domAnchor = getDomPortAnchor(nodeId, portId, "output");
-      const fallbackAnchor = getPortAnchor(node, "output", portIndex, position);
-      const anchor = domAnchor ?? fallbackAnchor;
+      const domAnchor = getDomPortAnchor(nodeId, portId, "output", screenToCanvas);
+      const fallbackAnchor = getPortAnchor(node, "output", portIndex, toDisplay(position));
+      const anchor = domAnchor ? toDisplay(domAnchor) : fallbackAnchor;
       setPendingConnection({
         fromNodeId: nodeId,
         fromPortId: portId,
@@ -449,7 +514,7 @@ export function Canvas({ inspectorVisible, toggleInspector }: CanvasProps): JSX.
       setPointerPosition(anchor);
       setConnectionError(null);
     },
-    [nodesById, nodePositions, removeConnectionsFromPort, getDomPortAnchor]
+    [nodesById, nodePositions, removeConnectionsFromPort, screenToCanvas]
   );
 
   const handleInputPointerUp = useCallback(
@@ -528,22 +593,17 @@ export function Canvas({ inspectorVisible, toggleInspector }: CanvasProps): JSX.
     [updateNodeParameter]
   );
 
+  const handleContextMenu = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      const canvasPoint = screenToCanvas(event.clientX, event.clientY);
+      onOpenCommandPalette(canvasPoint, { x: event.clientX, y: event.clientY });
+    },
+    [onOpenCommandPalette, screenToCanvas]
+  );
+
   return (
     <section className="canvas-pane" aria-label="Patch editor">
-      <header className="canvas-header">
-        <h1>Patch</h1>
-        <div className="canvas-header__controls">
-          <NodePalette onCreateNode={handleCreateNode} />
-          <button
-            type="button"
-            className="canvas-toggle-inspector"
-            onClick={toggleInspector}
-            aria-pressed={inspectorVisible}
-          >
-            {inspectorVisible ? "Hide Inspector" : "Show Inspector"}
-          </button>
-        </div>
-      </header>
       <div
         ref={canvasRef}
         className="canvas-body"
@@ -551,113 +611,120 @@ export function Canvas({ inspectorVisible, toggleInspector }: CanvasProps): JSX.
         onPointerMove={handleCanvasPointerMove}
         onPointerUp={handleCanvasPointerUp}
         onPointerLeave={handleCanvasPointerLeave}
-        onWheel={handleCanvasWheel}
+        onContextMenu={handleContextMenu}
       >
         <div
           className="canvas-content"
           style={{
+            width: WORKSPACE_SIZE,
+            height: WORKSPACE_SIZE,
             transform: `translate(${viewOffset.x}px, ${viewOffset.y}px) scale(${viewScale})`
           }}
         >
           {viewModel.nodes.map((node) => {
-          const position = nodePositions.get(node.id) ?? getNodePosition(node);
-          const { width } = getNodeDimensions(node);
-          const implementation = getNodeImplementation(node.kind);
-          const controls = implementation?.manifest.controls ?? [];
-          const controlConfigs = controls.map((control) => {
-            let min = control.min ?? 0;
-            const max = control.max ?? 1;
-            let step = control.step ?? 0.01;
-            if (node.kind === "delay.ddl" && control.id === "delay") {
-              const dynamicStep = 1 / viewModel.oversampling;
-              min = dynamicStep;
-              step = dynamicStep;
+            const positionWorld = nodePositions.get(node.id) ?? getNodePosition(node);
+            const positionDisplay = toDisplay(positionWorld);
+            const { width } = getNodeDimensions(node);
+            const implementation = getNodeImplementation(node.kind);
+            const controls = implementation?.manifest.controls ?? [];
+            const controlConfigs = controls.map((control) => {
+              let min = control.min ?? 0;
+              const max = control.max ?? 1;
+              let step = control.step ?? 0.01;
+              if (node.kind === "delay.ddl" && control.id === "delay") {
+                const dynamicStep = 1 / viewModel.oversampling;
+                min = dynamicStep;
+                step = dynamicStep;
+              }
+              const defaults = implementation?.manifest.defaultParams ?? {};
+              const manifestDefault = defaults[control.id];
+              let defaultValue =
+                typeof manifestDefault === "number" ? manifestDefault : min;
+              defaultValue = Math.min(max, Math.max(min, defaultValue));
+              if (step > 0) {
+                defaultValue = Math.round(defaultValue / step) * step;
+              }
+              const rawValue = getParameterValue(node.id, control.id);
+              const clampedValue = Math.min(max, Math.max(min, rawValue));
+              const quantized = step > 0 ? Math.round(clampedValue / step) * step : clampedValue;
+              return {
+                id: control.id,
+                label: control.label,
+                value: quantized,
+                min,
+                max,
+                step,
+                defaultValue
+              };
+            });
+            let widget: ReactNode | null = null;
+            if (node.kind === "envelope.ad") {
+              const riseValue =
+                controlConfigs.find((control) => control.id === "rise")?.value ?? 0.05;
+              const fallValue =
+                controlConfigs.find((control) => control.id === "fall")?.value ?? 0.25;
+              const shapeValue =
+                controlConfigs.find((control) => control.id === "shape")?.value ?? 0.5;
+              const snapshot = envelopeSnapshots[node.id] ?? getEnvelopeSnapshot(node.id);
+              widget = (
+                <EnvelopeVisualizer
+                  rise={riseValue}
+                  fall={fallValue}
+                  curve={shapeValue}
+                  value={snapshot.value}
+                  progress={snapshot.progress}
+                />
+              );
+            } else if (node.kind === "utility.scope") {
+              const scaleValue =
+                controlConfigs.find((control) => control.id === "scale")?.value ?? 5;
+              const timeValue =
+                controlConfigs.find((control) => control.id === "time")?.value ?? 0.05;
+              const snapshot = scopeSnapshots[node.id] ?? getScopeSnapshot(node.id);
+              widget = (
+                <ScopeVisualizer
+                  samples={snapshot.samples}
+                  sampleInterval={
+                    snapshot.sampleInterval || (1 / Math.max(1, viewModel.sampleRate))
+                  }
+                  scale={snapshot.scale ?? scaleValue}
+                  requestedTime={snapshot.requestedTime ?? timeValue}
+                  mode={snapshot.mode ?? 0}
+                  coverage={
+                    snapshot.coverage ??
+                    snapshot.samples.length *
+                      (snapshot.sampleInterval || (1 / Math.max(1, viewModel.sampleRate)))
+                  }
+                />
+              );
             }
-            const defaults = implementation?.manifest.defaultParams ?? {};
-            const manifestDefault = defaults[control.id];
-            let defaultValue =
-              typeof manifestDefault === "number" ? manifestDefault : min;
-            defaultValue = Math.min(max, Math.max(min, defaultValue));
-            if (step > 0) {
-              defaultValue = Math.round(defaultValue / step) * step;
-            }
-            const rawValue = getParameterValue(node.id, control.id);
-            const clampedValue = Math.min(max, Math.max(min, rawValue));
-            const quantized = step > 0 ? Math.round(clampedValue / step) * step : clampedValue;
-            return {
-              id: control.id,
-              label: control.label,
-              value: quantized,
-              min,
-              max,
-              step,
-              defaultValue
-            };
-          });
-          let widget: ReactNode | null = null;
-          if (node.kind === "envelope.ad") {
-            const riseValue =
-              controlConfigs.find((control) => control.id === "rise")?.value ?? 0.05;
-            const fallValue =
-              controlConfigs.find((control) => control.id === "fall")?.value ?? 0.25;
-            const shapeValue =
-              controlConfigs.find((control) => control.id === "shape")?.value ?? 0.5;
-            const snapshot = envelopeSnapshots[node.id] ?? getEnvelopeSnapshot(node.id);
-            widget = (
-              <EnvelopeVisualizer
-                rise={riseValue}
-                fall={fallValue}
-                curve={shapeValue}
-                value={snapshot.value}
-                progress={snapshot.progress}
-              />
-            );
-          } else if (node.kind === "utility.scope") {
-            const scaleValue =
-              controlConfigs.find((control) => control.id === "scale")?.value ?? 5;
-            const timeValue =
-              controlConfigs.find((control) => control.id === "time")?.value ?? 0.05;
-            const snapshot = scopeSnapshots[node.id] ?? getScopeSnapshot(node.id);
-            widget = (
-              <ScopeVisualizer
-                samples={snapshot.samples}
-                sampleInterval={
-                  snapshot.sampleInterval || (1 / Math.max(1, viewModel.sampleRate))
-                }
-                scale={snapshot.scale ?? scaleValue}
-                requestedTime={snapshot.requestedTime ?? timeValue}
-                mode={snapshot.mode ?? 0}
-                coverage={
-                  snapshot.coverage ??
-                  snapshot.samples.length *
-                    (snapshot.sampleInterval || (1 / Math.max(1, viewModel.sampleRate)))
-                }
-              />
-            );
-          }
 
-          return (
-            <PatchNode
-              key={node.id}
-              node={node}
-              position={position}
-              width={width}
-              selected={selectedNodeId === node.id}
-              onSelect={selectNode}
-              onDragStart={handleDragStart}
-              onDrag={handleDrag}
-              onDragEnd={handleDragEnd}
-              onOutputPointerDown={handleOutputPointerDown}
-              onInputPointerUp={handleInputPointerUp}
-              controls={controlConfigs}
-              inputConnections={portConnectionMap.get(node.id)?.inputs ?? {}}
-              outputConnections={portConnectionMap.get(node.id)?.outputs ?? {}}
-              activeOutputPortId={activeOutputPortId && pendingConnection?.fromNodeId === node.id ? activeOutputPortId : null}
-              onControlChange={handleControlChange}
-              widget={widget}
-            />
-          );
-        })}
+            return (
+              <PatchNode
+                key={node.id}
+                node={node}
+                position={positionDisplay}
+                width={width}
+                selected={selectedNodeId === node.id}
+                onSelect={selectNode}
+                onDragStart={handleDragStart}
+                onDrag={handleDrag}
+                onDragEnd={handleDragEnd}
+                onOutputPointerDown={handleOutputPointerDown}
+                onInputPointerUp={handleInputPointerUp}
+                controls={controlConfigs}
+                inputConnections={portConnectionMap.get(node.id)?.inputs ?? {}}
+                outputConnections={portConnectionMap.get(node.id)?.outputs ?? {}}
+                activeOutputPortId={
+                  activeOutputPortId && pendingConnection?.fromNodeId === node.id
+                    ? activeOutputPortId
+                    : null
+                }
+                onControlChange={handleControlChange}
+                widget={widget}
+              />
+            );
+          })}
 
           <svg className="canvas-connections" aria-hidden="true">
             {connectionPaths.map((connection) => (
@@ -673,7 +740,7 @@ export function Canvas({ inspectorVisible, toggleInspector }: CanvasProps): JSX.
 
           {viewModel.nodes.length === 0 ? (
             <div className="canvas-placeholder">
-              <p>Add nodes from the palette to start building a patch.</p>
+              <p>Add nodes to start building a patch.</p>
             </div>
           ) : null}
 

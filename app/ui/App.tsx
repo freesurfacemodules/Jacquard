@@ -1,141 +1,90 @@
 import "./App.css";
-import { Canvas } from "./components/Canvas";
-import { Inspector } from "./components/Inspector";
-import { Toolbar } from "./components/Toolbar";
+import { useCallback, useMemo, useState } from "react";
 import { PatchProvider } from "./state/PatchContext";
-import { useState, useCallback, useEffect, useRef } from "react";
+import { Toolbar } from "./components/Toolbar";
+import { Workspace, type WindowKey, type WindowVisibility } from "./components/Workspace";
 
-function Workspace(): JSX.Element {
-  const [inspectorVisible, setInspectorVisible] = useState(true);
-  const [inspectorWidth, setInspectorWidth] = useState(360);
-  const inspectorWidthRef = useRef(inspectorWidth);
-  const inspectorRef = useRef<HTMLDivElement | null>(null);
-  const pendingWidthRef = useRef<number | null>(null);
-  const resizeFrameRef = useRef<number | null>(null);
-  const [isResizing, setIsResizing] = useState(false);
-
-  const toggleInspector = useCallback(() => {
-    setInspectorVisible((prev) => !prev);
-  }, []);
-
-  const handleResizeStart = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      if (!inspectorVisible) {
-        return;
-      }
-      event.preventDefault();
-      inspectorWidthRef.current = inspectorWidth;
-      setIsResizing(true);
-      event.currentTarget.setPointerCapture(event.pointerId);
-    },
-    [inspectorVisible, inspectorWidth]
-  );
-
-  const handleResizeMove = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      if (!isResizing || !inspectorVisible) {
-        return;
-      }
-      const viewportWidth = window.innerWidth;
-      const minWidth = 240;
-      const maxWidth = Math.min(600, viewportWidth * 0.6);
-      const next = viewportWidth - event.clientX;
-      const clamped = Math.max(minWidth, Math.min(maxWidth, next));
-      inspectorWidthRef.current = clamped;
-      pendingWidthRef.current = clamped;
-      if (resizeFrameRef.current === null) {
-        resizeFrameRef.current = requestAnimationFrame(() => {
-          resizeFrameRef.current = null;
-          if (pendingWidthRef.current !== null && inspectorRef.current) {
-            inspectorRef.current.style.width = `${pendingWidthRef.current}px`;
-          }
-        });
-      }
-    },
-    [isResizing, inspectorVisible]
-  );
-
-  const handleResizeEnd = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    setIsResizing(false);
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-    setInspectorWidth(inspectorWidthRef.current);
-  }, []);
-
-  const handleWorkspacePointerUp = useCallback(() => {
-    if (isResizing) {
-      setIsResizing(false);
-      setInspectorWidth(inspectorWidthRef.current);
-    }
-  }, [isResizing]);
-
-  const handleWorkspacePointerLeave = useCallback(() => {
-    if (isResizing) {
-      setIsResizing(false);
-      setInspectorWidth(inspectorWidthRef.current);
-    }
-  }, [isResizing]);
-
-  useEffect(() => {
-    if (!inspectorVisible) {
-      setIsResizing(false);
-    }
-  }, [inspectorVisible]);
-
-  useEffect(() => {
-    if (inspectorVisible && inspectorRef.current) {
-      inspectorRef.current.style.width = `${inspectorWidth}px`;
-    }
-    inspectorWidthRef.current = inspectorWidth;
-    pendingWidthRef.current = null;
-    if (resizeFrameRef.current !== null) {
-      cancelAnimationFrame(resizeFrameRef.current);
-      resizeFrameRef.current = null;
-    }
-  }, [inspectorVisible, inspectorWidth]);
-
-  useEffect(() => {
-    return () => {
-      if (resizeFrameRef.current !== null) {
-        cancelAnimationFrame(resizeFrameRef.current);
-      }
-    };
-  }, []);
-
-  return (
-    <div
-      className="workspace"
-      onPointerMove={handleResizeMove}
-      onPointerUp={handleWorkspacePointerUp}
-      onPointerLeave={handleWorkspacePointerLeave}
-    >
-      <Canvas inspectorVisible={inspectorVisible} toggleInspector={toggleInspector} />
-      <div
-        className={`inspector-wrapper${inspectorVisible ? "" : " inspector-wrapper--hidden"}`}
-        ref={inspectorRef}
-        style={inspectorVisible ? { width: inspectorWidth } : undefined}
-      >
-        <div
-          className="inspector-resizer"
-          onPointerDown={handleResizeStart}
-          onPointerMove={handleResizeMove}
-          onPointerUp={handleResizeEnd}
-          onPointerCancel={handleResizeEnd}
-        />
-        <Inspector />
-      </div>
-    </div>
-  );
+interface CommandPaletteState {
+  open: boolean;
+  canvasPosition: { x: number; y: number } | null;
+  screenPosition: { x: number; y: number } | null;
 }
 
+interface PendingNodeCreation {
+  kind: string;
+  position: { x: number; y: number } | null;
+}
+
+const DEFAULT_WINDOWS: WindowVisibility = {
+  nodeBrowser: true,
+  nodeProperties: true,
+  assemblyView: true,
+  audioSettings: false
+};
+
 export function App(): JSX.Element {
+  const [windows, setWindows] = useState<WindowVisibility>(DEFAULT_WINDOWS);
+  const [commandPalette, setCommandPalette] = useState<CommandPaletteState>({
+    open: false,
+    canvasPosition: null,
+    screenPosition: null
+  });
+  const [pendingNodeCreation, setPendingNodeCreation] = useState<PendingNodeCreation | null>(
+    null
+  );
+
+  const toggleWindow = useCallback((key: WindowKey) => {
+    setWindows((prev) => ({ ...prev, [key]: !prev[key] }));
+  }, []);
+
+  const openCommandPalette = useCallback(
+    (canvasPoint: { x: number; y: number } | null, screenPoint: { x: number; y: number } | null) => {
+      setCommandPalette({ open: true, canvasPosition: canvasPoint, screenPosition: screenPoint });
+    },
+    []
+  );
+
+  const closeCommandPalette = useCallback(() => {
+    setCommandPalette((prev) => ({ ...prev, open: false }));
+  }, []);
+
+  const handleCommandPaletteSelect = useCallback(
+    (kind: string) => {
+      setPendingNodeCreation({ kind, position: commandPalette.canvasPosition });
+      setCommandPalette({ open: false, canvasPosition: null, screenPosition: null });
+    },
+    [commandPalette.canvasPosition]
+  );
+
+  const handleNodeBrowserCreate = useCallback((kind: string) => {
+    setPendingNodeCreation({ kind, position: null });
+  }, []);
+
+  const handleNodeCreationHandled = useCallback(() => {
+    setPendingNodeCreation(null);
+  }, []);
+
+  const toolbarWindowState = useMemo(() => windows, [windows]);
+
   return (
     <PatchProvider>
       <div className="app-shell">
-        <Toolbar />
+        <Toolbar
+          windows={toolbarWindowState}
+          onToggleWindow={toggleWindow}
+        />
         <main>
-          <Workspace />
+          <Workspace
+            windows={windows}
+            onToggleWindow={toggleWindow}
+            commandPalette={commandPalette}
+            onOpenCommandPalette={openCommandPalette}
+            onCloseCommandPalette={closeCommandPalette}
+            onCommandPaletteSelect={handleCommandPaletteSelect}
+            onNodeCreationHandled={handleNodeCreationHandled}
+            pendingNodeCreation={pendingNodeCreation}
+            onCreateNodeViaBrowser={handleNodeBrowserCreate}
+          />
         </main>
       </div>
     </PatchProvider>
