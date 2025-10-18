@@ -191,9 +191,11 @@ describe("compiler", () => {
 
     const result = await compilePatch(graph);
     expect(result.wasmBinary.byteLength).toBeGreaterThan(0);
-    expect(result.moduleSource).toContain("const scopeMonitorBuffers");
+    expect(result.moduleSource).toContain("const scopeMonitorDownsample");
     expect(result.scopeMonitors.length).toBe(1);
     expect(result.scopeMonitors[0]).toMatchObject({ nodeId: "scope1", index: 0 });
+    expect(result.scopeMonitors[0].levelCount).toBe(4);
+    expect(result.scopeMonitors[0].levelFactors).toEqual([1, 2, 4, 8]);
   });
 
   it("produces a wasm binary for the ladder filter node", async () => {

@@ -80,13 +80,12 @@ interface EnvelopeSnapshot {
 
 interface ScopeSnapshot {
   samples: Float32Array;
-  count: number;
-  writeIndex: number;
+  sampleInterval: number;
   scale: number;
-  time: number;
+  requestedTime: number;
   mode: number;
-  capacity: number;
-  captured: number;
+  factor: number;
+  coverage: number;
 }
 
 const filterParameterValuesForGraph = (
@@ -562,13 +561,12 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
     (nodeId: string): ScopeSnapshot => {
       return scopeSnapshotsRef.current[nodeId] ?? {
         samples: new Float32Array(0),
-        count: 0,
-        writeIndex: 0,
+        sampleInterval: 1 / Math.max(1, graphRef.current.sampleRate),
         scale: 1,
-        time: 0.01,
+        requestedTime: 0.01,
         mode: 0,
-        capacity: 0,
-        captured: 0
+        factor: 1,
+        coverage: 0
       };
     },
     []
@@ -804,14 +802,13 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       for (const binding of result.scopeMonitors) {
         initialScopes[binding.nodeId] =
           scopeSnapshotsRef.current[binding.nodeId] ?? {
-            samples: new Float32Array(binding.capacity),
-            count: binding.capacity,
-            writeIndex: 0,
+            samples: new Float32Array(0),
+            sampleInterval: 1 / Math.max(1, graph.sampleRate),
             scale: 1,
-            time: 0.01,
+            requestedTime: 0.01,
             mode: 0,
-            capacity: binding.capacity,
-            captured: 0
+            factor: binding.levelFactors?.[0] ?? 1,
+            coverage: 0
           };
       }
       scopeSnapshotsRef.current = initialScopes;
@@ -945,16 +942,13 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
             return;
           }
 
-          const monitors = (data as { monitors?: unknown; capacity?: unknown }).monitors;
+          const monitors = (data as { monitors?: unknown }).monitors;
           if (!Array.isArray(monitors)) {
             return;
           }
 
-          const next: Record<string, ScopeSnapshot> = { ...scopeSnapshotsRef.current };
+          const updated: Record<string, ScopeSnapshot> = { ...scopeSnapshotsRef.current };
           let changed = false;
-          const capacity = typeof (data as { capacity?: unknown }).capacity === "number"
-            ? (data as { capacity: number }).capacity
-            : bindings[0]?.capacity ?? 0;
 
           for (const monitor of monitors as Array<Record<string, unknown>>) {
             const index = typeof monitor.index === "number" ? monitor.index : -1;
@@ -962,37 +956,50 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
               continue;
             }
             const binding = bindings[index];
-            const samples = monitor.samples instanceof Float32Array
-              ? monitor.samples
-              : Array.isArray(monitor.samples)
-              ? Float32Array.from(monitor.samples as number[])
-              : null;
+
+            let samples: Float32Array | null = null;
+            const rawSamples = monitor.samples;
+            if (rawSamples instanceof Float32Array) {
+              samples = rawSamples;
+            } else if (rawSamples instanceof ArrayBuffer) {
+              samples = new Float32Array(rawSamples);
+            } else if (Array.isArray(rawSamples)) {
+              samples = Float32Array.from(rawSamples as number[]);
+            }
             if (!samples) {
               continue;
             }
-            const count = typeof monitor.count === "number" ? monitor.count : 0;
-            const writeIndex = typeof monitor.writeIndex === "number" ? monitor.writeIndex : 0;
+
+            const sampleInterval =
+              typeof monitor.sampleInterval === "number" && Number.isFinite(monitor.sampleInterval)
+                ? monitor.sampleInterval
+                : 1 / Math.max(1, graphRef.current.sampleRate);
             const scale = typeof monitor.scale === "number" ? monitor.scale : 1;
-            const time = typeof monitor.time === "number" ? monitor.time : 0.01;
+            const requestedTime = typeof monitor.time === "number" ? monitor.time : 0.01;
             const mode = typeof monitor.mode === "number" ? monitor.mode : 0;
-            const captured = typeof monitor.captured === "number" ? monitor.captured : count;
+            const factor = typeof monitor.factor === "number" ? monitor.factor : 1;
+            const coverage =
+              typeof monitor.coverage === "number" && Number.isFinite(monitor.coverage)
+                ? monitor.coverage
+                : samples.length * sampleInterval;
+
             const snapshot: ScopeSnapshot = {
               samples,
-              count,
-              writeIndex,
+              sampleInterval,
               scale,
-              time,
+              requestedTime,
               mode,
-              capacity: capacity || binding.capacity,
-              captured
+              factor,
+              coverage
             };
-            next[binding.nodeId] = snapshot;
+
+            updated[binding.nodeId] = snapshot;
             changed = true;
           }
 
           if (changed) {
-            scopeSnapshotsRef.current = next;
-            setScopeSnapshots(next);
+            scopeSnapshotsRef.current = updated;
+            setScopeSnapshots({ ...updated });
           }
         }
       };

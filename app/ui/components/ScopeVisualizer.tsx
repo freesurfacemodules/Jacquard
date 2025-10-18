@@ -2,18 +2,15 @@ import { useMemo } from "react";
 
 interface ScopeVisualizerProps {
   samples: Float32Array;
-  count: number;
-  writeIndex: number;
+  sampleInterval: number;
   scale: number;
-  time: number;
+  requestedTime: number;
   mode: number;
-  captured: number;
-  capacity: number;
+  coverage: number;
 }
 
 const VIEWBOX_WIDTH = 220;
 const VIEWBOX_HEIGHT = 120;
-const MIN_DISPLAY_SAMPLES = 16;
 const EPSILON = 1e-6;
 
 interface GridLine {
@@ -27,6 +24,8 @@ interface PlotData {
   points: string;
   grid: GridLine[];
   triggered: boolean;
+  hold: boolean;
+  coverage: number;
 }
 
 const clamp = (value: number, min: number, max: number) =>
@@ -34,53 +33,25 @@ const clamp = (value: number, min: number, max: number) =>
 
 export function ScopeVisualizer({
   samples,
-  count,
-  writeIndex,
+  sampleInterval,
   scale,
-  time,
+  requestedTime,
   mode,
-  captured,
-  capacity
+  coverage
 }: ScopeVisualizerProps): JSX.Element {
   const data = useMemo<PlotData>(() => {
     const safeScale = clamp(Math.abs(scale), 0.1, 20);
-    const windowSamples = Math.max(count, MIN_DISPLAY_SAMPLES);
-    const effectiveCapacity = Math.max(capacity, samples.length);
-    const triggered = mode === 1;
-
+    const triggered = mode !== 0;
+    const hold = mode === 2;
     const available = samples.length;
-    if (available === 0 || windowSamples === 0) {
-      return { points: "", grid: [], triggered };
+    if (available === 0) {
+      return { points: "", grid: [], triggered, hold, coverage: 0 };
     }
 
-    const maxSamples = Math.min(windowSamples, available);
-    const displaySamples = triggered
-      ? Math.max(1, Math.min(maxSamples, Math.floor(captured)))
-      : maxSamples;
-
-    const result: number[] = new Array(displaySamples);
-
-    if (triggered) {
-      for (let i = 0; i < displaySamples; i++) {
-        result[i] = samples[i] ?? 0;
-      }
-    } else {
-      const ringCapacity = effectiveCapacity > 0 ? effectiveCapacity : available;
-      const endIndex = ((writeIndex % ringCapacity) + ringCapacity) % ringCapacity;
-      let startIndex = endIndex - displaySamples;
-      while (startIndex < 0) {
-        startIndex += ringCapacity;
-      }
-      for (let i = 0; i < displaySamples; i++) {
-        const sourceIndex = (startIndex + i) % ringCapacity;
-        result[i] = samples[sourceIndex] ?? 0;
-      }
-    }
-
-    const normalized: string[] = new Array(displaySamples);
-    for (let i = 0; i < displaySamples; i++) {
-      const x = displaySamples <= 1 ? 0 : i / (displaySamples - 1);
-      const yValue = clamp(result[i], -safeScale, safeScale);
+    const normalized: string[] = [];
+    for (let i = 0; i < samples.length; i++) {
+      const x = samples.length <= 1 ? 0 : i / (samples.length - 1);
+      const yValue = clamp(samples[i], -safeScale, safeScale);
       const y = 0.5 - yValue / (safeScale * 2);
       const px = x * VIEWBOX_WIDTH;
       const py = clamp(y, 0, 1) * VIEWBOX_HEIGHT;
@@ -98,7 +69,8 @@ export function ScopeVisualizer({
     }
 
     // Vertical grid lines (1ms increments)
-    const totalMs = Math.max(time * 1000, EPSILON);
+    const timeSpan = Math.max(requestedTime, coverage, samples.length * sampleInterval, EPSILON);
+    const totalMs = timeSpan * 1000;
     const divisions = Math.min(100, Math.ceil(totalMs));
     for (let i = 0; i <= divisions; i++) {
       const ms = i;
@@ -109,9 +81,11 @@ export function ScopeVisualizer({
     return {
       points: normalized.join(" "),
       grid,
-      triggered
+      triggered,
+      hold,
+      coverage: timeSpan
     };
-  }, [samples, count, writeIndex, scale, time, mode, captured, capacity]);
+  }, [samples, sampleInterval, scale, requestedTime, mode, coverage]);
 
   return (
     <div className="scope-visualizer" aria-label="Oscilloscope">
@@ -151,7 +125,13 @@ export function ScopeVisualizer({
         )}
         {data.points ? (
           <polyline
-            className="scope-visualizer__curve"
+            className={
+              data.hold
+                ? "scope-visualizer__curve scope-visualizer__curve--hold"
+                : data.triggered
+                ? "scope-visualizer__curve scope-visualizer__curve--triggered"
+                : "scope-visualizer__curve"
+            }
             fill="none"
             strokeWidth={2}
             points={data.points}

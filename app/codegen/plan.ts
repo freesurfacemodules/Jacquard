@@ -47,6 +47,8 @@ export interface ScopeMonitor {
   kind: string;
   index: number;
   capacity: number;
+  levelCount: number;
+  levelFactors: number[];
 }
 
 export interface PlanNode {
@@ -90,6 +92,11 @@ export function createExecutionPlan(graph: PatchGraph): ExecutionPlan {
   const scopeMonitors: ScopeMonitor[] = [];
   let envelopeMonitorCounter = 0;
   let scopeMonitorCounter = 0;
+  const scopeLevelFactors = [1, 2, 4, 8];
+  const scopeMonitorCapacity = Math.max(
+    2048,
+    Math.min(8192, Math.ceil(graph.sampleRate / 12))
+  );
 
   graph.connections.forEach((connection, index) => {
     const fromNode = nodesById.get(connection.from.node);
@@ -185,8 +192,6 @@ export function createExecutionPlan(graph: PatchGraph): ExecutionPlan {
     };
   });
 
-  const SCOPE_MONITOR_CAPACITY = 1024;
-
   for (const planNode of planNodes) {
     switch (planNode.node.kind) {
       case "envelope.ad": {
@@ -206,7 +211,9 @@ export function createExecutionPlan(graph: PatchGraph): ExecutionPlan {
           nodeId: planNode.node.id,
           kind: planNode.node.kind,
           index: monitorIndex,
-          capacity: SCOPE_MONITOR_CAPACITY
+          capacity: scopeMonitorCapacity,
+          levelCount: scopeLevelFactors.length,
+          levelFactors: [...scopeLevelFactors]
         });
         break;
       }

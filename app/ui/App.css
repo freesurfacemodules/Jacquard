@@ -666,3 +666,11 @@
   stroke: #c3ff7c;
   fill: none;
 }
+
+.scope-visualizer__curve--triggered {
+  stroke: #ffcf6c;
+}
+
+.scope-visualizer__curve--hold {
+  stroke: #ff6ca8;
+}

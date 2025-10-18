@@ -451,13 +451,17 @@ export function Canvas(): JSX.Element {
             widget = (
               <ScopeVisualizer
                 samples={snapshot.samples}
-                count={snapshot.count || Math.floor(timeValue * viewModel.sampleRate)}
-                writeIndex={snapshot.writeIndex}
-                scale={snapshot.scale || scaleValue}
-                time={snapshot.time || timeValue}
-                mode={snapshot.mode}
-                captured={snapshot.captured}
-                capacity={snapshot.capacity || snapshot.samples.length}
+                sampleInterval={
+                  snapshot.sampleInterval || (1 / Math.max(1, viewModel.sampleRate))
+                }
+                scale={snapshot.scale ?? scaleValue}
+                requestedTime={snapshot.requestedTime ?? timeValue}
+                mode={snapshot.mode ?? 0}
+                coverage={
+                  snapshot.coverage ??
+                  snapshot.samples.length *
+                    (snapshot.sampleInterval || (1 / Math.max(1, viewModel.sampleRate)))
+                }
               />
             );
           }

@@ -354,8 +354,8 @@ describe("code generation", () => {
 
     const { source } = emitAssemblyScript(graph);
     expect(source).toContain("const SCOPE_MONITOR_COUNT");
-    expect(source).toContain("scopeMonitorBuffers");
-    expect(source).toMatch(/scopeMonitorWriteIndex\[0\]/);
-    expect(source).toMatch(/scopeMonitorMeta\[.*\+ 5\]/);
+    expect(source).toContain("const SCOPE_LEVEL_COUNT");
+    expect(source).toContain("scopeMonitorDownsample");
+    expect(source).toMatch(/const monitorIndex: i32/);
   });
 });

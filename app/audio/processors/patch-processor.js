@@ -24,6 +24,15 @@ if (typeof globalThis.AudioWorkletProcessor === "undefined") {
       this.scopeMonitorMeta = null;
       this.scopeUpdateCounter = 0;
       this.scopeUpdateInterval = 4;
+      this.scopeConfig = options.processorOptions?.scopeMonitors ?? [];
+      this.scopeLevelFactors = this.scopeConfig[0]?.levelFactors ?? [1];
+      this.scopeLevelCount = this.scopeLevelFactors.length;
+      if (this.scopeLevelCount <= 0) {
+        this.scopeLevelCount = 1;
+        this.scopeLevelFactors = [1];
+      }
+      this.scopeMetaStride = this.scopeLevelCount * 3 + 3;
+      this.sampleRateValue = typeof sampleRate === "number" ? sampleRate : 48000;
 
       if (this.port && typeof this.port.start === "function") {
         this.port.start();
@@ -65,6 +74,20 @@ if (typeof globalThis.AudioWorkletProcessor === "undefined") {
     async initialize(processorOptions) {
       if (!processorOptions || !processorOptions.wasmBinary) {
         throw new Error("Missing WebAssembly binary.");
+      }
+
+      const scopeConfig = Array.isArray(processorOptions.scopeMonitors)
+        ? processorOptions.scopeMonitors
+        : this.scopeConfig;
+      if (Array.isArray(scopeConfig) && scopeConfig.length > 0) {
+        this.scopeConfig = scopeConfig;
+        this.scopeLevelFactors = scopeConfig[0]?.levelFactors ?? this.scopeLevelFactors;
+        this.scopeLevelCount = this.scopeLevelFactors.length || this.scopeLevelCount;
+        if (this.scopeLevelCount <= 0) {
+          this.scopeLevelCount = 1;
+          this.scopeLevelFactors = [1];
+        }
+        this.scopeMetaStride = this.scopeLevelCount * 3 + 3;
       }
 
       const binarySource = processorOptions.wasmBinary;
@@ -156,6 +179,8 @@ if (typeof globalThis.AudioWorkletProcessor === "undefined") {
       ) {
         scopeMonitorCount = Number(exports.getScopeMonitorCount()) | 0;
         scopeMonitorCapacity = Number(exports.getScopeMonitorCapacity()) | 0;
+        const levelCount = this.scopeLevelCount;
+        const metaStride = this.scopeMetaStride;
         if (scopeMonitorCount > 0 && scopeMonitorCapacity > 0) {
           const bufferPtr = exports.getScopeMonitorBufferPointer();
           const metaPtr = exports.getScopeMonitorMetaPointer();
@@ -164,7 +189,7 @@ if (typeof globalThis.AudioWorkletProcessor === "undefined") {
             scopeMonitorBuffers = new Float32Array(
               memory.buffer,
               bufferPtr,
-              scopeMonitorCount * scopeMonitorCapacity
+              scopeMonitorCount * levelCount * scopeMonitorCapacity
             );
           }
           if (typeof metaPtr === "number" && metaPtr >= 0) {
@@ -172,7 +197,7 @@ if (typeof globalThis.AudioWorkletProcessor === "undefined") {
             scopeMonitorMeta = new Float32Array(
               memory.buffer,
               metaPtr,
-              scopeMonitorCount * 5
+              scopeMonitorCount * metaStride
             );
           }
         }
@@ -342,7 +367,7 @@ if (typeof globalThis.AudioWorkletProcessor === "undefined") {
             this.scopeMonitorBuffers = new Float32Array(
               this.state.memory.buffer,
               pointer,
-              this.scopeMonitorCount * this.scopeMonitorCapacity
+              this.scopeMonitorCount * this.scopeLevelCount * this.scopeMonitorCapacity
             );
           }
         }
@@ -359,7 +384,7 @@ if (typeof globalThis.AudioWorkletProcessor === "undefined") {
             this.scopeMonitorMeta = new Float32Array(
               this.state.memory.buffer,
               pointer,
-              this.scopeMonitorCount * 5
+              this.scopeMonitorCount * this.scopeMetaStride
             );
           }
         }
@@ -386,33 +411,119 @@ if (typeof globalThis.AudioWorkletProcessor === "undefined") {
         const transferables = [];
         const monitors = [];
         const capacity = this.scopeMonitorCapacity;
+        const levelCount = this.scopeLevelCount;
+        const metaStride = this.scopeMetaStride;
+        const levelFactors = this.scopeLevelFactors;
+        const sampleRateValue = this.sampleRateValue;
+
         for (let index = 0; index < this.scopeMonitorCount; index++) {
-          const bufferBase = index * capacity;
-          const slice = this.scopeMonitorBuffers.subarray(bufferBase, bufferBase + capacity);
-          const samples = new Float32Array(slice);
+          const config = this.scopeConfig[index] ?? this.scopeConfig[0] ?? {};
+          const factors = Array.isArray(config.levelFactors) && config.levelFactors.length > 0
+            ? config.levelFactors
+            : levelFactors;
+          const metaBase = index * metaStride;
+          const scale = this.scopeMonitorMeta[metaBase + levelCount * 3 + 0] ?? 1;
+          const requestedTime = this.scopeMonitorMeta[metaBase + levelCount * 3 + 1] ?? 0.01;
+          const modeValue = Math.round(this.scopeMonitorMeta[metaBase + levelCount * 3 + 2] ?? 0);
+
+          const levelData = [];
+          for (let level = 0; level < levelCount; level++) {
+            const factor = factors[level] ?? (level > 0 ? factors[level - 1] * 2 : 1);
+            const target = Math.max(1, Math.floor(this.scopeMonitorMeta[metaBase + level * 3 + 0] ?? capacity));
+            const writeIndex = Math.max(0, Math.floor(this.scopeMonitorMeta[metaBase + level * 3 + 1] ?? 0));
+            const captured = Math.max(0, Math.floor(this.scopeMonitorMeta[metaBase + level * 3 + 2] ?? 0));
+            const coverage = modeValue === 0
+              ? (target * factor) / sampleRateValue
+              : (Math.min(captured, target) * factor) / sampleRateValue;
+            const bufferBase = (index * levelCount + level) * capacity;
+            levelData.push({ factor, target, writeIndex, captured, coverage, bufferBase });
+          }
+
+          let selectedLevel = 0;
+          let selectedCoverage = levelData[0]?.coverage ?? 0;
+          let bestMeets = selectedCoverage >= requestedTime - 1e-6;
+          for (let level = 1; level < levelCount; level++) {
+            const data = levelData[level];
+            const meets = data.coverage >= requestedTime - 1e-6;
+            if (bestMeets) {
+              if (meets && data.coverage < selectedCoverage) {
+                selectedLevel = level;
+                selectedCoverage = data.coverage;
+              }
+            } else {
+              if (meets || data.coverage > selectedCoverage) {
+                selectedLevel = level;
+                selectedCoverage = data.coverage;
+                bestMeets = meets;
+              }
+            }
+          }
+
+          const chosen = levelData[selectedLevel];
+          const factor = chosen.factor;
+          const sampleInterval = factor / sampleRateValue;
+          const mode = modeValue;
+
+          let samples;
+          if (mode === 0) {
+            const valid = Math.min(chosen.target, chosen.captured > 0 ? chosen.captured : chosen.target);
+            if (valid <= 0) {
+              samples = new Float32Array(0);
+            } else {
+              samples = new Float32Array(valid);
+              if (chosen.captured < chosen.target) {
+                samples.set(
+                  this.scopeMonitorBuffers.subarray(chosen.bufferBase, chosen.bufferBase + valid)
+                );
+              } else {
+                const start = chosen.writeIndex % chosen.target;
+                const first = Math.min(chosen.target - start, valid);
+                samples.set(
+                  this.scopeMonitorBuffers.subarray(
+                    chosen.bufferBase + start,
+                    chosen.bufferBase + start + first
+                  ),
+                  0
+                );
+                if (first < valid) {
+                  samples.set(
+                    this.scopeMonitorBuffers.subarray(
+                      chosen.bufferBase,
+                      chosen.bufferBase + (valid - first)
+                    ),
+                    first
+                  );
+                }
+              }
+            }
+          } else {
+            const valid = Math.min(chosen.captured, chosen.target, capacity);
+            if (valid <= 0) {
+              samples = new Float32Array(0);
+            } else {
+              samples = new Float32Array(
+                this.scopeMonitorBuffers.subarray(chosen.bufferBase, chosen.bufferBase + valid)
+              );
+            }
+          }
+
+          const coverageSeconds = samples.length * sampleInterval;
           transferables.push(samples.buffer);
-          const metaBase = index * 5;
-          const count = this.scopeMonitorMeta[metaBase] ?? 0;
-          const writeIndex = this.scopeMonitorMeta[metaBase + 1] ?? 0;
-          const scale = this.scopeMonitorMeta[metaBase + 2] ?? 1;
-          const time = this.scopeMonitorMeta[metaBase + 3] ?? 0.01;
-          const mode = this.scopeMonitorMeta[metaBase + 4] ?? 0;
-          const captured = this.scopeMonitorMeta[metaBase + 5] ?? count;
           monitors.push({
             index,
             samples,
-            count,
-            writeIndex,
+            sampleInterval,
             scale,
-            time,
+            time: requestedTime,
             mode,
-            captured
+            factor,
+            coverage: coverageSeconds
           });
         }
+
         this.port.postMessage(
           {
             type: "scopes",
-            capacity,
             monitors
           },
           transferables

@@ -446,16 +446,24 @@ function collectScopeSection(plan: ExecutionPlan): string {
     return "";
   }
 
-  const capacity = plan.scopeMonitors[0]?.capacity ?? 1024;
+  const firstMonitor = plan.scopeMonitors[0];
+  const capacity = firstMonitor?.capacity ?? 1024;
+  const levelFactors = firstMonitor?.levelFactors ?? [1];
+  const levelCount = levelFactors.length;
+  const levelFactorsLiteral = levelFactors.map((factor) => factor.toString()).join(", ");
+  const metaStride = levelCount * 3 + 3;
   const lines: string[] = [];
   lines.push(`const SCOPE_MONITOR_COUNT: i32 = ${count};`);
   lines.push(`const SCOPE_MONITOR_CAPACITY: i32 = ${capacity};`);
-  lines.push("const SCOPE_MONITOR_META_STRIDE: i32 = 6;");
-  lines.push("const scopeMonitorBuffers = new StaticArray<f32>(SCOPE_MONITOR_COUNT * SCOPE_MONITOR_CAPACITY);");
+  lines.push(`const SCOPE_LEVEL_COUNT: i32 = ${levelCount};`);
+  lines.push(`const SCOPE_LEVEL_FACTORS = [${levelFactorsLiteral}] as Array<i32>;`);
+  lines.push(`const SCOPE_MONITOR_META_STRIDE: i32 = ${metaStride};`);
+  lines.push("const scopeMonitorBuffers = new StaticArray<f32>(SCOPE_MONITOR_COUNT * SCOPE_LEVEL_COUNT * SCOPE_MONITOR_CAPACITY);");
   lines.push("const scopeMonitorMeta = new StaticArray<f32>(SCOPE_MONITOR_COUNT * SCOPE_MONITOR_META_STRIDE);");
-  lines.push("const scopeMonitorWriteIndex = new StaticArray<i32>(SCOPE_MONITOR_COUNT);");
+  lines.push("const scopeMonitorWriteIndex = new StaticArray<i32>(SCOPE_MONITOR_COUNT * SCOPE_LEVEL_COUNT);");
+  lines.push("const scopeMonitorCaptured = new StaticArray<i32>(SCOPE_MONITOR_COUNT * SCOPE_LEVEL_COUNT);");
+  lines.push("const scopeMonitorDownsample = new StaticArray<i32>(SCOPE_MONITOR_COUNT * SCOPE_LEVEL_COUNT);");
   lines.push("const scopeMonitorMode = new StaticArray<i32>(SCOPE_MONITOR_COUNT);");
-  lines.push("const scopeMonitorCaptured = new StaticArray<i32>(SCOPE_MONITOR_COUNT);");
   lines.push("");
   lines.push("export function getScopeMonitorBufferPointer(): i32 {");
   lines.push("  return changetype<i32>(scopeMonitorBuffers);");
@@ -471,6 +479,18 @@ function collectScopeSection(plan: ExecutionPlan): string {
   lines.push("");
   lines.push("export function getScopeMonitorCapacity(): i32 {");
   lines.push("  return SCOPE_MONITOR_CAPACITY;");
+  lines.push("}");
+  lines.push("");
+  lines.push("export function getScopeMonitorMetaStride(): i32 {");
+  lines.push("  return SCOPE_MONITOR_META_STRIDE;");
+  lines.push("}");
+  lines.push("");
+  lines.push("export function getScopeLevelCount(): i32 {");
+  lines.push("  return SCOPE_LEVEL_COUNT;");
+  lines.push("}");
+  lines.push("");
+  lines.push("export function getScopeLevelFactorsPointer(): i32 {");
+  lines.push("  return changetype<i32>(SCOPE_LEVEL_FACTORS);");
   lines.push("}");
   return lines.join("\n");
 }
