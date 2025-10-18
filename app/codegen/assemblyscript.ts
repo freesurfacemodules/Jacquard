@@ -590,23 +590,14 @@ function collectStateDeclarations(plan: ExecutionPlan): string {
 }
 
 function buildInputExpression(input: PlanInput): string {
-  const terms: string[] = [];
-
-  if (
-    input.parameterValue !== null &&
-    (input.parameterValue !== 0 || input.wires.length === 0)
-  ) {
-    terms.push(numberLiteral(input.parameterValue));
+  if (input.wires.length === 0) {
+    if (input.parameterValue !== null) {
+      return numberLiteral(input.parameterValue);
+    }
+    return numberLiteral(input.fallbackValue);
   }
 
-  for (const wire of input.wires) {
-   terms.push(wire.varName);
-  }
-
-  if (terms.length === 0) {
-    terms.push(numberLiteral(input.fallbackValue));
-  }
-
+  const terms = input.wires.map((wire) => wire.varName);
   return terms.length === 1 ? terms[0] : terms.join(" + ");
 }
 
