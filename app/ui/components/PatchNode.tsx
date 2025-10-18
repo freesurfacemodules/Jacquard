@@ -35,6 +35,7 @@ interface PatchNodeProps {
     min: number;
     max: number;
     step: number;
+    defaultValue: number;
   }>;
   onControlChange(nodeId: string, controlId: string, value: number): void;
   widget?: ReactNode;
@@ -149,6 +150,7 @@ export const PatchNode = memo(function PatchNode({
                 max={control.max}
                 step={control.step}
                 value={control.value}
+                defaultValue={control.defaultValue}
                 onChange={(next) => onControlChange(node.id, control.id, next)}
               />
               <span>{control.label}</span>

@@ -581,6 +581,10 @@ function collectStateDeclarations(plan: ExecutionPlan): string {
         lines.push(`let noise_hasSpare_${identifier}: bool = false;`);
         break;
       }
+      case "utility.slew": {
+        lines.push(`const slew_${identifier} = new SlewLimiter();`);
+        break;
+      }
       default:
         break;
     }

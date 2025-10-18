@@ -5,6 +5,7 @@ interface KnobProps {
   max: number;
   step?: number;
   value: number;
+  defaultValue: number;
   onChange(value: number): void;
 }
 
@@ -12,7 +13,14 @@ const MIN_ANGLE = -135;
 const MAX_ANGLE = 135;
 const SENSITIVITY = 0.005; // value change per pixel dragged
 
-export function Knob({ min, max, step = 0.01, value, onChange }: KnobProps): JSX.Element {
+export function Knob({
+  min,
+  max,
+  step = 0.01,
+  value,
+  defaultValue,
+  onChange
+}: KnobProps): JSX.Element {
   const knobRef = useRef<HTMLDivElement | null>(null);
   const dragStateRef = useRef<{ pointerId: number; startY: number; startValue: number } | null>(
     null
@@ -77,6 +85,12 @@ export function Knob({ min, max, step = 0.01, value, onChange }: KnobProps): JSX
     onChange(nextValue);
   };
 
+  const handleDoubleClick = (event: React.MouseEvent<HTMLDivElement>): void => {
+    event.preventDefault();
+    dragStateRef.current = null;
+    onChange(clamp(defaultValue));
+  };
+
   const angle = MIN_ANGLE + ((value - min) / (max - min)) * (MAX_ANGLE - MIN_ANGLE);
 
   return (
@@ -92,6 +106,7 @@ export function Knob({ min, max, step = 0.01, value, onChange }: KnobProps): JSX
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onWheel={handleWheel}
+      onDoubleClick={handleDoubleClick}
     >
       <div className="knob__indicator" style={{ transform: `rotate(${angle}deg)` }} />
     </div>

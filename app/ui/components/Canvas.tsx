@@ -513,16 +513,25 @@ export function Canvas({ inspectorVisible, toggleInspector }: CanvasProps): JSX.
               min = dynamicStep;
               step = dynamicStep;
             }
+            const defaults = implementation?.manifest.defaultParams ?? {};
+            const manifestDefault = defaults[control.id];
+            let defaultValue =
+              typeof manifestDefault === "number" ? manifestDefault : min;
+            defaultValue = Math.min(max, Math.max(min, defaultValue));
+            if (step > 0) {
+              defaultValue = Math.round(defaultValue / step) * step;
+            }
             const rawValue = getParameterValue(node.id, control.id);
             const clampedValue = Math.min(max, Math.max(min, rawValue));
-            const quantized = Math.round(clampedValue / step) * step;
+            const quantized = step > 0 ? Math.round(clampedValue / step) * step : clampedValue;
             return {
               id: control.id,
               label: control.label,
               value: quantized,
               min,
               max,
-              step
+              step,
+              defaultValue
             };
           });
           let widget: ReactNode | null = null;

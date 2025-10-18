@@ -244,6 +244,84 @@ describe("code generation", () => {
     expect(source).toMatch(/if \(noise_hasSpare_noise1\)/);
   });
 
+  it("emits slew limiter node wiring", () => {
+    let graph = createGraph();
+    const osc = instantiateNode("osc.sine", "osc1");
+    const slew = instantiateNode("utility.slew", "slew1");
+    const out = instantiateNode("io.output", "out1");
+
+    graph = addNode(graph, osc);
+    graph = addNode(graph, slew);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: osc.id,
+      fromPortId: "out",
+      toNodeId: slew.id,
+      toPortId: "in"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: slew.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: slew.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "right"
+    });
+
+    const { source } = emitAssemblyScript(graph);
+    expect(source).toContain("const slew_slew1 = new SlewLimiter();");
+    expect(source).toContain("// Slew Limiter (slew1)");
+    expect(source).toMatch(/slew_slew1\.step/);
+    expect(source).toMatch(/riseSeconds: f32 = getParameterValue/);
+    expect(source).toMatch(/fallSeconds: f32 = getParameterValue/);
+    expect(source).toMatch(/shape: f32 = getParameterValue/);
+  });
+
+  it("emits soft clip node wiring", () => {
+    let graph = createGraph();
+    const osc = instantiateNode("osc.sine", "osc1");
+    const softclip = instantiateNode("utility.softclip", "clip1");
+    const out = instantiateNode("io.output", "out1");
+
+    graph = addNode(graph, osc);
+    graph = addNode(graph, softclip);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: osc.id,
+      fromPortId: "out",
+      toNodeId: softclip.id,
+      toPortId: "in"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: softclip.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: softclip.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "right"
+    });
+
+    const { source } = emitAssemblyScript(graph);
+    expect(source).toContain("const shaped: f32 = softclipSample(");
+    expect(source).toContain("// Soft Clip (clip1)");
+    expect(source).toMatch(/getParameterValue\(\d+\), getParameterValue\(\d+\)\)/);
+    expect(source).toContain("softclipSample(rawSample");
+  });
+
   it("emits AD envelope node wiring", () => {
     let graph = createGraph();
     const envelope = instantiateNode("envelope.ad", "env1");

@@ -127,6 +127,80 @@ describe("compiler", () => {
     expect(result.scopeMonitors.length).toBe(0);
   });
 
+  it("produces a wasm binary for the soft clip node", async () => {
+    let graph = createGraph();
+    const osc = instantiateNode("osc.sine", "osc1");
+    const softclip = instantiateNode("utility.softclip", "clip1");
+    const out = instantiateNode("io.output", "out1");
+
+    graph = addNode(graph, osc);
+    graph = addNode(graph, softclip);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: osc.id,
+      fromPortId: "out",
+      toNodeId: softclip.id,
+      toPortId: "in"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: softclip.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: softclip.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "right"
+    });
+
+    const result = await compilePatch(graph);
+    expect(result.wasmBinary.byteLength).toBeGreaterThan(0);
+    expect(result.moduleSource).toContain("Soft Clip (clip1)");
+    expect(result.moduleSource).toContain("softclipSample(rawSample");
+  });
+
+  it("produces a wasm binary for the slew limiter node", async () => {
+    let graph = createGraph();
+    const osc = instantiateNode("osc.sine", "osc1");
+    const slew = instantiateNode("utility.slew", "slew1");
+    const out = instantiateNode("io.output", "out1");
+
+    graph = addNode(graph, osc);
+    graph = addNode(graph, slew);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: osc.id,
+      fromPortId: "out",
+      toNodeId: slew.id,
+      toPortId: "in"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: slew.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: slew.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "right"
+    });
+
+    const result = await compilePatch(graph);
+    expect(result.wasmBinary.byteLength).toBeGreaterThan(0);
+    expect(result.moduleSource).toContain("Slew Limiter (slew1)");
+    expect(result.moduleSource).toContain("slew_slew1 = new SlewLimiter()");
+  });
+
   it("produces a wasm binary for the AD envelope node", async () => {
     let graph = createGraph();
     const envelope = instantiateNode("envelope.ad", "env1");

@@ -10,7 +10,9 @@ import { biquadNode } from "@dsp/nodes/filter/biquad/manifest";
 import { ladderFilterNode } from "@dsp/nodes/filter/ladder/manifest";
 import { noiseNode } from "@dsp/nodes/noise/basic/manifest";
 import { adEnvelopeNode } from "@dsp/nodes/envelope/ad/manifest";
+import { slewLimiterNode } from "@dsp/nodes/utility/slew/manifest";
 import { oscilloscopeNode } from "@dsp/nodes/utility/scope/manifest";
+import { softclipNode } from "@dsp/nodes/utility/softclip/manifest";
 
 const implementations: NodeImplementation[] = [
   sineOscNode,
@@ -21,8 +23,10 @@ const implementations: NodeImplementation[] = [
   biquadNode,
   ladderFilterNode,
   adEnvelopeNode,
-  oscilloscopeNode,
   noiseNode,
+  slewLimiterNode,
+  softclipNode,
+  oscilloscopeNode,
   outputNode
 ];
 
