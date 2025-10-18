@@ -49,7 +49,7 @@ const sineManifest: NodeImplementation = {
           "let frequency: f32 = FREQ_C4 * Mathf.pow(2.0, pitch);",
           1
         ),
-        helpers.indentLines(`let sample: f32 = node_${identifier}.step(frequency);`, 1),
+        helpers.indentLines(`let sample: f32 = node_${identifier}.step(frequency) * 5.0;`, 1),
         assignments ? helpers.indentLines(assignments, 1) : "",
         "}"
       ];

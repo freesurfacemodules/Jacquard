@@ -66,7 +66,7 @@ export class AdEnvelope {
     if (this.stage === EnvelopeStage.Idle) {
       this.value = ZERO_F32;
       this.progress = NO_PROGRESS;
-      return this.value;
+      return this.value * 10.0;
     }
 
     const dt = INV_SAMPLE_RATE_OVERSAMPLED;
@@ -97,7 +97,7 @@ export class AdEnvelope {
         this.elapsed = ZERO_F32;
       }
 
-      return this.value;
+      return this.value * 10.0;
     }
 
     if (this.stage === EnvelopeStage.Decay) {
@@ -124,14 +124,14 @@ export class AdEnvelope {
         this.reset();
       }
 
-      return this.value;
+      return this.value * 10.0;
     }
 
-    return this.value;
+    return this.value * 10.0;
   }
 
   getValue(): f32 {
-    return this.value;
+    return this.value * 10.0;
   }
 
   getProgress(): f32 {

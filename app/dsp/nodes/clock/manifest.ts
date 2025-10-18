@@ -85,7 +85,7 @@ export const clockNode: NodeImplementation = {
             "const phaseDelta: f32 = frequency * INV_SAMPLE_RATE_OVERSAMPLED * TAU;",
             `${phaseVar} += phaseDelta;`,
             `if (${phaseVar} >= TAU) { ${phaseVar} -= TAU; }`,
-            `const clockSample: f32 = ${phaseVar} < (TAU * 0.5) ? 1.0 : -1.0;`
+            `const clockSample: f32 = ${phaseVar} < (TAU * 0.5) ? 5.0 : 0.0;`
           ].join("\n"),
           1
         ),

@@ -561,11 +561,11 @@ function collectStateDeclarations(plan: ExecutionPlan): string {
         break;
       }
       case "utility.scope": {
-        lines.push(`const scope_trig_${identifier} = new SchmittTrigger(0.2, 0.1);`);
+        lines.push(`const scope_trig_${identifier} = new SchmittTrigger(2.5, 1.0);`);
         break;
       }
       case "envelope.ad": {
-        lines.push(`const schmitt_${identifier} = new SchmittTrigger(0.2, 0.1);`);
+        lines.push(`const schmitt_${identifier} = new SchmittTrigger(2.5, 1.0);`);
         lines.push(`const env_${identifier} = new AdEnvelope();`);
         break;
       }

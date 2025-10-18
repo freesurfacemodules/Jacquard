@@ -3,6 +3,7 @@
 ## Current Functionality
 - **Graph Editing**: Registry-driven node palette with drag/drop placement, connection drawing, and node selection. Interactive knobs live on the nodes themselves.
 - **Realtime Audio**: AssemblyScript codegen → Wasm compile in-browser → AudioWorklet playback. Parameter updates stream to the worklet with smoothing so audio keeps running while knobs move.
+- **Voltage Scaling**: Core nodes follow Eurorack conventions (audio ±5 V, pitches 1 V/oct around user-set offsets, envelopes 0–10 V, triggers 0–5 V) so modulation behaves predictably across the patch.
 - **Envelopes**: AD envelope generator with Schmitt-triggered gating feeds a live SVG visualizer so users can watch attack/decay progress in real time.
 - **Debugging**: Oscilloscope node captures patch signals with trigger support and streams history into the UI for real-time waveform inspection.
 - **Compilation Flow**: Compile logs surface module sizes and parameter counts. Topology changes invalidate the running artifact; parameter/position changes do not.

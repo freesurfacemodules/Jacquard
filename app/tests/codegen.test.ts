@@ -239,7 +239,7 @@ describe("code generation", () => {
 
     const { source } = emitAssemblyScript(graph);
     expect(source).toContain("const noise_rng_noise1 = new Xoroshiro128Plus");
-    expect(source).toMatch(/const uniformSample: f32 = noise_rng_noise1\.uniform/);
+    expect(source).toMatch(/const uniformSample: f32 = \(noise_rng_noise1\.uniform\(\) \* 10\.0\) - 5\.0;/);
     expect(source).toMatch(/let normalSample: f32 = 0.0;/);
     expect(source).toMatch(/if \(noise_hasSpare_noise1\)/);
   });

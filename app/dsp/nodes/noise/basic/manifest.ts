@@ -39,7 +39,7 @@ export const noiseNode: NodeImplementation = {
       return [
         `// ${planNode.node.label} (${planNode.node.id})`,
         "{",
-        helpers.indentLines(`const uniformSample: f32 = ${rngVar}.uniform();`, 1),
+        helpers.indentLines(`const uniformSample: f32 = (${rngVar}.uniform() * 10.0) - 5.0;`, 1),
         helpers.indentLines("let normalSample: f32 = 0.0;", 1),
         helpers.indentLines(
           [
@@ -52,8 +52,8 @@ export const noiseNode: NodeImplementation = {
             `  let u2: f32 = ${rngVar}.uniform();`,
             `  const radius: f32 = Mathf.sqrt(-2.0 * Mathf.log(u1));`,
             `  const theta: f32 = TAU * u2;`,
-            `  normalSample = radius * Mathf.cos(theta);`,
-            `  ${spareVar} = radius * Mathf.sin(theta);`,
+            `  normalSample = radius * Mathf.cos(theta) * 5.0;`,
+            `  ${spareVar} = radius * Mathf.sin(theta) * 5.0;`,
             `  ${hasSpareVar} = true;`,
             `}`
           ].join("\n"),

@@ -69,9 +69,10 @@ export const biquadNode: NodeImplementation = {
       const lowVar = `biquad_low_${identifier}`;
       const highVar = `biquad_high_${identifier}`;
       const inputExpr = helpers.buildInputExpression(input);
-      const cutoffExpr = cutoffIn && cutoffIn.wires.length > 0
+      const baseCutoffExpr = helpers.parameterRef(cutoffControl.index);
+      const pitchExpr = cutoffIn && cutoffIn.wires.length > 0
         ? helpers.buildInputExpression(cutoffIn)
-        : helpers.parameterRef(cutoffControl.index);
+        : helpers.numberLiteral(0);
       const resExpr = resIn && resIn.wires.length > 0
         ? helpers.buildInputExpression(resIn)
         : helpers.parameterRef(resControl.index);
@@ -83,9 +84,16 @@ export const biquadNode: NodeImplementation = {
         `// ${planNode.node.label} (${planNode.node.id})`,
         "{",
         helpers.indentLines(`const sampleIn: f32 = ${inputExpr};`, 1),
-        helpers.indentLines(`let cutoffHz: f32 = ${cutoffExpr};`, 1),
+        helpers.indentLines(`let cutoffHz: f32 = ${baseCutoffExpr};`, 1),
         helpers.indentLines("if (cutoffHz < 20.0) cutoffHz = 20.0;", 1),
-        helpers.indentLines("if (cutoffHz > 20000.0) cutoffHz = 20000.0;", 1),
+        helpers.indentLines("const maxCutoff: f32 = SAMPLE_RATE * 0.45;", 1),
+        helpers.indentLines("if (cutoffHz > maxCutoff) cutoffHz = maxCutoff;", 1),
+        helpers.indentLines(`let pitchOffset: f32 = ${pitchExpr};`, 1),
+        helpers.indentLines("if (pitchOffset < -10.0) pitchOffset = -10.0;", 1),
+        helpers.indentLines("if (pitchOffset > 10.0) pitchOffset = 10.0;", 1),
+        helpers.indentLines("cutoffHz *= Mathf.pow(2.0, pitchOffset);", 1),
+        helpers.indentLines("if (cutoffHz < 20.0) cutoffHz = 20.0;", 1),
+        helpers.indentLines("if (cutoffHz > maxCutoff) cutoffHz = maxCutoff;", 1),
         helpers.indentLines(`let resonance: f32 = ${resExpr};`, 1),
         helpers.indentLines("if (resonance < 0.1) resonance = 0.1;", 1),
         helpers.indentLines("if (resonance > 20.0) resonance = 20.0;", 1),
