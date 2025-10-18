@@ -3,22 +3,31 @@ import { Canvas } from "./components/Canvas";
 import { Inspector } from "./components/Inspector";
 import { Toolbar } from "./components/Toolbar";
 import { PatchProvider } from "./state/PatchContext";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 
 function Workspace(): JSX.Element {
   const [inspectorVisible, setInspectorVisible] = useState(true);
   const [inspectorWidth, setInspectorWidth] = useState(360);
+  const inspectorWidthRef = useRef(inspectorWidth);
+  const inspectorRef = useRef<HTMLDivElement | null>(null);
   const [isResizing, setIsResizing] = useState(false);
 
   const toggleInspector = useCallback(() => {
     setInspectorVisible((prev) => !prev);
   }, []);
 
-  const handleResizeStart = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    setIsResizing(true);
-    event.currentTarget.setPointerCapture(event.pointerId);
-  }, []);
+  const handleResizeStart = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (!inspectorVisible) {
+        return;
+      }
+      event.preventDefault();
+      inspectorWidthRef.current = inspectorWidth;
+      setIsResizing(true);
+      event.currentTarget.setPointerCapture(event.pointerId);
+    },
+    [inspectorVisible, inspectorWidth]
+  );
 
   const handleResizeMove = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
@@ -29,7 +38,11 @@ function Workspace(): JSX.Element {
       const minWidth = 240;
       const maxWidth = Math.min(600, viewportWidth * 0.6);
       const next = viewportWidth - event.clientX;
-      setInspectorWidth(Math.max(minWidth, Math.min(maxWidth, next)));
+      const clamped = Math.max(minWidth, Math.min(maxWidth, next));
+      inspectorWidthRef.current = clamped;
+      if (inspectorRef.current) {
+        inspectorRef.current.style.width = `${clamped}px`;
+      }
     },
     [isResizing, inspectorVisible]
   );
@@ -39,17 +52,20 @@ function Workspace(): JSX.Element {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
+    setInspectorWidth(inspectorWidthRef.current);
   }, []);
 
   const handleWorkspacePointerUp = useCallback(() => {
     if (isResizing) {
       setIsResizing(false);
+      setInspectorWidth(inspectorWidthRef.current);
     }
   }, [isResizing]);
 
   const handleWorkspacePointerLeave = useCallback(() => {
     if (isResizing) {
       setIsResizing(false);
+      setInspectorWidth(inspectorWidthRef.current);
     }
   }, [isResizing]);
 
@@ -58,6 +74,12 @@ function Workspace(): JSX.Element {
       setIsResizing(false);
     }
   }, [inspectorVisible]);
+
+  useEffect(() => {
+    if (inspectorVisible && inspectorRef.current) {
+      inspectorRef.current.style.width = `${inspectorWidth}px`;
+    }
+  }, [inspectorVisible, inspectorWidth]);
 
   return (
     <div
@@ -69,6 +91,7 @@ function Workspace(): JSX.Element {
       <Canvas inspectorVisible={inspectorVisible} toggleInspector={toggleInspector} />
       <div
         className={`inspector-wrapper${inspectorVisible ? "" : " inspector-wrapper--hidden"}`}
+        ref={inspectorRef}
         style={inspectorVisible ? { width: inspectorWidth } : undefined}
       >
         <div
