@@ -26,16 +26,14 @@ export const gainNode: NodeImplementation = {
         label: "Gain",
         type: "slider",
         min: 0,
-        max: 10,
-        step: 0.1
+        max: 10
       },
       {
         id: CHANNEL_OFFSET,
         label: "Offset",
         type: "slider",
         min: -10,
-        max: 10,
-        step: 0.01
+        max: 10
       }
     ]
   },

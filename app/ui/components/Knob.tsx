@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 interface KnobProps {
   min: number;
@@ -16,7 +16,7 @@ const SENSITIVITY = 0.005; // value change per pixel dragged
 export function Knob({
   min,
   max,
-  step = 0.01,
+  step = 0,
   value,
   defaultValue,
   onChange
@@ -25,17 +25,60 @@ export function Knob({
   const dragStateRef = useRef<{ pointerId: number; startY: number; startValue: number } | null>(
     null
   );
+  const pendingValueRef = useRef<number>(value);
+  const frameRef = useRef<number | null>(null);
 
   const clamp = useCallback(
     (nextValue: number) => {
-      const stepped = Math.round(nextValue / step) * step;
-      return Math.min(max, Math.max(min, stepped));
+      let bounded = Math.min(max, Math.max(min, nextValue));
+      if (step > 0) {
+        const snapped = Math.round(bounded / step) * step;
+        bounded = Math.min(max, Math.max(min, snapped));
+      }
+      return bounded;
     },
     [min, max, step]
   );
 
+  const scheduleChange = useCallback(
+    (nextValue: number, immediate = false) => {
+      const clampedValue = clamp(nextValue);
+      pendingValueRef.current = clampedValue;
+
+      if (immediate) {
+        if (frameRef.current !== null) {
+          cancelAnimationFrame(frameRef.current);
+          frameRef.current = null;
+        }
+        onChange(clampedValue);
+        return;
+      }
+
+      if (frameRef.current === null) {
+        frameRef.current = requestAnimationFrame(() => {
+          frameRef.current = null;
+          onChange(pendingValueRef.current);
+        });
+      }
+    },
+    [clamp, onChange]
+  );
+
+  useEffect(() => {
+    pendingValueRef.current = value;
+  }, [value]);
+
+  useEffect(
+    () => () => {
+      if (frameRef.current !== null) {
+        cancelAnimationFrame(frameRef.current);
+      }
+    },
+    []
+  );
+
   const setValueFromPointer = useCallback(
-    (event: PointerEvent | React.PointerEvent<HTMLDivElement>) => {
+    (event: PointerEvent | React.PointerEvent<HTMLDivElement>, immediate = false) => {
       const state = dragStateRef.current;
       if (!state) {
         return;
@@ -43,10 +86,10 @@ export function Knob({
       const deltaY = state.startY - event.clientY;
       const range = max - min;
       const deltaValue = range * deltaY * SENSITIVITY;
-      const nextValue = clamp(state.startValue + deltaValue);
-      onChange(nextValue);
+      const nextValue = state.startValue + deltaValue;
+      scheduleChange(nextValue, immediate);
     },
-    [clamp, max, min, onChange]
+    [max, min, scheduleChange]
   );
 
   const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>): void => {
@@ -73,6 +116,7 @@ export function Knob({
     if (!element || !element.hasPointerCapture(event.pointerId)) {
       return;
     }
+    setValueFromPointer(event, true);
     element.releasePointerCapture(event.pointerId);
     dragStateRef.current = null;
   };
@@ -81,14 +125,14 @@ export function Knob({
     event.preventDefault();
     const range = max - min;
     const factor = range * 0.0025;
-    const nextValue = clamp(value - event.deltaY * factor);
-    onChange(nextValue);
+    const nextValue = value - event.deltaY * factor;
+    scheduleChange(nextValue);
   };
 
   const handleDoubleClick = (event: React.MouseEvent<HTMLDivElement>): void => {
     event.preventDefault();
     dragStateRef.current = null;
-    onChange(clamp(defaultValue));
+    scheduleChange(defaultValue, true);
   };
 
   const angle = MIN_ANGLE + ((value - min) / (max - min)) * (MAX_ANGLE - MIN_ANGLE);

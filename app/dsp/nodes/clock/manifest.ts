@@ -28,8 +28,7 @@ export const clockNode: NodeImplementation = {
         label: "BPM",
         type: "slider",
         min: 30,
-        max: 300,
-        step: 0.1
+        max: 300
       },
       {
         id: MULT_CONTROL,

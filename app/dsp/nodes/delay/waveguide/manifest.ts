@@ -31,8 +31,7 @@ export const waveguideDelayNode: NodeImplementation = {
         label: "Delay (samples)",
         type: "slider",
         min: 0.125,
-        max: 4096,
-        step: 0.125
+        max: 4096
       }
     ]
   },

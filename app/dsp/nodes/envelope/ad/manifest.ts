@@ -33,24 +33,21 @@ export const adEnvelopeNode: NodeImplementation = {
         label: "Rise (s)",
         type: "slider",
         min: 0.001,
-        max: 5,
-        step: 0.001
+        max: 5
       },
       {
         id: FALL_CONTROL,
         label: "Fall (s)",
         type: "slider",
         min: 0.001,
-        max: 5,
-        step: 0.001
+        max: 5
       },
       {
         id: SHAPE_CONTROL,
         label: "Curve",
         type: "slider",
         min: 0,
-        max: 1,
-        step: 0.01
+        max: 1
       }
     ]
   },

@@ -29,16 +29,14 @@ export const softclipNode: NodeImplementation = {
         label: "Input Gain (dB)",
         type: "slider",
         min: -60,
-        max: 24,
-        step: 0.1
+        max: 24
       },
       {
         id: OUTPUT_GAIN_CONTROL,
         label: "Output Gain (dB)",
         type: "slider",
         min: -60,
-        max: 24,
-        step: 0.1
+        max: 24
       }
     ]
   },

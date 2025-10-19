@@ -34,7 +34,7 @@ interface PatchNodeProps {
     value: number;
     min: number;
     max: number;
-    step: number;
+    step?: number;
     defaultValue: number;
   }>;
   inputConnections: Record<string, number>;

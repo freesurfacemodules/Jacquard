@@ -107,7 +107,7 @@ export function NodePropertiesPanel({ onClose }: NodePropertiesPanelProps): JSX.
                           type="range"
                           min={control.min}
                           max={control.max}
-                          step={control.step ?? 0.01}
+                          step={control.step && control.step > 0 ? control.step : "any"}
                           value={value}
                           onChange={handleControlChange(selectedNode.id, control.id)}
                         />

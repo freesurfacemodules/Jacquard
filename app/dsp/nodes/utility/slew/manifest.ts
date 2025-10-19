@@ -31,24 +31,21 @@ export const slewLimiterNode: NodeImplementation = {
         label: "Rise (s)",
         type: "slider",
         min: 0.0001,
-        max: 2,
-        step: 0.0001
+        max: 2
       },
       {
         id: FALL_CONTROL,
         label: "Fall (s)",
         type: "slider",
         min: 0.0001,
-        max: 2,
-        step: 0.0001
+        max: 2
       },
       {
         id: SHAPE_CONTROL,
         label: "Curve",
         type: "slider",
         min: 0,
-        max: 1,
-        step: 0.01
+        max: 1
       }
     ]
   },

@@ -37,16 +37,14 @@ export const biquadNode: NodeImplementation = {
         label: "Cutoff (Hz)",
         type: "slider",
         min: 20,
-        max: 20000,
-        step: 1
+        max: 20000
       },
       {
         id: RES_CONTROL,
         label: "Resonance",
         type: "slider",
         min: 0.1,
-        max: 20,
-        step: 0.01
+        max: 20
       }
     ]
   },

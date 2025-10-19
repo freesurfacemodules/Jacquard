@@ -41,24 +41,21 @@ export const ladderFilterNode: NodeImplementation = {
         label: "Cutoff (Hz)",
         type: "slider",
         min: 20,
-        max: 20000,
-        step: 1
+        max: 20000
       },
       {
         id: RES_CONTROL,
         label: "Resonance",
         type: "slider",
         min: 0,
-        max: 1,
-        step: 0.01
+        max: 1
       },
       {
         id: DRIVE_CONTROL,
         label: "Drive",
         type: "slider",
         min: -1,
-        max: 1,
-        step: 0.01
+        max: 1
       }
     ]
   },

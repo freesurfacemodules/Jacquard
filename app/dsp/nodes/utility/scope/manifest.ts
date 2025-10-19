@@ -38,16 +38,14 @@ export const oscilloscopeNode: NodeImplementation = {
         label: "Scale (V)",
         type: "slider",
         min: MIN_SCALE,
-        max: MAX_SCALE,
-        step: 0.1
+        max: MAX_SCALE
       },
       {
         id: TIME_CONTROL,
         label: "Time (s)",
         type: "slider",
         min: MIN_TIME,
-        max: MAX_TIME,
-        step: 0.001
+        max: MAX_TIME
       }
     ]
   },
