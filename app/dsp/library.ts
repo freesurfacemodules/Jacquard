@@ -15,7 +15,6 @@ import { slewLimiterNode } from "@dsp/nodes/utility/slew/manifest";
 import { oscilloscopeNode } from "@dsp/nodes/utility/scope/manifest";
 import { softclipNode } from "@dsp/nodes/utility/softclip/manifest";
 import { rectifierNode } from "@dsp/nodes/distortion/rectifier/manifest";
-import { rectifierNode } from "@dsp/nodes/distortion/rectifier/manifest";
 import { andNode } from "@dsp/nodes/logic/and/manifest";
 import { orNode } from "@dsp/nodes/logic/or/manifest";
 import { notNode } from "@dsp/nodes/logic/not/manifest";
@@ -37,7 +36,6 @@ const implementations: NodeImplementation[] = [
   noiseNode,
   slewLimiterNode,
   softclipNode,
-  rectifierNode,
   rectifierNode,
   oscilloscopeNode,
   andNode,
