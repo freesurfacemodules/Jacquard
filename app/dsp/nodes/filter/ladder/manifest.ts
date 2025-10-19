@@ -31,7 +31,7 @@ export const ladderFilterNode: NodeImplementation = {
       [DRIVE_CONTROL]: 0
     },
     appearance: {
-      width: 220,
+      width: 260,
       height: 180,
       icon: "filter"
     },

@@ -338,18 +338,6 @@ export function Toolbar({ windows, onToggleWindow }: ToolbarProps): JSX.Element 
         </div>
       </div>
       <div className="toolbar-section toolbar-section--actions">
-        <button type="button" onClick={handleUndo} className="toolbar-button" disabled={!canUndo}>
-          Undo
-        </button>
-        <button type="button" onClick={handleRedo} className="toolbar-button" disabled={!canRedo}>
-          Redo
-        </button>
-        <button type="button" onClick={handleSavePatch} className="toolbar-button">
-          Save
-        </button>
-        <button type="button" onClick={handleLoadClick} className="toolbar-button">
-          Load
-        </button>
         <button
           type="button"
           onClick={handleCompile}

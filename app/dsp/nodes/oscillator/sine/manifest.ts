@@ -17,7 +17,7 @@ const sineManifest: NodeImplementation = {
       pitch: 0
     },
     appearance: {
-      width: 160,
+      width: 260,
       height: 120,
       icon: "wave-sine"
     }

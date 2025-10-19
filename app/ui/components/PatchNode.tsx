@@ -124,7 +124,6 @@ export const PatchNode = memo(function PatchNode({
         onPointerMove={handleHeaderPointerMove}
         onPointerUp={handleHeaderPointerUp}
       >
-        <span className="patch-node__title">{node.label}</span>
         <span className="patch-node__subtitle">{node.kind}</span>
       </div>
       <div className="patch-node__ports">
