@@ -8,7 +8,7 @@ const DIV_CONTROL = "div";
 export const clockNode: NodeImplementation = {
   manifest: {
     kind: "clock.basic",
-    category: "utility",
+    category: "clock",
     label: "Clock",
     inputs: [],
     outputs: [audioPort("out", "Out")],

@@ -1,0 +1,38 @@
+	void process(const ProcessArgs& args) override {
+
+		x = inputs[IN_INPUT].getVoltage();
+
+		// Write in the buffer
+		Buffer[IWrite] = x;
+
+        delay = params[TIME_PARAM].getValue();
+        delay = 1e-4 * std::pow(10.f / 1e-3, delay);
+        delay =	delay * (1.0f+inputs[PITCH_INPUT].getVoltage()/5.0f);
+        delay = clamp(delay,0.0001f, 1.0f);
+
+		// Read Buffer (Lagrange interpolation)
+		IReadf = IWrite - delay * args.sampleRate - params[DADJUST_PARAM].getValue();
+		IReadf = std::fmin(IReadf, IWrite-3.0f);
+		IRead0 = floor(IReadf)-1;
+    		IRead1 = IRead0 + 1;
+    		IRead2 = IRead0 + 2;
+    		IRead3 = IRead0 + 3;
+    		fDelay = IReadf - floor(IReadf) + 1.0f;
+
+		if (IRead0<0) IRead0 += BufferLength;
+		if (IRead1<0) IRead1 += BufferLength;
+		if (IRead2<0) IRead2 += BufferLength;
+		if (IRead3<0) IRead3 += BufferLength;
+
+		y = Buffer[IRead3] *  fDelay       * (fDelay-1.0f) * (fDelay-2.0f) / 6.0f
+	          - Buffer[IRead2] *  fDelay       * (fDelay-1.0f) * (fDelay-3.0f) / 2.0f
+        	  + Buffer[IRead1] *  fDelay       * (fDelay-2.0f) * (fDelay-3.0f) / 2.0f
+        	  - Buffer[IRead0] * (fDelay-1.0f) * (fDelay-2.0f) * (fDelay-3.0f) / 6.0f;
+
+		// Ouput
+		outputs[OUT_OUTPUT].setVoltage(y);
+
+		// Increment IWrite
+		IWrite += 1;
+		if (IWrite>=BufferLength) IWrite -= BufferLength;
+	}

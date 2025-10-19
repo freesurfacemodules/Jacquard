@@ -5,6 +5,7 @@ import { stereoMixerNode } from "@dsp/nodes/mixer/stereo/manifest";
 import { outputNode } from "@dsp/nodes/io/output/manifest";
 import { gainNode } from "@dsp/nodes/utility/gain/manifest";
 import { ddlDelayNode } from "@dsp/nodes/delay/ddl/manifest";
+import { waveguideDelayNode } from "@dsp/nodes/delay/waveguide/manifest";
 import { clockNode } from "@dsp/nodes/clock/manifest";
 import { biquadNode } from "@dsp/nodes/filter/biquad/manifest";
 import { ladderFilterNode } from "@dsp/nodes/filter/ladder/manifest";
@@ -13,6 +14,15 @@ import { adEnvelopeNode } from "@dsp/nodes/envelope/ad/manifest";
 import { slewLimiterNode } from "@dsp/nodes/utility/slew/manifest";
 import { oscilloscopeNode } from "@dsp/nodes/utility/scope/manifest";
 import { softclipNode } from "@dsp/nodes/utility/softclip/manifest";
+import { rectifierNode } from "@dsp/nodes/distortion/rectifier/manifest";
+import { rectifierNode } from "@dsp/nodes/distortion/rectifier/manifest";
+import { andNode } from "@dsp/nodes/logic/and/manifest";
+import { orNode } from "@dsp/nodes/logic/or/manifest";
+import { notNode } from "@dsp/nodes/logic/not/manifest";
+import { xorNode } from "@dsp/nodes/logic/xor/manifest";
+import { addNode } from "@dsp/nodes/math/add/manifest";
+import { subtractNode } from "@dsp/nodes/math/subtract/manifest";
+import { multiplyNode } from "@dsp/nodes/math/multiply/manifest";
 
 const implementations: NodeImplementation[] = [
   sineOscNode,
@@ -20,13 +30,23 @@ const implementations: NodeImplementation[] = [
   gainNode,
   clockNode,
   ddlDelayNode,
+  waveguideDelayNode,
   biquadNode,
   ladderFilterNode,
   adEnvelopeNode,
   noiseNode,
   slewLimiterNode,
   softclipNode,
+  rectifierNode,
+  rectifierNode,
   oscilloscopeNode,
+  andNode,
+  orNode,
+  notNode,
+  xorNode,
+  addNode,
+  subtractNode,
+  multiplyNode,
   outputNode
 ];
 

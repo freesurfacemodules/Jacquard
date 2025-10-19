@@ -13,7 +13,7 @@ const SHAPE_CONTROL = "shape";
 export const adEnvelopeNode: NodeImplementation = {
   manifest: {
     kind: "envelope.ad",
-    category: "utility",
+    category: "envelope",
     label: "AD Envelope",
     inputs: [audioPort(TRIGGER_INPUT, "Trigger")],
     outputs: [audioPort(OUTPUT_PORT, "Envelope")],

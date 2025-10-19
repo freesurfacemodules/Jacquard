@@ -177,6 +177,54 @@ describe("code generation", () => {
     expect(source).toContain("const MIN_DELAY_SAMPLES");
   });
 
+  it("emits waveguide delay node with interpolation", () => {
+    let graph = createGraph({ oversampling: 2 });
+    const osc = instantiateNode("osc.sine", "osc1");
+    const mod = instantiateNode("osc.sine", "mod1");
+    const delay = instantiateNode("delay.waveguide", "wg1");
+    const out = instantiateNode("io.output", "out1");
+
+    graph = addNode(graph, osc);
+    graph = addNode(graph, mod);
+    graph = addNode(graph, delay);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: osc.id,
+      fromPortId: "out",
+      toNodeId: delay.id,
+      toPortId: "in"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: mod.id,
+      fromPortId: "out",
+      toNodeId: delay.id,
+      toPortId: "delay"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: delay.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: delay.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "right"
+    });
+
+    const { source } = emitAssemblyScript(graph);
+    expect(source).toContain("const waveguide_wg1 = new WaveguideDelay();");
+    expect(source).toContain("const waveguide_wg1_prefetch: f32 = waveguide_wg1.prepare();");
+    expect(source).toMatch(/waveguide_wg1\.commit/);
+    expect(source).toContain("WAVEGUIDE_MIN_DELAY_UI");
+    expect(source).toContain("WAVEGUIDE_MIN_INTERNAL_DELAY");
+  });
+
   it("emits biquad filter wiring", () => {
     let graph = createGraph({ oversampling: 2 });
     const osc = instantiateNode("osc.sine", "osc1");
@@ -244,6 +292,182 @@ describe("code generation", () => {
     expect(source).toMatch(/if \(noise_hasSpare_noise1\)/);
   });
 
+  it("emits logic AND gate wiring", () => {
+    let graph = createGraph();
+    const oscA = instantiateNode("osc.sine", "oscA");
+    const oscB = instantiateNode("osc.sine", "oscB");
+    const andGate = instantiateNode("logic.and", "and1");
+    const out = instantiateNode("io.output", "out1");
+
+    graph = addNode(graph, oscA);
+    graph = addNode(graph, oscB);
+    graph = addNode(graph, andGate);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: oscA.id,
+      fromPortId: "out",
+      toNodeId: andGate.id,
+      toPortId: "a"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: oscB.id,
+      fromPortId: "out",
+      toNodeId: andGate.id,
+      toPortId: "b"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: andGate.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: andGate.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "right"
+    });
+
+    const { source } = emitAssemblyScript(graph);
+    expect(source).toContain("// AND Gate (and1)");
+    expect(source).toMatch(/const valueA: f32 = wire\d+;/);
+    expect(source).toMatch(/const valueB: f32 = wire\d+;/);
+    expect(source).toContain("let result: f32 = 0.0;");
+    expect(source).toContain("if (valueA >= 1.0 && valueB >= 1.0) {");
+    expect(source).toContain("result = 5.0;");
+  });
+
+  it("emits logic OR gate wiring", () => {
+    let graph = createGraph();
+    const oscA = instantiateNode("osc.sine", "oscA");
+    const oscB = instantiateNode("osc.sine", "oscB");
+    const orGate = instantiateNode("logic.or", "or1");
+    const out = instantiateNode("io.output", "out1");
+
+    graph = addNode(graph, oscA);
+    graph = addNode(graph, oscB);
+    graph = addNode(graph, orGate);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: oscA.id,
+      fromPortId: "out",
+      toNodeId: orGate.id,
+      toPortId: "a"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: oscB.id,
+      fromPortId: "out",
+      toNodeId: orGate.id,
+      toPortId: "b"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: orGate.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: orGate.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "right"
+    });
+
+    const { source } = emitAssemblyScript(graph);
+    expect(source).toContain("// OR Gate (or1)");
+    expect(source).toMatch(/const valueA: f32 = wire\d+;/);
+    expect(source).toMatch(/const valueB: f32 = wire\d+;/);
+    expect(source).toContain("if (valueA >= 1.0 || valueB >= 1.0) {");
+    expect(source).toContain("result = 5.0;");
+  });
+
+  it("emits logic NOT gate wiring", () => {
+    let graph = createGraph();
+    const osc = instantiateNode("osc.sine", "osc1");
+    const notGate = instantiateNode("logic.not", "not1");
+    const out = instantiateNode("io.output", "out1");
+
+    graph = addNode(graph, osc);
+    graph = addNode(graph, notGate);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: osc.id,
+      fromPortId: "out",
+      toNodeId: notGate.id,
+      toPortId: "in"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: notGate.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    const { source } = emitAssemblyScript(graph);
+    expect(source).toContain("// NOT Gate (not1)");
+    expect(source).toMatch(/const inputValue: f32 = wire\d+;/);
+    expect(source).toContain("const isFalse: bool = inputValue < 1.0;");
+    expect(source).toContain("const result: f32 = isFalse ? 5.0 : 0.0;");
+  });
+
+  it("emits logic XOR gate wiring", () => {
+    let graph = createGraph();
+    const oscA = instantiateNode("osc.sine", "oscA");
+    const oscB = instantiateNode("osc.sine", "oscB");
+    const xorGate = instantiateNode("logic.xor", "xor1");
+    const out = instantiateNode("io.output", "out1");
+
+    graph = addNode(graph, oscA);
+    graph = addNode(graph, oscB);
+    graph = addNode(graph, xorGate);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: oscA.id,
+      fromPortId: "out",
+      toNodeId: xorGate.id,
+      toPortId: "a"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: oscB.id,
+      fromPortId: "out",
+      toNodeId: xorGate.id,
+      toPortId: "b"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: xorGate.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: xorGate.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "right"
+    });
+
+    const { source } = emitAssemblyScript(graph);
+    expect(source).toContain("// XOR Gate (xor1)");
+    expect(source).toContain("const aTrue: bool = valueA >= 1.0;");
+    expect(source).toContain("const bTrue: bool = valueB >= 1.0;");
+    expect(source).toContain("const isExclusive: bool = (aTrue && !bTrue) || (!aTrue && bTrue);");
+    expect(source).toContain("const result: f32 = isExclusive ? 5.0 : 0.0;");
+  });
+
   it("emits slew limiter node wiring", () => {
     let graph = createGraph();
     const osc = instantiateNode("osc.sine", "osc1");
@@ -287,7 +511,7 @@ describe("code generation", () => {
   it("emits soft clip node wiring", () => {
     let graph = createGraph();
     const osc = instantiateNode("osc.sine", "osc1");
-    const softclip = instantiateNode("utility.softclip", "clip1");
+    const softclip = instantiateNode("distortion.softclip", "clip1");
     const out = instantiateNode("io.output", "out1");
 
     graph = addNode(graph, osc);
@@ -320,6 +544,155 @@ describe("code generation", () => {
     expect(source).toContain("// Soft Clip (clip1)");
     expect(source).toMatch(/getParameterValue\(\d+\), getParameterValue\(\d+\)\)/);
     expect(source).toContain("softclipSample(rawSample");
+  });
+
+  it("emits rectifier node wiring", () => {
+    let graph = createGraph();
+    const osc = instantiateNode("osc.sine", "osc1");
+    const rectifier = instantiateNode("distortion.rectifier", "rect1");
+    const out = instantiateNode("io.output", "out1");
+
+    graph = addNode(graph, osc);
+    graph = addNode(graph, rectifier);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: osc.id,
+      fromPortId: "out",
+      toNodeId: rectifier.id,
+      toPortId: "in"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: rectifier.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    const { source } = emitAssemblyScript(graph);
+    expect(source).toContain("// Rectifier (rect1)");
+    expect(source).toContain("const rectified: f32 = Mathf.abs(");
+    expect(source).toMatch(/wire\d+ = rectified;/);
+  });
+
+  it("emits math add node wiring", () => {
+    let graph = createGraph();
+    const oscA = instantiateNode("osc.sine", "oscA");
+    const oscB = instantiateNode("osc.sine", "oscB");
+    const add = instantiateNode("math.add", "add1");
+    const out = instantiateNode("io.output", "out1");
+
+    graph = addNode(graph, oscA);
+    graph = addNode(graph, oscB);
+    graph = addNode(graph, add);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: oscA.id,
+      fromPortId: "out",
+      toNodeId: add.id,
+      toPortId: "a"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: oscB.id,
+      fromPortId: "out",
+      toNodeId: add.id,
+      toPortId: "b"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: add.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    const { source } = emitAssemblyScript(graph);
+    expect(source).toContain("// Add (add1)");
+    expect(source).toContain("const result: f32 =");
+    expect(source).toMatch(/wire\d+ = result;/);
+  });
+
+  it("emits math subtract node wiring", () => {
+    let graph = createGraph();
+    const oscA = instantiateNode("osc.sine", "oscA");
+    const oscB = instantiateNode("osc.sine", "oscB");
+    const subtract = instantiateNode("math.subtract", "sub1");
+    const out = instantiateNode("io.output", "out1");
+
+    graph = addNode(graph, oscA);
+    graph = addNode(graph, oscB);
+    graph = addNode(graph, subtract);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: oscA.id,
+      fromPortId: "out",
+      toNodeId: subtract.id,
+      toPortId: "a"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: oscB.id,
+      fromPortId: "out",
+      toNodeId: subtract.id,
+      toPortId: "b"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: subtract.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    const { source } = emitAssemblyScript(graph);
+    expect(source).toContain("// Subtract (sub1)");
+    expect(source).toContain("const result: f32 =");
+    expect(source).toMatch(/wire\d+ = result;/);
+    expect(source).toContain("-");
+  });
+
+  it("emits math multiply node wiring", () => {
+    let graph = createGraph();
+    const oscA = instantiateNode("osc.sine", "oscA");
+    const oscB = instantiateNode("osc.sine", "oscB");
+    const multiply = instantiateNode("math.multiply", "mul1");
+    const out = instantiateNode("io.output", "out1");
+
+    graph = addNode(graph, oscA);
+    graph = addNode(graph, oscB);
+    graph = addNode(graph, multiply);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: oscA.id,
+      fromPortId: "out",
+      toNodeId: multiply.id,
+      toPortId: "a"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: oscB.id,
+      fromPortId: "out",
+      toNodeId: multiply.id,
+      toPortId: "b"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: multiply.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    const { source } = emitAssemblyScript(graph);
+    expect(source).toContain("// Multiply (mul1)");
+    expect(source).toContain("const result: f32 =");
+    expect(source).toMatch(/wire\d+ = result;/);
+    expect(source).toContain("*");
   });
 
   it("emits AD envelope node wiring", () => {

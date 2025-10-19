@@ -53,9 +53,11 @@ const PARAM_MESSAGE_SINGLE = "parameter";
 const makeParameterKey = (nodeId: string, controlId: string): string =>
   `${nodeId}:${controlId}`;
 
-const DELAY_NODE_KIND = "delay.ddl";
+const DELAY_NODE_KINDS = new Set<string>(["delay.ddl", "delay.waveguide"]);
 const DELAY_CONTROL_ID = "delay";
 const DELAY_MAX_SAMPLES = 4096;
+
+const isDelayNodeKind = (kind: string): boolean => DELAY_NODE_KINDS.has(kind);
 
 const clampDelayParameter = (value: number, oversampling: number): number => {
   const step = 1 / oversampling;
@@ -110,7 +112,7 @@ const normalizeDelayNodes = (
   let changed = false;
   const updatedValues: Record<string, number> = {};
   const nodes = graph.nodes.map((node) => {
-    if (node.kind !== DELAY_NODE_KIND) {
+    if (!isDelayNodeKind(node.kind)) {
       return node;
     }
     const rawValue = typeof node.parameters[DELAY_CONTROL_ID] === "number"
@@ -147,7 +149,7 @@ const buildParameterValuesForGraph = (graph: PatchGraph): Record<string, number>
       const nodeValue = node.parameters?.[control.id];
       if (typeof nodeValue === "number") {
         values[key] =
-          node.kind === DELAY_NODE_KIND && control.id === DELAY_CONTROL_ID
+          isDelayNodeKind(node.kind) && control.id === DELAY_CONTROL_ID
             ? clampDelayParameter(nodeValue, graph.oversampling)
             : nodeValue;
       } else if (
@@ -156,13 +158,13 @@ const buildParameterValuesForGraph = (graph: PatchGraph): Record<string, number>
       ) {
         const fallbackValue = implementation.manifest.defaultParams[control.id]!;
         values[key] =
-          node.kind === DELAY_NODE_KIND && control.id === DELAY_CONTROL_ID
+          isDelayNodeKind(node.kind) && control.id === DELAY_CONTROL_ID
             ? clampDelayParameter(fallbackValue, graph.oversampling)
             : fallbackValue;
       } else {
         const minValue = control.min ?? 0;
         values[key] =
-          node.kind === DELAY_NODE_KIND && control.id === DELAY_CONTROL_ID
+          isDelayNodeKind(node.kind) && control.id === DELAY_CONTROL_ID
             ? clampDelayParameter(minValue, graph.oversampling)
             : minValue;
       }
@@ -530,7 +532,7 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       const node = graph.nodes.find((candidate) => candidate.id === nodeId);
       if (node && typeof node.parameters[controlId] === "number") {
         const raw = node.parameters[controlId];
-        if (node.kind === DELAY_NODE_KIND && controlId === DELAY_CONTROL_ID) {
+        if (isDelayNodeKind(node.kind) && controlId === DELAY_CONTROL_ID) {
           return clampDelayParameter(raw, graph.oversampling);
         }
         return raw;
@@ -539,7 +541,7 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
         const implementation = getNodeImplementation(node.kind);
         const fallback = implementation?.manifest.defaultParams?.[controlId];
         if (typeof fallback === "number") {
-          if (node.kind === DELAY_NODE_KIND && controlId === DELAY_CONTROL_ID) {
+          if (isDelayNodeKind(node.kind) && controlId === DELAY_CONTROL_ID) {
             return clampDelayParameter(fallback, graph.oversampling);
           }
           return fallback;
@@ -578,7 +580,7 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       const oversampling = currentGraph.oversampling;
       const targetNode = currentGraph.nodes.find((candidate) => candidate.id === nodeId);
       let adjustedValue = value;
-      if (targetNode?.kind === DELAY_NODE_KIND && parameterId === DELAY_CONTROL_ID) {
+      if (targetNode && isDelayNodeKind(targetNode.kind) && parameterId === DELAY_CONTROL_ID) {
         adjustedValue = clampDelayParameter(value, oversampling);
       }
       const nextGraph = updateGraphNodeParameter(

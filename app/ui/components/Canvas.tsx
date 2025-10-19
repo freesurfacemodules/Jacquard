@@ -26,6 +26,7 @@ const WORKSPACE_MIN = -2048;
 const WORKSPACE_MAX = 8192;
 const WORKSPACE_SIZE = WORKSPACE_MAX - WORKSPACE_MIN;
 const ORIGIN_OFFSET = -WORKSPACE_MIN;
+const DELAY_NODE_KINDS = new Set<string>(["delay.ddl", "delay.waveguide"]);
 
 const cssEscape = (value: string): string => {
   if (typeof window !== "undefined" && window.CSS && typeof window.CSS.escape === "function") {
@@ -631,7 +632,7 @@ export function Canvas({
               let min = control.min ?? 0;
               const max = control.max ?? 1;
               let step = control.step ?? 0.01;
-              if (node.kind === "delay.ddl" && control.id === "delay") {
+              if (DELAY_NODE_KINDS.has(node.kind) && control.id === "delay") {
                 const dynamicStep = 1 / viewModel.oversampling;
                 min = dynamicStep;
                 step = dynamicStep;

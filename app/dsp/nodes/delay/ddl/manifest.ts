@@ -7,7 +7,7 @@ const CONTROL_ID = "delay";
 export const ddlDelayNode: NodeImplementation = {
   manifest: {
     kind: "delay.ddl",
-    category: "utility",
+    category: "delay",
     label: "DDL Delay",
     inputs: [audioPort("in", "In")],
     outputs: [audioPort("out", "Out")],

@@ -11,7 +11,7 @@ const SHAPE_CONTROL = "shape";
 export const slewLimiterNode: NodeImplementation = {
   manifest: {
     kind: "utility.slew",
-    category: "utility",
+    category: "filter",
     label: "Slew Limiter",
     inputs: [audioPort(INPUT_PORT, "In")],
     outputs: [audioPort(OUTPUT_PORT, "Out")],

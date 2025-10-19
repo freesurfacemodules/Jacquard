@@ -6,7 +6,7 @@ const CHANNEL_IDS = ["ch1", "ch2", "ch3", "ch4"];
 export const stereoMixerNode: NodeImplementation = {
   manifest: {
     kind: "mixer.stereo",
-    category: "utility",
+    category: "mixer",
     label: "Stereo Mixer",
     inputs: CHANNEL_IDS.map((id, index) =>
       audioPort(id, `Channel ${index + 1}`)

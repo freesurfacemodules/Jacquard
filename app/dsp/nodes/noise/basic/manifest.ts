@@ -4,7 +4,7 @@ import { NodeImplementation } from "@dsp/types";
 export const noiseNode: NodeImplementation = {
   manifest: {
     kind: "noise.basic",
-    category: "utility",
+    category: "noise",
     label: "Noise",
     inputs: [],
     outputs: [audioPort("uniform", "Uniform"), audioPort("normal", "Normal")],

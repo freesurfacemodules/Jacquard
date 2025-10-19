@@ -3,7 +3,19 @@ import type { PortDescriptor } from "@graph/types";
 
 export interface DspNodeManifest {
   kind: string;
-  category: "oscillator" | "filter" | "io" | "utility" | "math";
+  category:
+    | "oscillator"
+    | "filter"
+    | "io"
+    | "utility"
+    | "math"
+    | "delay"
+    | "clock"
+    | "envelope"
+    | "logic"
+    | "mixer"
+    | "noise"
+    | "distortion";
   label: string;
   inputs: PortDescriptor[];
   outputs: PortDescriptor[];

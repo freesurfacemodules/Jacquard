@@ -130,7 +130,7 @@ describe("compiler", () => {
   it("produces a wasm binary for the soft clip node", async () => {
     let graph = createGraph();
     const osc = instantiateNode("osc.sine", "osc1");
-    const softclip = instantiateNode("utility.softclip", "clip1");
+    const softclip = instantiateNode("distortion.softclip", "clip1");
     const out = instantiateNode("io.output", "out1");
 
     graph = addNode(graph, osc);
@@ -199,6 +199,52 @@ describe("compiler", () => {
     expect(result.wasmBinary.byteLength).toBeGreaterThan(0);
     expect(result.moduleSource).toContain("Slew Limiter (slew1)");
     expect(result.moduleSource).toContain("slew_slew1 = new SlewLimiter()");
+  });
+
+  it("produces a wasm binary for the waveguide delay node", async () => {
+    let graph = createGraph({ oversampling: 4 });
+    const osc = instantiateNode("osc.sine", "osc1");
+    const mod = instantiateNode("osc.sine", "mod1");
+    const delay = instantiateNode("delay.waveguide", "wg1");
+    const out = instantiateNode("io.output", "out1");
+
+    graph = addNode(graph, osc);
+    graph = addNode(graph, mod);
+    graph = addNode(graph, delay);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: osc.id,
+      fromPortId: "out",
+      toNodeId: delay.id,
+      toPortId: "in"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: mod.id,
+      fromPortId: "out",
+      toNodeId: delay.id,
+      toPortId: "delay"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: delay.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: delay.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "right"
+    });
+
+    const result = await compilePatch(graph);
+    expect(result.wasmBinary.byteLength).toBeGreaterThan(0);
+    expect(result.moduleSource).toContain("Waveguide Delay (wg1)");
+    expect(result.moduleSource).toContain("waveguide_wg1 = new WaveguideDelay()");
   });
 
   it("produces a wasm binary for the AD envelope node", async () => {

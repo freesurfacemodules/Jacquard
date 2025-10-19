@@ -128,7 +128,7 @@ export function topologicalSort(graph: PatchGraph): TopologyResult {
     }
 
     const fromNode = nodesById.get(connection.from.node);
-    if (fromNode?.kind === "delay.ddl") {
+    if (fromNode && DELAY_NODE_KINDS.has(fromNode.kind)) {
       continue;
     }
 
@@ -172,3 +172,4 @@ export function topologicalSort(graph: PatchGraph): TopologyResult {
   const hasCycle = order.length !== graph.nodes.length;
   return { order, hasCycle };
 }
+const DELAY_NODE_KINDS = new Set<string>(["delay.ddl", "delay.waveguide"]);

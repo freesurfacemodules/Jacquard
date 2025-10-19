@@ -9,8 +9,8 @@ const OUTPUT_GAIN_CONTROL = "outputGain";
 
 export const softclipNode: NodeImplementation = {
   manifest: {
-    kind: "utility.softclip",
-    category: "utility",
+    kind: "distortion.softclip",
+    category: "distortion",
     label: "Soft Clip",
     inputs: [audioPort(INPUT_PORT, "In")],
     outputs: [audioPort(OUTPUT_PORT, "Out")],

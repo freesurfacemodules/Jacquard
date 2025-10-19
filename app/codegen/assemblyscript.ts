@@ -33,12 +33,18 @@ export function emitAssemblyScript(
 
   const delayPrefetchLines: string[] = [];
   for (const planNode of plan.nodes) {
-    if (planNode.node.kind !== "delay.ddl") {
+    if (
+      planNode.node.kind !== "delay.ddl" &&
+      planNode.node.kind !== "delay.waveguide"
+    ) {
       continue;
     }
     const identifier = sanitizeIdentifier(planNode.node.id);
-    const delayVar = `delay_${identifier}`;
-    const prefetchVar = `delay_${identifier}_prefetch`;
+    const delayVar =
+      planNode.node.kind === "delay.ddl"
+        ? `delay_${identifier}`
+        : `waveguide_${identifier}`;
+    const prefetchVar = `${delayVar}_prefetch`;
     const assignments: string[] = [];
     const output = planNode.outputs.find((candidate) => candidate.port.id === "out");
     if (output) {
@@ -546,6 +552,10 @@ function collectStateDeclarations(plan: ExecutionPlan): string {
       }
       case "delay.ddl": {
         lines.push(`const delay_${identifier} = new DdlDelay();`);
+        break;
+      }
+      case "delay.waveguide": {
+        lines.push(`const waveguide_${identifier} = new WaveguideDelay();`);
         break;
       }
       case "filter.biquad": {
