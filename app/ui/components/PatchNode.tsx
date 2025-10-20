@@ -1,5 +1,5 @@
 import { memo } from "react";
-import type { ReactNode } from "react";
+import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import type { NodeDescriptor } from "@graph/types";
 import type { NodeImplementation } from "@dsp/types";
 import { getNodeImplementation } from "@dsp/library";
@@ -12,10 +12,11 @@ interface PatchNodeProps {
   position: { x: number; y: number };
   width: number;
   selected: boolean;
-  onSelect(nodeId: string): void;
-  onDragStart(nodeId: string, event: React.PointerEvent<HTMLDivElement>): void;
-  onDrag(nodeId: string, event: React.PointerEvent<HTMLDivElement>): void;
-  onDragEnd(nodeId: string, event: React.PointerEvent<HTMLDivElement>): void;
+  onPointerDown(nodeId: string, event: ReactPointerEvent, region: "body" | "header"): void;
+  onPointerUp(nodeId: string, event: ReactPointerEvent, region: "body" | "header"): void;
+  onDragStart(nodeId: string, event: ReactPointerEvent<HTMLDivElement>): void;
+  onDrag(nodeId: string, event: ReactPointerEvent<HTMLDivElement>): void;
+  onDragEnd(nodeId: string, event: ReactPointerEvent<HTMLDivElement>): void;
   onOutputPointerDown(
     nodeId: string,
     portId: string,
@@ -59,7 +60,8 @@ export const PatchNode = memo(function PatchNode({
   position,
   width,
   selected,
-  onSelect,
+  onPointerDown,
+  onPointerUp,
   onDragStart,
   onDrag,
   onDragEnd,
@@ -75,23 +77,23 @@ export const PatchNode = memo(function PatchNode({
   const implementation: NodeImplementation | undefined = getNodeImplementation(node.kind);
 
   const handleContainerPointerDown = (
-    event: React.PointerEvent<HTMLDivElement>
+    event: ReactPointerEvent<HTMLDivElement>
   ): void => {
     event.stopPropagation();
-    onSelect(node.id);
+    onPointerDown(node.id, event, "body");
   };
 
   const handleHeaderPointerDown = (
-    event: React.PointerEvent<HTMLDivElement>
+    event: ReactPointerEvent<HTMLDivElement>
   ): void => {
     event.stopPropagation();
-    onSelect(node.id);
+    onPointerDown(node.id, event, "header");
     event.currentTarget.setPointerCapture(event.pointerId);
     onDragStart(node.id, event);
   };
 
   const handleHeaderPointerMove = (
-    event: React.PointerEvent<HTMLDivElement>
+    event: ReactPointerEvent<HTMLDivElement>
   ): void => {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       onDrag(node.id, event);
@@ -99,11 +101,12 @@ export const PatchNode = memo(function PatchNode({
   };
 
   const handleHeaderPointerUp = (
-    event: React.PointerEvent<HTMLDivElement>
+    event: ReactPointerEvent<HTMLDivElement>
   ): void => {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
       onDragEnd(node.id, event);
+      onPointerUp(node.id, event, "header");
     }
   };
 
@@ -117,6 +120,10 @@ export const PatchNode = memo(function PatchNode({
       role="button"
       tabIndex={-1}
       onPointerDown={handleContainerPointerDown}
+      onPointerUp={(event) => {
+        event.stopPropagation();
+        onPointerUp(node.id, event, "body");
+      }}
     >
       <div
         className="patch-node__header"

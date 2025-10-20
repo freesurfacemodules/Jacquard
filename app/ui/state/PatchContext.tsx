@@ -201,6 +201,7 @@ export interface PatchController {
   connectNodes(params: ConnectNodesParams): void;
   disconnectConnection(connectionId: string): void;
   removeNode(nodeId: string): void;
+  removeNodes(nodeIds: string[]): void;
   removeConnectionsFromPort(nodeId: string, portId: string): void;
   removeConnectionsToPort(nodeId: string, portId: string): void;
   updateNodePosition(nodeId: string, position: NodePosition): void;
@@ -485,6 +486,31 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
         options.selectNode = null;
       }
       applyGraphChange(nextGraph, options);
+    },
+    [applyGraphChange]
+  );
+
+  const removeNodesFromGraph = useCallback(
+    (nodeIds: string[]) => {
+      const uniqueIds = Array.from(new Set(nodeIds));
+      if (uniqueIds.length === 0) {
+        return;
+      }
+      let nextGraph = graphRef.current;
+      for (const id of uniqueIds) {
+        nextGraph = removeGraphNode(nextGraph, id);
+      }
+      applyGraphChange(nextGraph, {
+        changeType: "topology",
+        selectNode: null,
+        afterCommit: (_prev, updated) => {
+          setParameterValues((prevValues) => {
+            const filtered = filterParameterValuesForGraph(prevValues, updated);
+            parameterValuesRef.current = filtered;
+            return filtered;
+          });
+        }
+      });
     },
     [applyGraphChange]
   );
@@ -1146,6 +1172,7 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       connectNodes,
       disconnectConnection,
       removeNode: removeNodeFromGraph,
+      removeNodes: removeNodesFromGraph,
       removeConnectionsFromPort,
       removeConnectionsToPort,
       updateNodePosition,
@@ -1182,6 +1209,7 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       connectNodes,
       disconnectConnection,
       removeNodeFromGraph,
+      removeNodesFromGraph,
       removeConnectionsFromPort,
       removeConnectionsToPort,
       updateNodePosition,

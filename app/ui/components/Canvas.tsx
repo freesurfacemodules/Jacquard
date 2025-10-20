@@ -154,6 +154,7 @@ export function Canvas({
     removeConnectionsFromPort,
     removeConnectionsToPort,
     removeNode,
+    removeNodes,
     updateNodePosition,
     updateNodeParameter,
     selectedNodeId,
@@ -179,7 +180,15 @@ export function Canvas({
     origin: Point;
     startOffset: Point;
   } | null>(null);
-  const selectionStateRef = useRef<{ pointerId: number; start: Point; last: Point } | null>(null);
+const selectionStateRef = useRef<{ pointerId: number; start: Point; last: Point } | null>(null);
+const nodePointerStateRef = useRef<{
+  nodeId: string;
+  pointerId: number;
+  region: "body" | "header";
+  moved: boolean;
+  shiftKey: boolean;
+} | null>(null);
+const canvasPointerStateRef = useRef<{ pointerId: number; start: { x: number; y: number }; moved: boolean } | null>(null);
   const [selectionRect, setSelectionRect] = useState<{ start: Point; end: Point } | null>(null);
   const initializedRef = useRef(false);
 
@@ -422,7 +431,11 @@ export function Canvas({
         return;
       }
 
-      selectNodes([]);
+      canvasPointerStateRef.current = {
+        pointerId: event.pointerId,
+        start: { x: event.clientX, y: event.clientY },
+        moved: false
+      };
       setSelectionRect(null);
 
       panStateRef.current = {
@@ -457,6 +470,10 @@ export function Canvas({
           x: panState.startOffset.x + dx,
           y: panState.startOffset.y + dy
         });
+        const canvasState = canvasPointerStateRef.current;
+        if (canvasState && canvasState.pointerId === event.pointerId) {
+          canvasState.moved = true;
+        }
         return;
       }
 
@@ -484,6 +501,14 @@ export function Canvas({
       if (panState && panState.pointerId === event.pointerId) {
         panStateRef.current = null;
         event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+
+      const canvasState = canvasPointerStateRef.current;
+      if (canvasState && canvasState.pointerId === event.pointerId) {
+        if (!canvasState.moved) {
+          selectNodes([]);
+        }
+        canvasPointerStateRef.current = null;
       }
 
       if (pendingConnection) {
@@ -572,8 +597,12 @@ export function Canvas({
         start: startPoint,
         nodes
       };
+      const npState = nodePointerStateRef.current;
+      if (npState && npState.pointerId === event.pointerId) {
+        npState.moved = false;
+      }
     },
-    [nodePositions, selectNode, selectedNodeIds, translatePointerToCanvas]
+    [nodePositions, selectNode, selectNodes, selectedNodeIds, translatePointerToCanvas]
   );
 
   const handleDrag = useCallback(
@@ -600,6 +629,10 @@ export function Canvas({
           y: clampCoordinate(entry.start.y + deltaY)
         };
         updateNodePosition(entry.id, nextPosition);
+      }
+      const npState = nodePointerStateRef.current;
+      if (npState && npState.pointerId === event.pointerId) {
+        npState.moved = true;
       }
     },
     [translatePointerToCanvas, updateNodePosition]
@@ -705,15 +738,14 @@ export function Canvas({
 
       event.preventDefault();
       const idsToRemove = [...new Set(selectedNodeIds)];
-      idsToRemove.forEach((id) => removeNode(id));
-      selectNodes([]);
+      removeNodes(idsToRemove);
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [removeNode, selectNodes, selectedNodeIds]);
+  }, [removeNodes, selectedNodeIds]);
 
   const handleControlChange = useCallback(
     (nodeId: string, controlId: string, value: number) => {
@@ -729,6 +761,48 @@ export function Canvas({
       onOpenCommandPalette(canvasPoint, { x: event.clientX, y: event.clientY });
     },
     [onOpenCommandPalette, screenToCanvas]
+  );
+
+  const handleNodePointerDown = useCallback(
+    (nodeId: string, event: React.PointerEvent, region: "body" | "header") => {
+      event.stopPropagation();
+      const isSelected = selectedNodeIds.includes(nodeId);
+
+      if (event.shiftKey) {
+        if (isSelected) {
+          selectNodes(selectedNodeIds.filter((id) => id !== nodeId));
+        } else {
+          selectNodes([...selectedNodeIds, nodeId]);
+        }
+      } else if (!isSelected) {
+        selectNodes([nodeId]);
+      }
+
+      nodePointerStateRef.current = {
+        nodeId,
+        pointerId: event.pointerId,
+        region,
+        moved: false,
+        shiftKey: event.shiftKey
+      };
+    },
+    [selectNodes, selectedNodeIds]
+  );
+
+  const handleNodePointerUp = useCallback(
+    (nodeId: string, event: React.PointerEvent, _region: "body" | "header") => {
+      const state = nodePointerStateRef.current;
+      if (!state || state.pointerId !== event.pointerId) {
+        return;
+      }
+
+      if (!state.moved && !state.shiftKey) {
+        selectNodes([nodeId]);
+      }
+
+      nodePointerStateRef.current = null;
+    },
+    [selectNodes]
   );
 
   return (
@@ -842,7 +916,8 @@ export function Canvas({
                 position={positionDisplay}
                 width={width}
                 selected={selectedNodeIds.includes(node.id)}
-                onSelect={selectNode}
+                onPointerDown={handleNodePointerDown}
+                onPointerUp={handleNodePointerUp}
                 onDragStart={handleDragStart}
                 onDrag={handleDrag}
                 onDragEnd={handleDragEnd}
