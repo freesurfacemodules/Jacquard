@@ -351,6 +351,39 @@ class Xoroshiro128Plus {
 }
 `;
 
+const DCBLOCK_DECLARATION = `
+class DcBlocker {
+  private r: f32 = 0.0;
+  private g: f32 = 1.0;
+  private x1: f32 = 0.0;
+  private y1: f32 = 0.0;
+
+  constructor() {
+    this.setCutoff(SAMPLE_RATE * (<f32>OVERSAMPLING), 10.0);
+  }
+
+  reset(): void {
+    this.x1 = 0.0;
+    this.y1 = 0.0;
+  }
+
+  setCutoff(sampleRate: f32, cutoff: f32): void {
+    let fc = cutoff;
+    if (fc < 0.001) fc = 0.001;
+    const rValue = Mathf.exp(-2.0 * Mathf.PI * fc / sampleRate);
+    this.r = rValue;
+    this.g = 0.5 * (1.0 + rValue);
+  }
+
+  process(input: f32): f32 {
+    const y = this.g * (input - this.x1) + this.r * this.y1;
+    this.x1 = input;
+    this.y1 = y;
+    return y;
+  }
+}
+`;
+
 function createEmitHelpers(): NodeEmitHelpers {
   return {
     indentLines,
@@ -506,6 +539,7 @@ function collectAssemblyDeclarations(): string {
 
   declarations.add(DOWNSAMPLER_DECLARATION.trim());
   declarations.add(XOROSHIRO_DECLARATION.trim());
+  declarations.add(DCBLOCK_DECLARATION.trim());
 
   for (const implementation of nodeImplementations) {
     const snippet = implementation.assembly?.declarations;
@@ -593,6 +627,10 @@ function collectStateDeclarations(plan: ExecutionPlan): string {
       }
       case "utility.slew": {
         lines.push(`const slew_${identifier} = new SlewLimiter();`);
+        break;
+      }
+      case "utility.dcbias": {
+        lines.push(`const dcblock_${identifier} = new DcBlocker();`);
         break;
       }
       default:

@@ -695,6 +695,35 @@ describe("code generation", () => {
     expect(source).toContain("*");
   });
 
+  it("emits dc bias removal node wiring", () => {
+    let graph = createGraph();
+    const osc = instantiateNode("osc.sine", "osc1");
+    const dc = instantiateNode("utility.dcbias", "dc1");
+    const out = instantiateNode("io.output", "out1");
+
+    graph = addNode(graph, osc);
+    graph = addNode(graph, dc);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: osc.id,
+      fromPortId: "out",
+      toNodeId: dc.id,
+      toPortId: "in"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: dc.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    const { source } = emitAssemblyScript(graph);
+    expect(source).toContain("const dcblock_dc1 = new DcBlocker();");
+    expect(source).toContain("const dcSample: f32 = dcblock_dc1.process(inputSample);");
+  });
+
   it("emits AD envelope node wiring", () => {
     let graph = createGraph();
     const envelope = instantiateNode("envelope.ad", "env1");
