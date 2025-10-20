@@ -86,6 +86,7 @@ interface PatchSnapshot {
   graph: PatchGraph;
   parameterValues: Record<string, number>;
   selectedNodeId: string | null;
+  selectedNodeIds: string[];
   changeType: PatchChangeType;
 }
 
@@ -205,7 +206,9 @@ export interface PatchController {
   updateNodePosition(nodeId: string, position: NodePosition): void;
   updateNodeParameter(nodeId: string, parameterId: string, value: number): void;
   selectedNodeId: string | null;
+  selectedNodeIds: string[];
   selectNode(nodeId: string | null): void;
+  selectNodes(nodeIds: string[]): void;
   getParameterValue(nodeId: string, controlId: string): number;
   envelopeSnapshots: Record<string, EnvelopeSnapshot>;
   getEnvelopeSnapshot(nodeId: string): EnvelopeSnapshot;
@@ -226,6 +229,7 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
   const [graph, setGraph] = useState<PatchGraph>(() => createGraph());
   const [artifact, setArtifact] = useState<CompileResult | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [parameterBindings, setParameterBindings] = useState<PlanControl[]>([]);
   const [envelopeSnapshots, setEnvelopeSnapshots] = useState<Record<string, EnvelopeSnapshot>>(
     {}
@@ -260,10 +264,15 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
   const parameterValuesRef = useRef<Record<string, number>>({});
   const graphRef = useRef<PatchGraph>(graph);
   const selectedNodeIdRef = useRef<string | null>(selectedNodeId);
+  const selectedNodeIdsRef = useRef<string[]>(selectedNodeIds);
 
   useEffect(() => {
     parameterBindingsRef.current = parameterBindings;
   }, [parameterBindings]);
+
+  useEffect(() => {
+    selectedNodeIdsRef.current = selectedNodeIds;
+  }, [selectedNodeIds]);
 
   useEffect(() => {
     artifactRef.current = artifact;
@@ -367,7 +376,10 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
     ): boolean => {
       const previousGraph = graphRef.current;
       if (nextGraph === previousGraph) {
-        if (options.selectNode !== undefined && selectedNodeIdRef.current !== options.selectNode) {
+        if (options.selectNode !== undefined) {
+          const nextIds = options.selectNode ? [options.selectNode] : [];
+          setSelectedNodeIds(nextIds);
+          selectedNodeIdsRef.current = nextIds;
           setSelectedNodeId(options.selectNode);
           selectedNodeIdRef.current = options.selectNode;
         }
@@ -382,6 +394,7 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
           graph: previousGraph,
           parameterValues: { ...parameterValuesRef.current },
           selectedNodeId: selectedNodeIdRef.current,
+          selectedNodeIds: [...selectedNodeIdsRef.current],
           changeType
         };
         setUndoStack((prev) => [...prev, snapshot]);
@@ -392,6 +405,9 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       graphRef.current = nextGraph;
 
       if (options.selectNode !== undefined) {
+        const nextIds = options.selectNode ? [options.selectNode] : [];
+        setSelectedNodeIds(nextIds);
+        selectedNodeIdsRef.current = nextIds;
         setSelectedNodeId(options.selectNode);
         selectedNodeIdRef.current = options.selectNode;
       }
@@ -624,10 +640,25 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
     []
   );
 
-  const selectNode = useCallback((nodeId: string | null) => {
-    setSelectedNodeId(nodeId);
-    selectedNodeIdRef.current = nodeId;
+  const selectNodes = useCallback((nodeIds: string[]) => {
+    const unique = Array.from(new Set(nodeIds));
+    setSelectedNodeIds(unique);
+    selectedNodeIdsRef.current = unique;
+    const primary = unique.length > 0 ? unique[unique.length - 1] : null;
+    setSelectedNodeId(primary);
+    selectedNodeIdRef.current = primary;
   }, []);
+
+  const selectNode = useCallback(
+    (nodeId: string | null) => {
+      if (nodeId) {
+        selectNodes([nodeId]);
+      } else {
+        selectNodes([]);
+      }
+    },
+    [selectNodes]
+  );
 
   const undo = useCallback(() => {
     setUndoStack((prevUndo) => {
@@ -640,6 +671,7 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
         graph: graphRef.current,
         parameterValues: { ...parameterValuesRef.current },
         selectedNodeId: selectedNodeIdRef.current,
+        selectedNodeIds: [...selectedNodeIdsRef.current],
         changeType: snapshot.changeType
       };
       setRedoStack((prevRedo) => [...prevRedo, currentSnapshot]);
@@ -649,6 +681,8 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       parameterValuesRef.current = snapshot.parameterValues;
       setSelectedNodeId(snapshot.selectedNodeId);
       selectedNodeIdRef.current = snapshot.selectedNodeId;
+      setSelectedNodeIds(snapshot.selectedNodeIds);
+      selectedNodeIdsRef.current = [...snapshot.selectedNodeIds];
       if (snapshot.changeType === "topology") {
         setTopologyVersion((version) => version + 1);
         setParameterBindings([]);
@@ -676,6 +710,7 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
         graph: graphRef.current,
         parameterValues: { ...parameterValuesRef.current },
         selectedNodeId: selectedNodeIdRef.current,
+        selectedNodeIds: [...selectedNodeIdsRef.current],
         changeType: snapshot.changeType
       };
       setUndoStack((prevUndo) => [...prevUndo, currentSnapshot]);
@@ -685,6 +720,8 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       parameterValuesRef.current = snapshot.parameterValues;
       setSelectedNodeId(snapshot.selectedNodeId);
       selectedNodeIdRef.current = snapshot.selectedNodeId;
+      setSelectedNodeIds(snapshot.selectedNodeIds);
+      selectedNodeIdsRef.current = [...snapshot.selectedNodeIds];
       if (snapshot.changeType === "topology") {
         setTopologyVersion((version) => version + 1);
         setParameterBindings([]);
@@ -1114,7 +1151,9 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       updateNodePosition,
       updateNodeParameter,
       selectedNodeId,
+      selectedNodeIds,
       selectNode,
+      selectNodes,
       getParameterValue,
       envelopeSnapshots,
       getEnvelopeSnapshot,
@@ -1148,7 +1187,9 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       updateNodePosition,
       updateNodeParameter,
       selectedNodeId,
+      selectedNodeIds,
       selectNode,
+      selectNodes,
       getParameterValue,
       envelopeSnapshots,
       getEnvelopeSnapshot,

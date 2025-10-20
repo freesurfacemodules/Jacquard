@@ -531,6 +531,14 @@ option {
     transform-origin: 0 0;
 }
 
+.canvas-selection {
+    position: absolute;
+    border: 1px solid rgba(255, 106, 61, 0.8);
+    background: rgba(255, 106, 61, 0.2);
+    pointer-events: none;
+    z-index: 7;
+}
+
 .canvas-connections {
     position: absolute;
     inset: 0;

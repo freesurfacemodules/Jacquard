@@ -11,6 +11,7 @@ export function NodePropertiesPanel({ onClose }: NodePropertiesPanelProps): JSX.
   const {
     viewModel,
     selectedNodeId,
+    selectedNodeIds,
     getParameterValue,
     updateNodeParameter,
     disconnectConnection,
@@ -82,9 +83,13 @@ export function NodePropertiesPanel({ onClose }: NodePropertiesPanelProps): JSX.
         </button>
       </header>
       <div className="dock-panel__body">
-        {!selectedNode ? (
+        {selectedNodeIds.length === 0 ? (
           <p className="dock-panel__placeholder">Select a node to edit its parameters.</p>
-        ) : (
+        ) : selectedNodeIds.length > 1 ? (
+          <div className="properties-section">
+            <p className="dock-panel__placeholder">Multiple nodes selected.</p>
+          </div>
+        ) : selectedNode ? (
           <>
             <div className="properties-section">
               <h3>{selectedNode.label}</h3>
@@ -187,7 +192,7 @@ export function NodePropertiesPanel({ onClose }: NodePropertiesPanelProps): JSX.
               </button>
             </section>
           </>
-        )}
+        ) : null}
       </div>
     </aside>
   );

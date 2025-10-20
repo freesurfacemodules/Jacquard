@@ -44,9 +44,9 @@ interface PendingConnection {
 }
 
 interface DragState {
-  nodeId: string;
   pointerId: number;
-  offset: Point;
+  start: Point;
+  nodes: Array<{ id: string; start: Point }>;
 }
 
 interface NodeConnectionSummary {
@@ -157,7 +157,9 @@ export function Canvas({
     updateNodePosition,
     updateNodeParameter,
     selectedNodeId,
+    selectedNodeIds,
     selectNode,
+    selectNodes,
     envelopeSnapshots,
     getEnvelopeSnapshot,
     scopeSnapshots,
@@ -177,6 +179,8 @@ export function Canvas({
     origin: Point;
     startOffset: Point;
   } | null>(null);
+  const selectionStateRef = useRef<{ pointerId: number; start: Point; last: Point } | null>(null);
+  const [selectionRect, setSelectionRect] = useState<{ start: Point; end: Point } | null>(null);
   const initializedRef = useRef(false);
 
   const screenToCanvas = useCallback(
@@ -224,6 +228,38 @@ export function Canvas({
       viewModel.nodes.map((node) => [node.id, node])
     );
   }, [viewModel.nodes]);
+
+  const updateSelectionForRect = useCallback(
+    (start: Point, end: Point) => {
+      const minX = Math.min(start.x, end.x);
+      const maxX = Math.max(start.x, end.x);
+      const minY = Math.min(start.y, end.y);
+      const maxY = Math.max(start.y, end.y);
+
+      const selectedIds = viewModel.nodes
+        .filter((node) => {
+          const position = nodePositions.get(node.id);
+          if (!position) {
+            return false;
+          }
+          const { width, height } = getNodeDimensions(node);
+          const nodeMinX = position.x;
+          const nodeMaxX = position.x + width;
+          const nodeMinY = position.y;
+          const nodeMaxY = position.y + height;
+          const intersects =
+            nodeMaxX >= minX &&
+            nodeMinX <= maxX &&
+            nodeMaxY >= minY &&
+            nodeMinY <= maxY;
+          return intersects;
+        })
+        .map((node) => node.id);
+
+      selectNodes(selectedIds);
+    },
+    [nodePositions, selectNodes, viewModel.nodes]
+  );
 
   const portConnectionMap = useMemo(() => {
     const map = new Map<string, NodeConnectionSummary>();
@@ -295,6 +331,32 @@ export function Canvas({
       .filter(Boolean) as Array<{ id: string; path: string }>;
   }, [viewModel.connections, nodesById, nodePositions, screenToCanvas]);
 
+  const selectionOverlay = useMemo(() => {
+    if (!selectionRect) {
+      return null;
+    }
+    const { start, end } = selectionRect;
+    const minX = Math.min(start.x, end.x);
+    const maxX = Math.max(start.x, end.x);
+    const minY = Math.min(start.y, end.y);
+    const maxY = Math.max(start.y, end.y);
+    const topLeft = toDisplay({ x: minX, y: minY });
+    const bottomRight = toDisplay({ x: maxX, y: maxY });
+    const width = Math.max(1, bottomRight.x - topLeft.x);
+    const height = Math.max(1, bottomRight.y - topLeft.y);
+    return (
+      <div
+        className="canvas-selection"
+        style={{
+          left: `${topLeft.x}px`,
+          top: `${topLeft.y}px`,
+          width: `${width}px`,
+          height: `${height}px`
+        }}
+      />
+    );
+  }, [selectionRect]);
+
   const activeOutputPortId = pendingConnection?.fromPortId ?? null;
 
   const handleCreateNode = useCallback(
@@ -336,7 +398,6 @@ export function Canvas({
 
   const handleCanvasPointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
-      selectNode(null);
       setPendingConnection(null);
       setPointerPosition(null);
       setConnectionError(null);
@@ -345,6 +406,25 @@ export function Canvas({
         return;
       }
 
+      const point = translatePointerToCanvas(event);
+
+      if (event.shiftKey) {
+        if (point) {
+          selectionStateRef.current = {
+            pointerId: event.pointerId,
+            start: point,
+            last: point
+          };
+          setSelectionRect({ start: point, end: point });
+          selectNodes([]);
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }
+        return;
+      }
+
+      selectNodes([]);
+      setSelectionRect(null);
+
       panStateRef.current = {
         pointerId: event.pointerId,
         origin: { x: event.clientX, y: event.clientY },
@@ -352,11 +432,23 @@ export function Canvas({
       };
       event.currentTarget.setPointerCapture(event.pointerId);
     },
-    [selectNode, viewOffset]
+    [selectNodes, translatePointerToCanvas, viewOffset]
   );
 
   const handleCanvasPointerMove = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
+      const selectionState = selectionStateRef.current;
+      if (selectionState && selectionState.pointerId === event.pointerId) {
+        const point = translatePointerToCanvas(event);
+        if (!point) {
+          return;
+        }
+        selectionState.last = point;
+        setSelectionRect({ start: selectionState.start, end: point });
+        updateSelectionForRect(selectionState.start, point);
+        return;
+      }
+
       const panState = panStateRef.current;
       if (panState && panState.pointerId === event.pointerId) {
         const dx = event.clientX - panState.origin.x;
@@ -376,11 +468,18 @@ export function Canvas({
         setPointerPosition(toDisplay(point));
       }
     },
-    [pendingConnection, translatePointerToCanvas]
+    [pendingConnection, translatePointerToCanvas, updateSelectionForRect]
   );
 
   const handleCanvasPointerUp = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
+      const selectionState = selectionStateRef.current;
+      if (selectionState && selectionState.pointerId === event.pointerId) {
+        selectionStateRef.current = null;
+        setSelectionRect(null);
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+
       const panState = panStateRef.current;
       if (panState && panState.pointerId === event.pointerId) {
         panStateRef.current = null;
@@ -397,6 +496,8 @@ export function Canvas({
 
   const handleCanvasPointerLeave = useCallback(() => {
     panStateRef.current = null;
+    selectionStateRef.current = null;
+    setSelectionRect(null);
   }, []);
 
   const handleWheelNative = useCallback(
@@ -441,27 +542,47 @@ export function Canvas({
 
   const handleDragStart = useCallback(
     (nodeId: string, event: React.PointerEvent<HTMLDivElement>) => {
-      const point = translatePointerToCanvas(event);
-      if (!point) {
+      const startPoint = translatePointerToCanvas(event);
+      if (!startPoint) {
         return;
       }
-      const nodePosition = nodePositions.get(nodeId) ?? point;
+
+      let activeNodeIds = selectedNodeIds;
+      if (!activeNodeIds.includes(nodeId)) {
+        activeNodeIds = [nodeId];
+        selectNode(nodeId);
+      }
+
+      const nodes = activeNodeIds
+        .map((id) => {
+          const position = nodePositions.get(id);
+          if (!position) {
+            return null;
+          }
+          return { id, start: position };
+        })
+        .filter((entry): entry is { id: string; start: Point } => entry !== null);
+
+      if (nodes.length === 0) {
+        return;
+      }
+
       dragStateRef.current = {
-        nodeId,
         pointerId: event.pointerId,
-        offset: {
-          x: point.x - nodePosition.x,
-          y: point.y - nodePosition.y
-        }
+        start: startPoint,
+        nodes
       };
     },
-    [nodePositions, translatePointerToCanvas]
+    [nodePositions, selectNode, selectedNodeIds, translatePointerToCanvas]
   );
 
   const handleDrag = useCallback(
     (nodeId: string, event: React.PointerEvent<HTMLDivElement>) => {
       const state = dragStateRef.current;
-      if (!state || state.nodeId !== nodeId || state.pointerId !== event.pointerId) {
+      if (!state || state.pointerId !== event.pointerId) {
+        return;
+      }
+      if (!state.nodes.some((entry) => entry.id === nodeId)) {
         return;
       }
 
@@ -470,12 +591,16 @@ export function Canvas({
         return;
       }
 
-      const nextPosition: Point = {
-        x: clampCoordinate(point.x - state.offset.x),
-        y: clampCoordinate(point.y - state.offset.y)
-      };
+      const deltaX = point.x - state.start.x;
+      const deltaY = point.y - state.start.y;
 
-      updateNodePosition(nodeId, nextPosition);
+      for (const entry of state.nodes) {
+        const nextPosition: Point = {
+          x: clampCoordinate(entry.start.x + deltaX),
+          y: clampCoordinate(entry.start.y + deltaY)
+        };
+        updateNodePosition(entry.id, nextPosition);
+      }
     },
     [translatePointerToCanvas, updateNodePosition]
   );
@@ -558,7 +683,7 @@ export function Canvas({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
-      if (!selectedNodeId) {
+      if (selectedNodeIds.length === 0) {
         return;
       }
       if (event.key !== "Delete" && event.key !== "Backspace") {
@@ -579,14 +704,16 @@ export function Canvas({
       }
 
       event.preventDefault();
-      removeNode(selectedNodeId);
+      const idsToRemove = [...new Set(selectedNodeIds)];
+      idsToRemove.forEach((id) => removeNode(id));
+      selectNodes([]);
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [selectedNodeId, removeNode]);
+  }, [removeNode, selectNodes, selectedNodeIds]);
 
   const handleControlChange = useCallback(
     (nodeId: string, controlId: string, value: number) => {
@@ -714,7 +841,7 @@ export function Canvas({
                 node={node}
                 position={positionDisplay}
                 width={width}
-                selected={selectedNodeId === node.id}
+                selected={selectedNodeIds.includes(node.id)}
                 onSelect={selectNode}
                 onDragStart={handleDragStart}
                 onDrag={handleDrag}
@@ -734,6 +861,8 @@ export function Canvas({
               />
             );
           })}
+
+          {selectionOverlay}
 
           <svg className="canvas-connections" aria-hidden="true">
             {connectionPaths.map((connection) => (
