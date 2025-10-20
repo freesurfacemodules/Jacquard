@@ -1,5 +1,5 @@
 import { audioPort } from "../../common";
-import { NodeImplementation } from "@dsp/types";
+import { ControlStepContext, NodeImplementation } from "@dsp/types";
 import ddlDelaySource from "./ddl.as?raw";
 
 const CONTROL_ID = "delay";
@@ -24,9 +24,9 @@ export const ddlDelayNode: NodeImplementation = {
         id: CONTROL_ID,
         label: "Delay (samples)",
         type: "slider",
-        min: 0.125,
+        min: ({ oversampling }: ControlStepContext) => 1 / Math.max(1, oversampling),
         max: 4096,
-        step: 0.125
+        step: ({ oversampling }: ControlStepContext) => 1 / Math.max(1, oversampling)
       }
     ]
   },

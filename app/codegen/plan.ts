@@ -6,6 +6,7 @@ import {
   PortDescriptor
 } from "@graph/types";
 import { getNodeImplementation } from "@dsp/library";
+import { resolveControlMin } from "@dsp/utils/controls";
 
 export interface PlanWire {
   id: string;
@@ -169,11 +170,13 @@ export function createExecutionPlan(graph: PatchGraph): ExecutionPlan {
     const implementation = getNodeImplementation(node.kind);
     const manifestControls = implementation?.manifest.controls ?? [];
     const nodeControls: PlanControl[] = manifestControls.map((control) => {
+      const context = { oversampling: graph.oversampling };
+      const resolvedMin = resolveControlMin(control, context);
       const defaultValue =
         typeof node.parameters[control.id] === "number"
           ? node.parameters[control.id]
           : implementation?.manifest.defaultParams?.[control.id] ??
-            control.min ?? 0;
+            resolvedMin;
       const planControl: PlanControl = {
         nodeId: node.id,
         controlId: control.id,

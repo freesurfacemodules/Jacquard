@@ -7,6 +7,7 @@ import { PatchNode, type PortKind } from "./PatchNode";
 import { EnvelopeVisualizer } from "./EnvelopeVisualizer";
 import { ScopeVisualizer } from "./ScopeVisualizer";
 import type { NodeDescriptor, NodeMetadata, NodePosition } from "@graph/types";
+import { resolveControlMin, resolveControlMax, resolveControlStep } from "@dsp/utils/controls";
 
 export type Point = { x: number; y: number };
 
@@ -629,36 +630,42 @@ export function Canvas({
             const implementation = getNodeImplementation(node.kind);
             const controls = implementation?.manifest.controls ?? [];
             const controlConfigs = controls.map((control) => {
-              let min = control.min ?? 0;
-              const max = control.max ?? 1;
-            let step = control.step ?? 0;
-            if (DELAY_NODE_KINDS.has(node.kind) && control.id === "delay") {
-              const dynamicStep = 1 / viewModel.oversampling;
-              min = dynamicStep;
-              step = dynamicStep;
-            }
-            const defaults = implementation?.manifest.defaultParams ?? {};
-            const manifestDefault = defaults[control.id];
-            let defaultValue =
-              typeof manifestDefault === "number" ? manifestDefault : min;
-            defaultValue = Math.min(max, Math.max(min, defaultValue));
-            const shouldSnap = step > 0;
-            if (shouldSnap) {
-              defaultValue = Math.round(defaultValue / step) * step;
-            }
-            const rawValue = getParameterValue(node.id, control.id);
-            const clampedValue = Math.min(max, Math.max(min, rawValue));
-            const quantized = shouldSnap ? Math.round(clampedValue / step) * step : clampedValue;
-            return {
-              id: control.id,
-              label: control.label,
-              value: quantized,
-              min,
-              max,
-              step: shouldSnap ? step : undefined,
-              defaultValue
-            };
-          });
+              const controlContext = { oversampling: viewModel.oversampling };
+              let min = resolveControlMin(control, controlContext);
+              let max = resolveControlMax(control, controlContext);
+              if (!Number.isFinite(min)) {
+                min = 0;
+              }
+              if (!Number.isFinite(max)) {
+                max = 1;
+              }
+              if (max <= min) {
+                max = min + 1;
+              }
+              const stepValue = resolveControlStep(control, controlContext);
+              let step = stepValue;
+              const defaults = implementation?.manifest.defaultParams ?? {};
+              const manifestDefault = defaults[control.id];
+              let defaultValue =
+                typeof manifestDefault === "number" ? manifestDefault : min;
+              defaultValue = Math.min(max, Math.max(min, defaultValue));
+              const shouldSnap = step > 0;
+              if (shouldSnap) {
+                defaultValue = Math.round(defaultValue / step) * step;
+              }
+              const rawValue = getParameterValue(node.id, control.id);
+              const clampedValue = Math.min(max, Math.max(min, rawValue));
+              const quantized = shouldSnap ? Math.round(clampedValue / step) * step : clampedValue;
+              return {
+                id: control.id,
+                label: control.label,
+                value: quantized,
+                min,
+                max,
+                step: shouldSnap ? step : undefined,
+                defaultValue
+              };
+            });
             let widget: ReactNode | null = null;
             if (node.kind === "envelope.ad") {
               const riseValue =

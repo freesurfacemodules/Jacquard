@@ -64,9 +64,12 @@ export function Workspace({
 
   const compilerStatus = useMemo(() => {
     if (!validation.isValid) {
+      const primaryIssue = validation.issues[0]?.message;
       return {
         type: "error" as const,
-        message: "Resolve graph issues before compiling."
+        message: primaryIssue
+          ? `${primaryIssue} Resolve graph issues before compiling.`
+          : "Resolve graph issues before compiling."
       };
     }
     if (!artifact) {

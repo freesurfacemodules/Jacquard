@@ -11,22 +11,25 @@ interface KnobProps {
 
 const MIN_ANGLE = -135;
 const MAX_ANGLE = 135;
-const SENSITIVITY = 0.005; // value change per pixel dragged
+const MIN_DT = 1;
+const VELOCITY_FLOOR = 0;
+const VELOCITY_CEIL = 0.8; // px per ms
+const FINE_DIVISOR = 10000;
+const COARSE_DIVISOR = 500;
+const SHIFT_MULTIPLIER = 10;
+const ALT_DIVISOR = 100;
 
-export function Knob({
-  min,
-  max,
-  step = 0,
-  value,
-  defaultValue,
-  onChange
-}: KnobProps): JSX.Element {
+export function Knob({ min, max, step = 0, value, defaultValue, onChange }: KnobProps): JSX.Element {
   const knobRef = useRef<HTMLDivElement | null>(null);
-  const dragStateRef = useRef<{ pointerId: number; startY: number; startValue: number } | null>(
-    null
-  );
+  const dragStateRef = useRef<{
+    pointerId: number;
+    value: number;
+    lastY: number;
+    lastTime: number;
+  } | null>(null);
   const pendingValueRef = useRef<number>(value);
   const frameRef = useRef<number | null>(null);
+  const lastWheelTimeRef = useRef<number | null>(null);
 
   const clamp = useCallback(
     (nextValue: number) => {
@@ -38,6 +41,37 @@ export function Knob({
       return bounded;
     },
     [min, max, step]
+  );
+
+  const computeGain = useCallback(
+    (
+      deltaY: number,
+      deltaTime: number,
+      range: number,
+      modifiers: { shiftKey: boolean; altKey: boolean }
+    ): number => {
+      const absRange = Math.max(range, 1e-6);
+      const fineGain = absRange / FINE_DIVISOR;
+      const coarseGain = absRange / COARSE_DIVISOR;
+      const speed = Math.min(
+        VELOCITY_CEIL,
+        Math.max(
+          VELOCITY_FLOOR,
+          Math.abs(deltaY) / Math.max(deltaTime, MIN_DT)
+        )
+      );
+      const t = (speed - VELOCITY_FLOOR) / (VELOCITY_CEIL - VELOCITY_FLOOR);
+      const interpolated = fineGain + t * (coarseGain - fineGain);
+      let modified = interpolated;
+      if (modifiers.shiftKey) {
+        modified *= SHIFT_MULTIPLIER;
+      }
+      if (modifiers.altKey) {
+        modified /= ALT_DIVISOR;
+      }
+      return modified;
+    },
+    []
   );
 
   const scheduleChange = useCallback(
@@ -83,13 +117,24 @@ export function Knob({
       if (!state) {
         return;
       }
-      const deltaY = state.startY - event.clientY;
+      const currentY = event.clientY;
+      const deltaY = state.lastY - currentY;
       const range = max - min;
-      const deltaValue = range * deltaY * SENSITIVITY;
-      const nextValue = state.startValue + deltaValue;
+      const now = typeof event.timeStamp === "number" ? event.timeStamp : performance.now();
+      const deltaTime = now - state.lastTime;
+      const windowedDeltaY = deltaY;
+      const gain = computeGain(windowedDeltaY, deltaTime, range, {
+        shiftKey: event.shiftKey,
+        altKey: event.altKey
+      });
+      const deltaValue = gain * deltaY;
+      const nextValue = clamp(state.value + deltaValue);
+      state.value = nextValue;
+      state.lastY = currentY;
+      state.lastTime = now;
       scheduleChange(nextValue, immediate);
     },
-    [max, min, scheduleChange]
+    [max, min, clamp, scheduleChange, computeGain]
   );
 
   const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>): void => {
@@ -98,8 +143,9 @@ export function Knob({
     element?.setPointerCapture(event.pointerId);
     dragStateRef.current = {
       pointerId: event.pointerId,
-      startY: event.clientY,
-      startValue: value
+      lastY: event.clientY,
+      lastTime: typeof event.timeStamp === "number" ? event.timeStamp : performance.now(),
+      value
     };
   };
 
@@ -124,8 +170,15 @@ export function Knob({
   const handleWheel = (event: React.WheelEvent<HTMLDivElement>): void => {
     event.preventDefault();
     const range = max - min;
-    const factor = range * 0.0025;
-    const nextValue = value - event.deltaY * factor;
+    const now = typeof event.timeStamp === "number" ? event.timeStamp : performance.now();
+    const lastTime = lastWheelTimeRef.current ?? now;
+    const deltaTime = now - lastTime;
+    lastWheelTimeRef.current = now;
+    const gain = computeGain(event.deltaY, deltaTime, range, {
+      shiftKey: event.shiftKey,
+      altKey: event.altKey
+    });
+    const nextValue = value - event.deltaY * gain;
     scheduleChange(nextValue);
   };
 

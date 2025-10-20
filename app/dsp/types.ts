@@ -50,7 +50,14 @@ export interface NodeControl {
   id: string;
   label: string;
   type: "slider";
-  min: number;
-  max: number;
-  step?: number;
+  min: number | ControlRangeResolver;
+  max: number | ControlRangeResolver;
+  step?: number | ControlStepResolver;
 }
+
+export interface ControlStepContext {
+  oversampling: number;
+}
+
+export type ControlRangeResolver = (context: ControlStepContext) => number;
+export type ControlStepResolver = (context: ControlStepContext) => number;

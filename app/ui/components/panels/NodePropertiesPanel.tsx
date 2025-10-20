@@ -1,6 +1,7 @@
 import { ChangeEvent, useMemo } from "react";
 import { usePatch } from "../../state/PatchContext";
 import { getNodeImplementation } from "@dsp/nodes";
+import { resolveControlMin, resolveControlMax, resolveControlStep } from "@dsp/utils/controls";
 
 interface NodePropertiesPanelProps {
   onClose(): void;
@@ -9,7 +10,6 @@ interface NodePropertiesPanelProps {
 export function NodePropertiesPanel({ onClose }: NodePropertiesPanelProps): JSX.Element {
   const {
     viewModel,
-    validation,
     selectedNodeId,
     getParameterValue,
     updateNodeParameter,
@@ -97,6 +97,15 @@ export function NodePropertiesPanel({ onClose }: NodePropertiesPanelProps): JSX.
                 <div className="properties-controls">
                   {implementation.manifest.controls.map((control) => {
                     const value = getParameterValue(selectedNode.id, control.id);
+                    const context = { oversampling: viewModel.oversampling };
+                    const minValue = resolveControlMin(control, context);
+                    const maxValue = resolveControlMax(control, context);
+                    const sliderMin = Number.isFinite(minValue) ? minValue : 0;
+                    let sliderMax = Number.isFinite(maxValue) ? maxValue : sliderMin + 1;
+                    if (sliderMax <= sliderMin) {
+                      sliderMax = sliderMin + 1;
+                    }
+                    const stepValue = resolveControlStep(control, context);
                     return (
                       <label key={control.id} className="properties-control">
                         <span className="properties-control__label">
@@ -105,9 +114,9 @@ export function NodePropertiesPanel({ onClose }: NodePropertiesPanelProps): JSX.
                         </span>
                         <input
                           type="range"
-                          min={control.min}
-                          max={control.max}
-                          step={control.step && control.step > 0 ? control.step : "any"}
+                          min={sliderMin}
+                          max={sliderMax}
+                          step={stepValue > 0 ? stepValue : "any"}
                           value={value}
                           onChange={handleControlChange(selectedNode.id, control.id)}
                         />
@@ -178,17 +187,6 @@ export function NodePropertiesPanel({ onClose }: NodePropertiesPanelProps): JSX.
               </button>
             </section>
           </>
-        )}
-
-        {validation.isValid ? null : (
-          <section className="properties-section properties-section--validation">
-            <h4>Validation issues</h4>
-            <ul>
-              {validation.issues.map((issue, index) => (
-                <li key={`${issue.code}-${index}`}>{issue.message}</li>
-              ))}
-            </ul>
-          </section>
         )}
       </div>
     </aside>

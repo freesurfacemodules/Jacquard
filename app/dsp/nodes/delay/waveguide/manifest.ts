@@ -1,5 +1,5 @@
 import { audioPort } from "../../common";
-import { NodeImplementation } from "@dsp/types";
+import { ControlStepContext, NodeImplementation } from "@dsp/types";
 import waveguideDelaySource from "./waveguide-delay.as?raw";
 
 const INPUT_PORT = "in";
@@ -30,7 +30,7 @@ export const waveguideDelayNode: NodeImplementation = {
         id: CONTROL_ID,
         label: "Delay (samples)",
         type: "slider",
-        min: 0.125,
+        min: ({ oversampling }: ControlStepContext) => 1 / Math.max(1, oversampling),
         max: 4096
       }
     ]

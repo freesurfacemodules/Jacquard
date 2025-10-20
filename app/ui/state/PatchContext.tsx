@@ -39,6 +39,7 @@ import {
   WorkletHandle
 } from "@audio/worklet-loader";
 import { getNodeImplementation } from "@dsp/nodes";
+import { resolveControlMin, resolveControlMax, resolveControlStep } from "@dsp/utils/controls";
 import type { PlanControl, EnvelopeMonitor } from "@codegen/plan";
 import {
   createPatchDocument,
@@ -59,11 +60,24 @@ const DELAY_MAX_SAMPLES = 4096;
 
 const isDelayNodeKind = (kind: string): boolean => DELAY_NODE_KINDS.has(kind);
 
-const clampDelayParameter = (value: number, oversampling: number): number => {
-  const step = 1 / oversampling;
-  const clamped = Math.min(DELAY_MAX_SAMPLES, Math.max(step, value));
-  const quantized = Math.round(clamped / step) * step;
-  return Number.isFinite(quantized) ? quantized : step;
+const clampControlValue = (
+  kind: string,
+  controlId: string,
+  value: number,
+  oversampling: number
+): number => {
+  const implementation = getNodeImplementation(kind);
+  const control = implementation?.manifest.controls?.find((entry) => entry.id === controlId);
+  const context = { oversampling };
+  const min = resolveControlMin(control, context);
+  const max = resolveControlMax(control, context);
+  const clamped = Math.min(max, Math.max(min, value));
+  const step = resolveControlStep(control, context);
+  if (step > 0) {
+    const quantized = Math.round(clamped / step) * step;
+    return Number.isFinite(quantized) ? quantized : clamped;
+  }
+  return clamped;
 };
 
 type PatchChangeType = "topology" | "parameter" | "metadata";
@@ -118,7 +132,7 @@ const normalizeDelayNodes = (
     const rawValue = typeof node.parameters[DELAY_CONTROL_ID] === "number"
       ? node.parameters[DELAY_CONTROL_ID]
       : 1;
-    const clamped = clampDelayParameter(rawValue, oversampling);
+    const clamped = clampControlValue(node.kind, DELAY_CONTROL_ID, rawValue, oversampling);
     updatedValues[node.id] = clamped;
     if (clamped === rawValue) {
       return node;
@@ -148,25 +162,17 @@ const buildParameterValuesForGraph = (graph: PatchGraph): Record<string, number>
       const key = makeParameterKey(node.id, control.id);
       const nodeValue = node.parameters?.[control.id];
       if (typeof nodeValue === "number") {
-        values[key] =
-          isDelayNodeKind(node.kind) && control.id === DELAY_CONTROL_ID
-            ? clampDelayParameter(nodeValue, graph.oversampling)
-            : nodeValue;
+        values[key] = clampControlValue(node.kind, control.id, nodeValue, graph.oversampling);
       } else if (
         implementation?.manifest.defaultParams &&
         typeof implementation.manifest.defaultParams[control.id] === "number"
       ) {
         const fallbackValue = implementation.manifest.defaultParams[control.id]!;
-        values[key] =
-          isDelayNodeKind(node.kind) && control.id === DELAY_CONTROL_ID
-            ? clampDelayParameter(fallbackValue, graph.oversampling)
-            : fallbackValue;
+        values[key] = clampControlValue(node.kind, control.id, fallbackValue, graph.oversampling);
       } else {
-        const minValue = control.min ?? 0;
-        values[key] =
-          isDelayNodeKind(node.kind) && control.id === DELAY_CONTROL_ID
-            ? clampDelayParameter(minValue, graph.oversampling)
-            : minValue;
+        const context = { oversampling: graph.oversampling };
+        const minValue = resolveControlMin(control, context);
+        values[key] = clampControlValue(node.kind, control.id, minValue, graph.oversampling);
       }
     }
   }
@@ -532,8 +538,8 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       const node = graph.nodes.find((candidate) => candidate.id === nodeId);
       if (node && typeof node.parameters[controlId] === "number") {
         const raw = node.parameters[controlId];
-        if (isDelayNodeKind(node.kind) && controlId === DELAY_CONTROL_ID) {
-          return clampDelayParameter(raw, graph.oversampling);
+        if (isDelayNodeKind(node.kind)) {
+          return clampControlValue(node.kind, controlId, raw, graph.oversampling);
         }
         return raw;
       }
@@ -541,8 +547,8 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
         const implementation = getNodeImplementation(node.kind);
         const fallback = implementation?.manifest.defaultParams?.[controlId];
         if (typeof fallback === "number") {
-          if (isDelayNodeKind(node.kind) && controlId === DELAY_CONTROL_ID) {
-            return clampDelayParameter(fallback, graph.oversampling);
+          if (isDelayNodeKind(node.kind)) {
+            return clampControlValue(node.kind, controlId, fallback, graph.oversampling);
           }
           return fallback;
         }
@@ -580,8 +586,8 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       const oversampling = currentGraph.oversampling;
       const targetNode = currentGraph.nodes.find((candidate) => candidate.id === nodeId);
       let adjustedValue = value;
-      if (targetNode && isDelayNodeKind(targetNode.kind) && parameterId === DELAY_CONTROL_ID) {
-        adjustedValue = clampDelayParameter(value, oversampling);
+      if (targetNode && isDelayNodeKind(targetNode.kind)) {
+        adjustedValue = clampControlValue(targetNode.kind, parameterId, value, oversampling);
       }
       const nextGraph = updateGraphNodeParameter(
         currentGraph,
