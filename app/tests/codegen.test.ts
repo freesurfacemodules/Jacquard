@@ -724,6 +724,99 @@ describe("code generation", () => {
     expect(source).toContain("const dcSample: f32 = dcblock_dc1.process(inputSample);");
   });
 
+  it("emits multiplexer node wiring", () => {
+    let graph = createGraph();
+    const sigA = instantiateNode("osc.sine", "sigA");
+    const sigB = instantiateNode("osc.sine", "sigB");
+    const sel = instantiateNode("utility.gain", "sel1");
+    sel.parameters.gain = 0;
+    const mux = instantiateNode("utility.mux", "mux1");
+    const out = instantiateNode("io.output", "out1");
+
+    graph = addNode(graph, sigA);
+    graph = addNode(graph, sigB);
+    graph = addNode(graph, sel);
+    graph = addNode(graph, mux);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: sigA.id,
+      fromPortId: "out",
+      toNodeId: mux.id,
+      toPortId: "a"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: sigB.id,
+      fromPortId: "out",
+      toNodeId: mux.id,
+      toPortId: "b"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: sel.id,
+      fromPortId: "out",
+      toNodeId: mux.id,
+      toPortId: "sel"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: mux.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    const { source } = emitAssemblyScript(graph);
+    expect(source).toContain("const muxOut: f32 = sel < 0.5 ? (");
+  });
+
+  it("emits demultiplexer node wiring", () => {
+    let graph = createGraph();
+    const signal = instantiateNode("osc.sine", "sig1");
+    const sel = instantiateNode("utility.gain", "sel1");
+    sel.parameters.gain = 0;
+    const demux = instantiateNode("utility.demux", "dm1");
+    const out = instantiateNode("io.output", "out1");
+
+    graph = addNode(graph, signal);
+    graph = addNode(graph, sel);
+    graph = addNode(graph, demux);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: signal.id,
+      fromPortId: "out",
+      toNodeId: demux.id,
+      toPortId: "in"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: sel.id,
+      fromPortId: "out",
+      toNodeId: demux.id,
+      toPortId: "sel"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: demux.id,
+      fromPortId: "outA",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: demux.id,
+      fromPortId: "outB",
+      toNodeId: out.id,
+      toPortId: "right"
+    });
+
+    const { source } = emitAssemblyScript(graph);
+    expect(source).toContain("const demuxA: f32 = isB ? 0.0 : signal;");
+    expect(source).toContain("const demuxB: f32 = isB ? signal : 0.0;");
+  });
+
   it("emits AD envelope node wiring", () => {
     let graph = createGraph();
     const envelope = instantiateNode("envelope.ad", "env1");

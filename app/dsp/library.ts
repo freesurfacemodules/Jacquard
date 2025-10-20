@@ -16,6 +16,8 @@ import { oscilloscopeNode } from "@dsp/nodes/utility/scope/manifest";
 import { softclipNode } from "@dsp/nodes/utility/softclip/manifest";
 import { rectifierNode } from "@dsp/nodes/distortion/rectifier/manifest";
 import { dcBiasNode } from "@dsp/nodes/utility/dcbias/manifest";
+import { multiplexerNode } from "@dsp/nodes/utility/mux/manifest";
+import { demultiplexerNode } from "@dsp/nodes/utility/demux/manifest";
 import { andNode } from "@dsp/nodes/logic/and/manifest";
 import { orNode } from "@dsp/nodes/logic/or/manifest";
 import { notNode } from "@dsp/nodes/logic/not/manifest";
@@ -39,6 +41,8 @@ const implementations: NodeImplementation[] = [
   softclipNode,
   rectifierNode,
   dcBiasNode,
+  multiplexerNode,
+  demultiplexerNode,
   oscilloscopeNode,
   andNode,
   orNode,
