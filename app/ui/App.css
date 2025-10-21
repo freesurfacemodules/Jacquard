@@ -539,6 +539,47 @@ option {
     z-index: 7;
 }
 
+.canvas-context-menu {
+    position: absolute;
+    z-index: 20;
+    min-width: 176px;
+    padding: 4px 0;
+    border-radius: 6px;
+    background: var(--panel-bg, rgba(25, 25, 28, 0.95));
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: inherit;
+}
+
+.canvas-context-menu__button {
+    width: 100%;
+    padding: 6px 16px;
+    background: none;
+    border: none;
+    color: inherit;
+    text-align: left;
+    font: inherit;
+    cursor: pointer;
+}
+
+.canvas-context-menu__button:hover,
+.canvas-context-menu__button:focus {
+    background: rgba(255, 255, 255, 0.12);
+    outline: none;
+}
+
+.canvas-context-menu__button:disabled {
+    opacity: 0.45;
+    cursor: default;
+    pointer-events: none;
+}
+
+.canvas-context-menu__separator {
+    height: 1px;
+    margin: 4px 0;
+    background: rgba(255, 255, 255, 0.1);
+}
+
 .canvas-connections {
     position: absolute;
     inset: 0;

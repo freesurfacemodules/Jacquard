@@ -1,5 +1,5 @@
 import { memo } from "react";
-import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
+import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import type { NodeDescriptor } from "@graph/types";
 import { Knob } from "./Knob";
 
@@ -41,6 +41,7 @@ interface PatchNodeProps {
   activeOutputPortId: string | null;
   onControlChange(nodeId: string, controlId: string, value: number): void;
   widget?: ReactNode;
+  onContextMenu(nodeId: string, event: ReactMouseEvent<HTMLDivElement>): void;
 }
 
 const classNames = (
@@ -70,7 +71,8 @@ export const PatchNode = memo(function PatchNode({
   outputConnections,
   activeOutputPortId,
   onControlChange,
-  widget
+  widget,
+  onContextMenu
 }: PatchNodeProps): JSX.Element {
   const handleContainerPointerDown = (
     event: ReactPointerEvent<HTMLDivElement>
@@ -119,6 +121,10 @@ export const PatchNode = memo(function PatchNode({
       onPointerUp={(event) => {
         event.stopPropagation();
         onPointerUp(node.id, event, "body");
+      }}
+      onContextMenu={(event) => {
+        event.stopPropagation();
+        onContextMenu(node.id, event);
       }}
     >
       <div

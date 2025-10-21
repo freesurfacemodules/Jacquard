@@ -6,7 +6,11 @@ import { nanoid } from "@codegen/utils/nanoid";
 import { PatchNode, type PortKind } from "./PatchNode";
 import { EnvelopeVisualizer } from "./EnvelopeVisualizer";
 import { ScopeVisualizer } from "./ScopeVisualizer";
-import type { NodeDescriptor, NodeMetadata, NodePosition } from "@graph/types";
+import {
+  addNode as addGraphNode,
+  connectNodes as connectGraphNodes
+} from "@graph/graph";
+import type { Connection, NodeDescriptor, NodeMetadata, NodePosition } from "@graph/types";
 import { resolveControlMin, resolveControlMax, resolveControlStep } from "@dsp/utils/controls";
 
 export type Point = { x: number; y: number };
@@ -56,6 +60,40 @@ interface CanvasProps {
   pendingNodeCreation: { kind: string; position: Point | null } | null;
   onNodeCreationHandled(): void;
 }
+
+interface ClipboardNodeData {
+  id: string;
+  kind: string;
+  label: string;
+  parameters: Record<string, number>;
+  metadata?: NodeMetadata;
+  position: Point;
+}
+
+interface ClipboardPayload {
+  nodes: ClipboardNodeData[];
+  connections: Array<Pick<Connection, "from" | "to">>;
+  bounds: { minX: number; minY: number };
+}
+
+type ContextMenuState =
+  | {
+      kind: "node";
+      position: { x: number; y: number };
+      anchor: Point;
+    }
+  | {
+      kind: "canvas";
+      position: { x: number; y: number };
+      anchor: Point;
+    };
+
+const clone = <T,>(value: T): T => {
+  if (value === undefined) {
+    return value;
+  }
+  return JSON.parse(JSON.stringify(value)) as T;
+};
 
 function getNodeMetadata(node: NodeDescriptor): NodeMetadata | undefined {
   return node.metadata as NodeMetadata | undefined;
@@ -145,6 +183,7 @@ export function Canvas({
   onNodeCreationHandled
 }: CanvasProps): JSX.Element {
   const {
+    graph,
     viewModel,
     addNode,
     connectNodes,
@@ -160,7 +199,8 @@ export function Canvas({
     getEnvelopeSnapshot,
     scopeSnapshots,
     getScopeSnapshot,
-    getParameterValue
+    getParameterValue,
+    importPatch
   } = usePatch();
 
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -190,6 +230,41 @@ export function Canvas({
   } | null>(null);
   const [selectionRect, setSelectionRect] = useState<{ start: Point; end: Point } | null>(null);
   const initializedRef = useRef(false);
+  const clipboardRef = useRef<ClipboardPayload | null>(null);
+  const pasteOffsetRef = useRef(0);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement | null>(null);
+  const closeContextMenu = useCallback(() => {
+    setContextMenu(null);
+  }, []);
+
+  useEffect(() => {
+    if (!contextMenu) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (contextMenuRef.current?.contains(event.target as Node)) {
+        return;
+      }
+      closeContextMenu();
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeContextMenu();
+      }
+    };
+
+    window.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("contextmenu", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("contextmenu", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [contextMenu, closeContextMenu]);
 
   const screenToCanvas = useCallback(
     (screenX: number, screenY: number): Point | null => {
@@ -208,6 +283,20 @@ export function Canvas({
     },
     [viewOffset.x, viewOffset.y, viewScale]
   );
+
+  const openCommandPaletteAtCenter = useCallback(() => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) {
+      onOpenCommandPalette(null, null);
+      return;
+    }
+    const screenPoint = {
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2
+    };
+    const canvasPoint = screenToCanvas(screenPoint.x, screenPoint.y);
+    onOpenCommandPalette(canvasPoint, screenPoint);
+  }, [onOpenCommandPalette, screenToCanvas]);
 
   useEffect(() => {
     if (initializedRef.current) {
@@ -236,6 +325,154 @@ export function Canvas({
       viewModel.nodes.map((node) => [node.id, node])
     );
   }, [viewModel.nodes]);
+
+  const hasClipboard = Boolean(clipboardRef.current && clipboardRef.current.nodes.length > 0);
+
+  const copySelection = useCallback(
+    (includeExternalConnections: boolean): boolean => {
+      if (selectedNodeIds.length === 0) {
+        return false;
+      }
+      const selectedSet = new Set(selectedNodeIds);
+      const nodesToCopy: ClipboardNodeData[] = [];
+      let minX = Infinity;
+      let minY = Infinity;
+
+      for (const node of viewModel.nodes) {
+        if (!selectedSet.has(node.id)) {
+          continue;
+        }
+        const position = getNodePosition(node);
+        minX = Math.min(minX, position.x);
+        minY = Math.min(minY, position.y);
+        nodesToCopy.push({
+          id: node.id,
+          kind: node.kind,
+          label: node.label,
+          parameters: { ...node.parameters },
+          metadata: node.metadata ? clone(node.metadata) : undefined,
+          position
+        });
+      }
+
+      if (nodesToCopy.length === 0) {
+        return false;
+      }
+
+      if (!Number.isFinite(minX)) {
+        minX = 0;
+      }
+      if (!Number.isFinite(minY)) {
+        minY = 0;
+      }
+
+      const connections = viewModel.connections
+        .filter((connection) => {
+          const fromSelected = selectedSet.has(connection.from.node);
+          const toSelected = selectedSet.has(connection.to.node);
+          if (includeExternalConnections) {
+            return fromSelected || toSelected;
+          }
+          return fromSelected && toSelected;
+        })
+        .map((connection) => ({
+          from: clone(connection.from),
+          to: clone(connection.to)
+        }));
+
+      clipboardRef.current = {
+        nodes: nodesToCopy,
+        connections,
+        bounds: { minX, minY }
+      };
+      pasteOffsetRef.current = 0;
+      return true;
+    },
+    [selectedNodeIds, viewModel.connections, viewModel.nodes]
+  );
+
+  const pasteClipboard = useCallback(
+    (anchor?: Point | null): boolean => {
+      const payload = clipboardRef.current;
+      if (!payload || payload.nodes.length === 0) {
+        return false;
+      }
+
+      const { bounds } = payload;
+      let offsetX = 0;
+      let offsetY = 0;
+
+      if (anchor) {
+        offsetX = anchor.x - bounds.minX;
+        offsetY = anchor.y - bounds.minY;
+        pasteOffsetRef.current = 0;
+      } else {
+        pasteOffsetRef.current = (pasteOffsetRef.current % 16) + 1;
+        const delta = 32 * pasteOffsetRef.current;
+        offsetX = delta;
+        offsetY = delta;
+      }
+
+      const idMap = new Map<string, string>();
+      const newNodes: NodeDescriptor[] = [];
+      const newNodeIds: string[] = [];
+
+      for (const node of payload.nodes) {
+        const newId = nanoid();
+        const descriptor = instantiateNode(node.kind, newId);
+        descriptor.label = node.label;
+        descriptor.parameters = {
+          ...descriptor.parameters,
+          ...node.parameters
+        };
+
+        const metadataCopy = node.metadata ? clone(node.metadata) : undefined;
+        const baseX = node.position.x ?? 0;
+        const baseY = node.position.y ?? 0;
+        const position = {
+          x: clampCoordinate(baseX - bounds.minX + offsetX),
+          y: clampCoordinate(baseY - bounds.minY + offsetY)
+        };
+
+        descriptor.metadata = {
+          ...(metadataCopy ?? {}),
+          position
+        };
+
+        newNodes.push(descriptor);
+        newNodeIds.push(newId);
+        idMap.set(node.id, newId);
+      }
+
+      let nextGraph = graph;
+      for (const node of newNodes) {
+        nextGraph = addGraphNode(nextGraph, node);
+      }
+
+      for (const connection of payload.connections) {
+        const fromNodeId = idMap.get(connection.from.node) ?? connection.from.node;
+        const toNodeId = idMap.get(connection.to.node) ?? connection.to.node;
+        if (!idMap.has(connection.from.node) && !idMap.has(connection.to.node)) {
+          continue;
+        }
+        try {
+          nextGraph = connectGraphNodes(nextGraph, {
+            fromNodeId,
+            fromPortId: connection.from.port,
+            toNodeId,
+            toPortId: connection.to.port
+          });
+        } catch {
+          // Ignore connections that cannot be recreated (e.g., duplicates or validation issues).
+        }
+      }
+
+      importPatch(nextGraph);
+      selectNodes(newNodeIds);
+      return true;
+    },
+    [graph, importPatch, selectNodes]
+  );
 
   const updateSelectionForRect = useCallback(
     (start: Point, end: Point) => {
@@ -406,6 +643,7 @@ export function Canvas({
 
   const handleCanvasPointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
+      closeContextMenu();
       setPendingConnection(null);
       setPointerPosition(null);
       setConnectionError(null);
@@ -444,7 +682,7 @@ export function Canvas({
       };
       event.currentTarget.setPointerCapture(event.pointerId);
     },
-    [selectNodes, translatePointerToCanvas, viewOffset]
+    [closeContextMenu, selectNodes, translatePointerToCanvas, viewOffset]
   );
 
   const handleCanvasPointerMove = useCallback(
@@ -715,36 +953,73 @@ export function Canvas({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
-      if (selectedNodeIds.length === 0) {
-        return;
-      }
-      if (event.key !== "Delete" && event.key !== "Backspace") {
-        return;
-      }
-
       const target = event.target as HTMLElement | null;
-      if (target) {
-        const tagName = target.tagName;
-        const editable =
-          target.isContentEditable ||
-          tagName === "INPUT" ||
-          tagName === "TEXTAREA" ||
-          tagName === "SELECT";
-        if (editable) {
+      const tagName = target?.tagName ?? "";
+      const isEditable = !!target && (
+        target.isContentEditable ||
+        tagName === "INPUT" ||
+        tagName === "TEXTAREA" ||
+        tagName === "SELECT"
+      );
+
+      const key = event.key;
+      const lowerKey = key.toLowerCase();
+      const hasMeta = event.metaKey || event.ctrlKey;
+
+      if (!isEditable) {
+        if (hasMeta && lowerKey === "c") {
+          const copied = copySelection(event.shiftKey);
+          if (copied) {
+            event.preventDefault();
+            closeContextMenu();
+          }
+          return;
+        }
+        if (hasMeta && lowerKey === "v") {
+          const pasted = pasteClipboard();
+          if (pasted) {
+            event.preventDefault();
+            closeContextMenu();
+          }
+          return;
+        }
+        if (
+          !hasMeta &&
+          !event.altKey &&
+          !event.shiftKey &&
+          (key === " " || key === "Spacebar")
+        ) {
+          event.preventDefault();
+          closeContextMenu();
+          openCommandPaletteAtCenter();
           return;
         }
       }
 
-      event.preventDefault();
-      const idsToRemove = [...new Set(selectedNodeIds)];
-      removeNodes(idsToRemove);
+      if (isEditable || selectedNodeIds.length === 0) {
+        return;
+      }
+
+      if (key === "Delete" || key === "Backspace") {
+        event.preventDefault();
+        closeContextMenu();
+        const idsToRemove = [...new Set(selectedNodeIds)];
+        removeNodes(idsToRemove);
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [removeNodes, selectedNodeIds]);
+  }, [
+    closeContextMenu,
+    copySelection,
+    openCommandPaletteAtCenter,
+    pasteClipboard,
+    removeNodes,
+    selectedNodeIds
+  ]);
 
   const handleControlChange = useCallback(
     (nodeId: string, controlId: string, value: number) => {
@@ -756,15 +1031,31 @@ export function Canvas({
   const handleContextMenu = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
       event.preventDefault();
-      const canvasPoint = screenToCanvas(event.clientX, event.clientY);
-      onOpenCommandPalette(canvasPoint, { x: event.clientX, y: event.clientY });
+      closeContextMenu();
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (!rect) {
+        return;
+      }
+      const anchor = screenToCanvas(event.clientX, event.clientY);
+      if (!anchor) {
+        return;
+      }
+      setContextMenu({
+        kind: "canvas",
+        position: {
+          x: event.clientX - rect.left,
+          y: event.clientY - rect.top
+        },
+        anchor
+      });
     },
-    [onOpenCommandPalette, screenToCanvas]
+    [closeContextMenu, screenToCanvas]
   );
 
   const handleNodePointerDown = useCallback(
     (nodeId: string, event: React.PointerEvent, region: "body" | "header") => {
       event.stopPropagation();
+      closeContextMenu();
       const isSelected = selectedNodeIds.includes(nodeId);
 
       if (event.shiftKey) {
@@ -785,7 +1076,7 @@ export function Canvas({
         shiftKey: event.shiftKey
       };
     },
-    [selectNodes, selectedNodeIds]
+    [closeContextMenu, selectNodes, selectedNodeIds]
   );
 
   const handleNodePointerUp = useCallback(
@@ -802,6 +1093,33 @@ export function Canvas({
       nodePointerStateRef.current = null;
     },
     [selectNodes]
+  );
+
+  const handleNodeContextMenu = useCallback(
+    (nodeId: string, event: React.MouseEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      closeContextMenu();
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (!rect) {
+        return;
+      }
+      const anchor = screenToCanvas(event.clientX, event.clientY);
+      if (!anchor) {
+        return;
+      }
+      if (!selectedNodeIds.includes(nodeId)) {
+        selectNodes([nodeId]);
+      }
+      setContextMenu({
+        kind: "node",
+        position: {
+          x: event.clientX - rect.left,
+          y: event.clientY - rect.top
+        },
+        anchor
+      });
+    },
+    [closeContextMenu, screenToCanvas, selectNodes, selectedNodeIds]
   );
 
   return (
@@ -934,6 +1252,7 @@ export function Canvas({
                 }
                 onControlChange={handleControlChange}
                 widget={widget}
+                onContextMenu={handleNodeContextMenu}
               />
             );
           })}
@@ -951,6 +1270,70 @@ export function Canvas({
               />
             ) : null}
           </svg>
+
+          {contextMenu ? (
+            <div
+              ref={contextMenuRef}
+              className="canvas-context-menu"
+              style={{
+                left: `${contextMenu.position.x}px`,
+                top: `${contextMenu.position.y}px`
+              }}
+            >
+              {contextMenu.kind === "node" ? (
+                <>
+                  <button
+                    type="button"
+                    className="canvas-context-menu__button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      copySelection(false);
+                      closeContextMenu();
+                    }}
+                  >
+                    Copy
+                  </button>
+                  <button
+                    type="button"
+                    className="canvas-context-menu__button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      copySelection(true);
+                      closeContextMenu();
+                    }}
+                  >
+                    Copy with connections
+                  </button>
+                  <div className="canvas-context-menu__separator" />
+                  <button
+                    type="button"
+                    className="canvas-context-menu__button"
+                    disabled={!hasClipboard}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      pasteClipboard(contextMenu.anchor);
+                      closeContextMenu();
+                    }}
+                  >
+                    Paste
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="canvas-context-menu__button"
+                  disabled={!hasClipboard}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    pasteClipboard(contextMenu.anchor);
+                    closeContextMenu();
+                  }}
+                >
+                  Paste
+                </button>
+              )}
+            </div>
+          ) : null}
 
           {viewModel.nodes.length === 0 ? (
             <div className="canvas-placeholder">

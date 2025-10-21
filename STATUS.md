@@ -5,6 +5,7 @@
 - **Realtime Audio**: AssemblyScript codegen → Wasm compile in-browser → AudioWorklet playback. Parameter updates stream to the worklet with smoothing so audio keeps running while knobs move.
 - **Voltage Scaling**: Core nodes follow Eurorack conventions (audio ±5 V, pitches 1 V/oct around user-set offsets, envelopes 0–10 V, triggers 0–5 V) so modulation behaves predictably across the patch.
 - **Analog Oscillator**: Multi-wave oscillator with adaptive harmonic capping, FM-friendly partial limiting, and selectable analog-style spectra.
+- **Copy/Paste Workflow**: Context menu and keyboard shortcuts duplicate nodes (optionally retaining external connections) with parameter/state preservation.
 - **Envelopes**: AD envelope generator with Schmitt-triggered gating feeds a live SVG visualizer so users can watch attack/decay progress in real time.
 - **Slew Limiter**: Utility node smooths signals with independent rise/fall times and a linear↔exponential morph control for dialing glide behavior.
 - **Soft Clip & Rectifier**: Distortion suite includes tanh-based soft clip with gain trims plus a rectifier for absolute-value shaping.
