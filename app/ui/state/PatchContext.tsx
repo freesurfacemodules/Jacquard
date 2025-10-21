@@ -56,8 +56,6 @@ const makeParameterKey = (nodeId: string, controlId: string): string =>
 
 const DELAY_NODE_KINDS = new Set<string>(["delay.ddl", "delay.waveguide"]);
 const DELAY_CONTROL_ID = "delay";
-const DELAY_MAX_SAMPLES = 4096;
-
 const isDelayNodeKind = (kind: string): boolean => DELAY_NODE_KINDS.has(kind);
 
 const clampControlValue = (
@@ -557,7 +555,7 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       );
       applyGraphChange(normalizedGraph, {
         changeType: "topology",
-        afterCommit: (_prev, updated) => {
+        afterCommit: (_prev, _updated) => {
           if (Object.keys(updatedValues).length === 0) {
             return;
           }

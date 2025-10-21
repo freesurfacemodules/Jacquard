@@ -13,7 +13,7 @@ import {
   getNodeImplementation,
   nodeImplementations
 } from "@dsp/library";
-import type { AutoRoute, NodeEmitHelpers } from "@dsp/types";
+import type { NodeEmitHelpers } from "@dsp/types";
 
 export interface EmitOptions {
   moduleName?: string;

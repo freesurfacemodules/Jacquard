@@ -18,8 +18,6 @@ const PORT_ROW_HEIGHT = 28;
 const PORT_VERTICAL_PADDING = 12;
 const GRID_X = 240;
 const GRID_Y = 200;
-const GRID_ORIGIN_X = 80;
-const GRID_ORIGIN_Y = 80;
 const MIN_SCALE = 0.3;
 const MAX_SCALE = 2.5;
 const ZOOM_SENSITIVITY = 0.0015;
@@ -27,7 +25,6 @@ const WORKSPACE_MIN = -2048;
 const WORKSPACE_MAX = 8192;
 const WORKSPACE_SIZE = WORKSPACE_MAX - WORKSPACE_MIN;
 const ORIGIN_OFFSET = -WORKSPACE_MIN;
-const DELAY_NODE_KINDS = new Set<string>(["delay.ddl", "delay.waveguide"]);
 
 const cssEscape = (value: string): string => {
   if (typeof window !== "undefined" && window.CSS && typeof window.CSS.escape === "function") {
@@ -153,11 +150,9 @@ export function Canvas({
     connectNodes,
     removeConnectionsFromPort,
     removeConnectionsToPort,
-    removeNode,
     removeNodes,
     updateNodePosition,
     updateNodeParameter,
-    selectedNodeId,
     selectedNodeIds,
     selectNode,
     selectNodes,
@@ -180,15 +175,19 @@ export function Canvas({
     origin: Point;
     startOffset: Point;
   } | null>(null);
-const selectionStateRef = useRef<{ pointerId: number; start: Point; last: Point } | null>(null);
-const nodePointerStateRef = useRef<{
-  nodeId: string;
-  pointerId: number;
-  region: "body" | "header";
-  moved: boolean;
-  shiftKey: boolean;
-} | null>(null);
-const canvasPointerStateRef = useRef<{ pointerId: number; start: { x: number; y: number }; moved: boolean } | null>(null);
+  const selectionStateRef = useRef<{ pointerId: number; start: Point; last: Point } | null>(null);
+  const nodePointerStateRef = useRef<{
+    nodeId: string;
+    pointerId: number;
+    region: "body" | "header";
+    moved: boolean;
+    shiftKey: boolean;
+  } | null>(null);
+  const canvasPointerStateRef = useRef<{
+    pointerId: number;
+    start: { x: number; y: number };
+    moved: boolean;
+  } | null>(null);
   const [selectionRect, setSelectionRect] = useState<{ start: Point; end: Point } | null>(null);
   const initializedRef = useRef(false);
 
