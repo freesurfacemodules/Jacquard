@@ -70,6 +70,7 @@ describe("code generation", () => {
     expect(source).toContain("class AnalogOsc");
     expect(source).toMatch(/const analog_a1 = new AnalogOsc\(\);/);
     expect(source).toMatch(/analog_a1\.step/);
+    expect(source).toMatch(/let pitchBase: f32 = getParameterValue\(/);
     expect(source).toMatch(/waveformIndex: i32/);
     expect(source).toMatch(/fmInputValue/);
   });

@@ -7,9 +7,8 @@ const PITCH_INPUT = "pitch";
 const FM_INPUT = "fm";
 
 const WAVEFORM_CONTROL = "waveform";
+const PITCH_BASE_CONTROL = "pitchBase";
 const TILT_CONTROL = "tilt";
-const GUARD_CONTROL = "guard";
-const BETA_CONTROL = "beta";
 const FM_DEPTH_CONTROL = "fmDepth";
 
 export const analogOscillatorNode: NodeImplementation = {
@@ -26,9 +25,8 @@ export const analogOscillatorNode: NodeImplementation = {
       [PITCH_INPUT]: 0,
       [FM_INPUT]: 0,
       [WAVEFORM_CONTROL]: 0,
+      [PITCH_BASE_CONTROL]: 261.6255653005986,
       [TILT_CONTROL]: 1,
-      [GUARD_CONTROL]: 1200,
-      [BETA_CONTROL]: 1.5,
       [FM_DEPTH_CONTROL]: 200
     },
     appearance: {
@@ -48,36 +46,25 @@ export const analogOscillatorNode: NodeImplementation = {
         ]
       },
       {
+        id: PITCH_BASE_CONTROL,
+        label: "Pitch (Hz)",
+        type: "slider",
+        min: 20,
+        max: 5000
+      },
+      {
         id: TILT_CONTROL,
         label: "Tilt (ρ)",
         type: "slider",
         min: 0,
-        max: 3,
-        step: 0.01
-      },
-      {
-        id: GUARD_CONTROL,
-        label: "Guard (Hz)",
-        type: "slider",
-        min: 0,
-        max: 6000,
-        step: 10
-      },
-      {
-        id: BETA_CONTROL,
-        label: "β",
-        type: "slider",
-        min: 0.5,
-        max: 2,
-        step: 0.05
+        max: 3
       },
       {
         id: FM_DEPTH_CONTROL,
         label: "FM Depth (Hz/V)",
         type: "slider",
         min: 0,
-        max: 4000,
-        step: 10
+        max: 4000
       }
     ]
   },
@@ -88,17 +75,15 @@ export const analogOscillatorNode: NodeImplementation = {
       const pitchInput = planNode.inputs.find((entry) => entry.port.id === PITCH_INPUT);
       const fmInput = planNode.inputs.find((entry) => entry.port.id === FM_INPUT);
       const waveformControl = planNode.controls.find((entry) => entry.controlId === WAVEFORM_CONTROL);
+      const pitchBaseControl = planNode.controls.find((entry) => entry.controlId === PITCH_BASE_CONTROL);
       const tiltControl = planNode.controls.find((entry) => entry.controlId === TILT_CONTROL);
-      const guardControl = planNode.controls.find((entry) => entry.controlId === GUARD_CONTROL);
-      const betaControl = planNode.controls.find((entry) => entry.controlId === BETA_CONTROL);
       const fmDepthControl = planNode.controls.find((entry) => entry.controlId === FM_DEPTH_CONTROL);
 
       if (
         !output ||
         !waveformControl ||
+        !pitchBaseControl ||
         !tiltControl ||
-        !guardControl ||
-        !betaControl ||
         !fmDepthControl
       ) {
         return `// ${planNode.node.label} (${planNode.node.id}) missing configuration.`;
@@ -121,9 +106,12 @@ export const analogOscillatorNode: NodeImplementation = {
         helpers.indentLines(
           [
             `let pitchValue: f32 = ${pitchExpr};`,
-            "let baseFrequency: f32 = FREQ_C4 * Mathf.pow(2.0, pitchValue);",
-            "if (baseFrequency < 0.0) baseFrequency = 0.0;",
+            `let pitchBase: f32 = ${helpers.parameterRef(pitchBaseControl.index)};`,
+            "if (pitchBase < 0.0) pitchBase = 0.0;",
             "const nyquistHz: f32 = SAMPLE_RATE * 0.49;",
+            "if (pitchBase > nyquistHz) pitchBase = nyquistHz;",
+            "const pitchFactor: f32 = Mathf.pow(2.0, pitchValue);",
+            "let baseFrequency: f32 = pitchBase * pitchFactor;",
             "if (baseFrequency > nyquistHz) baseFrequency = nyquistHz;",
             `let fmInputValue: f32 = ${fmExpr};`,
             `let fmDepth: f32 = ${helpers.parameterRef(fmDepthControl.index)};`,
@@ -136,8 +124,8 @@ export const analogOscillatorNode: NodeImplementation = {
             "if (waveformParam > 2.0) waveformParam = 2.0;",
             "let waveformIndex: i32 = <i32>Mathf.round(waveformParam);",
             `let tiltValue: f32 = ${helpers.parameterRef(tiltControl.index)};`,
-            `let guardValue: f32 = ${helpers.parameterRef(guardControl.index)};`,
-            `let betaValue: f32 = ${helpers.parameterRef(betaControl.index)};`,
+            "const guardValue: f32 = 1200.0;",
+            "const betaValue: f32 = 1.5;",
             `let sample: f32 = ${oscillatorVar}.step(phaseDelta, fmDelta, waveformIndex, tiltValue, guardValue, betaValue) * 5.0;`
           ].join("\n"),
           1
