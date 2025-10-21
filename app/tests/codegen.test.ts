@@ -817,6 +817,44 @@ describe("code generation", () => {
     expect(source).toContain("const demuxB: f32 = isB ? signal : 0.0;");
   });
 
+  it("emits sample and hold wiring", () => {
+    let graph = createGraph();
+    const osc = instantiateNode("osc.sine", "sig1");
+    const trig = instantiateNode("clock.basic", "clk1");
+    const snh = instantiateNode("utility.samplehold", "snh1");
+    const out = instantiateNode("io.output", "out1");
+
+    graph = addNode(graph, osc);
+    graph = addNode(graph, trig);
+    graph = addNode(graph, snh);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: osc.id,
+      fromPortId: "out",
+      toNodeId: snh.id,
+      toPortId: "signal"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: trig.id,
+      fromPortId: "out",
+      toNodeId: snh.id,
+      toPortId: "trigger"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: snh.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    const { source } = emitAssemblyScript(graph);
+    expect(source).toContain("const isTrigger: bool = snh_trig_snh1.process(trigSample);");
+    expect(source).toContain("if (isTrigger) { snh_state_snh1 =");
+  });
+
   it("emits AD envelope node wiring", () => {
     let graph = createGraph();
     const envelope = instantiateNode("envelope.ad", "env1");

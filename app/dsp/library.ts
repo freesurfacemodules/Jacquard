@@ -18,6 +18,7 @@ import { rectifierNode } from "@dsp/nodes/distortion/rectifier/manifest";
 import { dcBiasNode } from "@dsp/nodes/utility/dcbias/manifest";
 import { multiplexerNode } from "@dsp/nodes/utility/mux/manifest";
 import { demultiplexerNode } from "@dsp/nodes/utility/demux/manifest";
+import { sampleHoldNode } from "@dsp/nodes/utility/samplehold/manifest";
 import { andNode } from "@dsp/nodes/logic/and/manifest";
 import { orNode } from "@dsp/nodes/logic/or/manifest";
 import { notNode } from "@dsp/nodes/logic/not/manifest";
@@ -43,6 +44,7 @@ const implementations: NodeImplementation[] = [
   dcBiasNode,
   multiplexerNode,
   demultiplexerNode,
+  sampleHoldNode,
   oscilloscopeNode,
   andNode,
   orNode,

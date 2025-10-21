@@ -633,6 +633,11 @@ function collectStateDeclarations(plan: ExecutionPlan): string {
         lines.push(`const dcblock_${identifier} = new DcBlocker();`);
         break;
       }
+      case "utility.samplehold": {
+        lines.push(`let snh_state_${identifier}: f32 = 0.0;`);
+        lines.push(`const snh_trig_${identifier} = new SchmittTrigger(2.5, 1.0);`);
+        break;
+      }
       default:
         break;
     }
