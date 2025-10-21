@@ -257,11 +257,9 @@ export function Canvas({
     };
 
     window.addEventListener("mousedown", handlePointerDown);
-    window.addEventListener("contextmenu", handlePointerDown);
     window.addEventListener("keydown", handleKeyDown);
     return () => {
       window.removeEventListener("mousedown", handlePointerDown);
-      window.removeEventListener("contextmenu", handlePointerDown);
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [contextMenu, closeContextMenu]);
@@ -1271,70 +1269,6 @@ export function Canvas({
             ) : null}
           </svg>
 
-          {contextMenu ? (
-            <div
-              ref={contextMenuRef}
-              className="canvas-context-menu"
-              style={{
-                left: `${contextMenu.position.x}px`,
-                top: `${contextMenu.position.y}px`
-              }}
-            >
-              {contextMenu.kind === "node" ? (
-                <>
-                  <button
-                    type="button"
-                    className="canvas-context-menu__button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      copySelection(false);
-                      closeContextMenu();
-                    }}
-                  >
-                    Copy
-                  </button>
-                  <button
-                    type="button"
-                    className="canvas-context-menu__button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      copySelection(true);
-                      closeContextMenu();
-                    }}
-                  >
-                    Copy with connections
-                  </button>
-                  <div className="canvas-context-menu__separator" />
-                  <button
-                    type="button"
-                    className="canvas-context-menu__button"
-                    disabled={!hasClipboard}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      pasteClipboard(contextMenu.anchor);
-                      closeContextMenu();
-                    }}
-                  >
-                    Paste
-                  </button>
-                </>
-              ) : (
-                <button
-                  type="button"
-                  className="canvas-context-menu__button"
-                  disabled={!hasClipboard}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    pasteClipboard(contextMenu.anchor);
-                    closeContextMenu();
-                  }}
-                >
-                  Paste
-                </button>
-              )}
-            </div>
-          ) : null}
-
           {viewModel.nodes.length === 0 ? (
             <div className="canvas-placeholder">
               <p>Add nodes to start building a patch.</p>
@@ -1344,8 +1278,72 @@ export function Canvas({
           {connectionError ? (
             <div className="canvas-message canvas-message--error">{connectionError}</div>
           ) : null}
-        </div>
       </div>
-    </section>
-  );
+
+      {contextMenu ? (
+        <div
+          ref={contextMenuRef}
+          className="canvas-context-menu"
+          style={{
+            left: `${contextMenu.position.x}px`,
+            top: `${contextMenu.position.y}px`
+          }}
+        >
+          {contextMenu.kind === "node" ? (
+            <>
+              <button
+                type="button"
+                className="canvas-context-menu__button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  copySelection(false);
+                  closeContextMenu();
+                }}
+              >
+                Copy
+              </button>
+              <button
+                type="button"
+                className="canvas-context-menu__button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  copySelection(true);
+                  closeContextMenu();
+                }}
+              >
+                Copy with connections
+              </button>
+              <div className="canvas-context-menu__separator" />
+              <button
+                type="button"
+                className="canvas-context-menu__button"
+                disabled={!hasClipboard}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  pasteClipboard(contextMenu.anchor);
+                  closeContextMenu();
+                }}
+              >
+                Paste
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="canvas-context-menu__button"
+              disabled={!hasClipboard}
+              onClick={(event) => {
+                event.stopPropagation();
+                pasteClipboard(contextMenu.anchor);
+                closeContextMenu();
+              }}
+            >
+              Paste
+            </button>
+          )}
+        </div>
+      ) : null}
+    </div>
+  </section>
+);
 }
