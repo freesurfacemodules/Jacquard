@@ -584,6 +584,10 @@ function collectStateDeclarations(plan: ExecutionPlan): string {
         lines.push(`const node_${identifier} = new SineOsc();`);
         break;
       }
+      case "osc.analog": {
+        lines.push(`const analog_${identifier} = new AnalogOsc();`);
+        break;
+      }
       case "delay.ddl": {
         lines.push(`const delay_${identifier} = new DdlDelay();`);
         break;

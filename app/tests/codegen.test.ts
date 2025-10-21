@@ -34,6 +34,46 @@ describe("code generation", () => {
     expect(source).toContain("INV_SAMPLE_RATE_OVERSAMPLED");
   });
 
+  it("emits analog oscillator with FM input", () => {
+    let graph = createGraph();
+    const analog = instantiateNode("osc.analog", "a1");
+    analog.parameters.fmDepth = 250;
+    const mod = instantiateNode("osc.sine", "mod1");
+    const out = instantiateNode("io.output", "out1");
+
+    graph = addNode(graph, analog);
+    graph = addNode(graph, mod);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: analog.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: analog.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "right"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: mod.id,
+      fromPortId: "out",
+      toNodeId: analog.id,
+      toPortId: "fm"
+    });
+
+    const { source } = emitAssemblyScript(graph);
+    expect(source).toContain("class AnalogOsc");
+    expect(source).toMatch(/const analog_a1 = new AnalogOsc\(\);/);
+    expect(source).toMatch(/analog_a1\.step/);
+    expect(source).toMatch(/waveformIndex: i32/);
+    expect(source).toMatch(/fmInputValue/);
+  });
+
   it("throws when graph validation fails", () => {
     let graph = createGraph();
     const osc = instantiateNode("osc.sine", "osc1");

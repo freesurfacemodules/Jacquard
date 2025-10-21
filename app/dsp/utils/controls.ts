@@ -7,7 +7,10 @@ export function resolveControlStep(
   control: NodeControl | undefined,
   context: ControlStepContext
 ): number {
-  if (!control || control.step == null) {
+  if (!control || control.type !== "slider") {
+    return 0;
+  }
+  if (control.step == null) {
     return 0;
   }
   if (typeof control.step === "function") {
@@ -24,6 +27,19 @@ export function resolveControlMin(
   if (!control) {
     return DEFAULT_MIN;
   }
+  if (control.type !== "slider") {
+    if (control.options.length === 0) {
+      return DEFAULT_MIN;
+    }
+    let minValue = control.options[0].value;
+    for (let index = 1; index < control.options.length; index++) {
+      const candidate = control.options[index].value;
+      if (candidate < minValue) {
+        minValue = candidate;
+      }
+    }
+    return minValue;
+  }
   const { min } = control;
   if (typeof min === "function") {
     const result = min(context);
@@ -38,6 +54,19 @@ export function resolveControlMax(
 ): number {
   if (!control) {
     return DEFAULT_MAX;
+  }
+  if (control.type !== "slider") {
+    if (control.options.length === 0) {
+      return DEFAULT_MAX;
+    }
+    let maxValue = control.options[0].value;
+    for (let index = 1; index < control.options.length; index++) {
+      const candidate = control.options[index].value;
+      if (candidate > maxValue) {
+        maxValue = candidate;
+      }
+    }
+    return maxValue;
   }
   const { max } = control;
   if (typeof max === "function") {

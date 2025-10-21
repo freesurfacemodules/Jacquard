@@ -69,7 +69,12 @@ export function NodePropertiesPanel({ onClose }: NodePropertiesPanelProps): JSX.
     return { incoming, outgoing };
   }, [selectedNode, viewModel.connections, viewModel.nodes]);
 
-  const handleControlChange = (nodeId: string, controlId: string) => (event: ChangeEvent<HTMLInputElement>) => {
+  const handleSliderChange = (nodeId: string, controlId: string) => (event: ChangeEvent<HTMLInputElement>) => {
+    const value = Number.parseFloat(event.target.value);
+    updateNodeParameter(nodeId, controlId, value);
+  };
+
+  const handleSelectChange = (nodeId: string, controlId: string) => (event: ChangeEvent<HTMLSelectElement>) => {
     const value = Number.parseFloat(event.target.value);
     updateNodeParameter(nodeId, controlId, value);
   };
@@ -102,29 +107,51 @@ export function NodePropertiesPanel({ onClose }: NodePropertiesPanelProps): JSX.
                 <div className="properties-controls">
                   {implementation.manifest.controls.map((control) => {
                     const value = getParameterValue(selectedNode.id, control.id);
-                    const context = { oversampling: viewModel.oversampling };
-                    const minValue = resolveControlMin(control, context);
-                    const maxValue = resolveControlMax(control, context);
-                    const sliderMin = Number.isFinite(minValue) ? minValue : 0;
-                    let sliderMax = Number.isFinite(maxValue) ? maxValue : sliderMin + 1;
-                    if (sliderMax <= sliderMin) {
-                      sliderMax = sliderMin + 1;
+                    if (control.type === "slider") {
+                      const context = { oversampling: viewModel.oversampling };
+                      const minValue = resolveControlMin(control, context);
+                      const maxValue = resolveControlMax(control, context);
+                      const sliderMin = Number.isFinite(minValue) ? minValue : 0;
+                      let sliderMax = Number.isFinite(maxValue) ? maxValue : sliderMin + 1;
+                      if (sliderMax <= sliderMin) {
+                        sliderMax = sliderMin + 1;
+                      }
+                      const stepValue = resolveControlStep(control, context);
+                      return (
+                        <label key={control.id} className="properties-control">
+                          <span className="properties-control__label">
+                            {control.label}
+                            <small>{value.toFixed(2)}</small>
+                          </span>
+                          <input
+                            type="range"
+                            min={sliderMin}
+                            max={sliderMax}
+                            step={stepValue > 0 ? stepValue : "any"}
+                            value={value}
+                            onChange={handleSliderChange(selectedNode.id, control.id)}
+                          />
+                        </label>
+                      );
                     }
-                    const stepValue = resolveControlStep(control, context);
+                    const selectedOption =
+                      control.options.find((option) => option.value === value) ?? null;
                     return (
                       <label key={control.id} className="properties-control">
                         <span className="properties-control__label">
                           {control.label}
-                          <small>{value.toFixed(2)}</small>
+                          <small>{selectedOption ? selectedOption.label : value.toFixed(2)}</small>
                         </span>
-                        <input
-                          type="range"
-                          min={sliderMin}
-                          max={sliderMax}
-                          step={stepValue > 0 ? stepValue : "any"}
-                          value={value}
-                          onChange={handleControlChange(selectedNode.id, control.id)}
-                        />
+                        <select
+                          value={value.toString()}
+                          onChange={handleSelectChange(selectedNode.id, control.id)}
+                        >
+                          {control.options.map((option) => (
+                            <option key={option.value} value={option.value.toString()}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
                       </label>
                     );
                   })}

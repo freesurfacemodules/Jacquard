@@ -830,12 +830,14 @@ const canvasPointerStateRef = useRef<{ pointerId: number; start: { x: number; y:
             const { width } = getNodeDimensions(node);
             const implementation = getNodeImplementation(node.kind);
             const controls = implementation?.manifest.controls ?? [];
-            const controlConfigs = controls.map((control) => {
-              const controlContext = { oversampling: viewModel.oversampling };
-              let min = resolveControlMin(control, controlContext);
-              let max = resolveControlMax(control, controlContext);
-              if (!Number.isFinite(min)) {
-                min = 0;
+            const controlConfigs = controls
+              .filter((control) => control.type === "slider")
+              .map((control) => {
+                const controlContext = { oversampling: viewModel.oversampling };
+                let min = resolveControlMin(control, controlContext);
+                let max = resolveControlMax(control, controlContext);
+                if (!Number.isFinite(min)) {
+                  min = 0;
               }
               if (!Number.isFinite(max)) {
                 max = 1;
@@ -856,17 +858,17 @@ const canvasPointerStateRef = useRef<{ pointerId: number; start: { x: number; y:
               }
               const rawValue = getParameterValue(node.id, control.id);
               const clampedValue = Math.min(max, Math.max(min, rawValue));
-              const quantized = shouldSnap ? Math.round(clampedValue / step) * step : clampedValue;
-              return {
-                id: control.id,
-                label: control.label,
-                value: quantized,
-                min,
-                max,
-                step: shouldSnap ? step : undefined,
-                defaultValue
-              };
-            });
+                const quantized = shouldSnap ? Math.round(clampedValue / step) * step : clampedValue;
+                return {
+                  id: control.id,
+                  label: control.label,
+                  value: quantized,
+                  min,
+                  max,
+                  step: shouldSnap ? step : undefined,
+                  defaultValue
+                };
+              });
             let widget: ReactNode | null = null;
             if (node.kind === "envelope.ad") {
               const riseValue =

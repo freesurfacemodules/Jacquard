@@ -69,6 +69,22 @@ const clampControlValue = (
   const implementation = getNodeImplementation(kind);
   const control = implementation?.manifest.controls?.find((entry) => entry.id === controlId);
   const context = { oversampling };
+  if (control && control.type === "select") {
+    if (control.options.length === 0) {
+      return value;
+    }
+    let closest = control.options[0].value;
+    let minDistance = Math.abs(value - closest);
+    for (let index = 1; index < control.options.length; index++) {
+      const optionValue = control.options[index].value;
+      const distance = Math.abs(value - optionValue);
+      if (distance < minDistance) {
+        closest = optionValue;
+        minDistance = distance;
+      }
+    }
+    return closest;
+  }
   const min = resolveControlMin(control, context);
   const max = resolveControlMax(control, context);
   const clamped = Math.min(max, Math.max(min, value));

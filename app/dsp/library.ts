@@ -1,5 +1,6 @@
 import { NodeDescriptor } from "@graph/types";
 import type { NodeImplementation } from "@dsp/types";
+import { analogOscillatorNode } from "@dsp/nodes/oscillator/analog/manifest";
 import { sineOscNode } from "@dsp/nodes/oscillator/sine/manifest";
 import { stereoMixerNode } from "@dsp/nodes/mixer/stereo/manifest";
 import { outputNode } from "@dsp/nodes/io/output/manifest";
@@ -28,6 +29,7 @@ import { subtractNode } from "@dsp/nodes/math/subtract/manifest";
 import { multiplyNode } from "@dsp/nodes/math/multiply/manifest";
 
 const implementations: NodeImplementation[] = [
+  analogOscillatorNode,
   sineOscNode,
   stereoMixerNode,
   gainNode,

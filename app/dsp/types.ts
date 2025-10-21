@@ -46,13 +46,28 @@ export interface NodeImplementation {
   assembly?: NodeAssembly;
 }
 
-export interface NodeControl {
+export type NodeControl = SliderControl | SelectControl;
+
+interface BaseControl {
   id: string;
   label: string;
+}
+
+export interface SliderControl extends BaseControl {
   type: "slider";
   min: number | ControlRangeResolver;
   max: number | ControlRangeResolver;
   step?: number | ControlStepResolver;
+}
+
+export interface SelectControlOption {
+  value: number;
+  label: string;
+}
+
+export interface SelectControl extends BaseControl {
+  type: "select";
+  options: SelectControlOption[];
 }
 
 export interface ControlStepContext {
