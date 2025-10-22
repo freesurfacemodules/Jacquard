@@ -81,6 +81,7 @@ type ContextMenuState =
       kind: "node";
       position: { x: number; y: number };
       anchor: Point;
+      selection: string[];
     }
   | {
       kind: "canvas";
@@ -231,6 +232,7 @@ export function Canvas({
   const [selectionRect, setSelectionRect] = useState<{ start: Point; end: Point } | null>(null);
   const initializedRef = useRef(false);
   const clipboardRef = useRef<ClipboardPayload | null>(null);
+  const [clipboardVersion, setClipboardVersion] = useState(0);
   const pasteOffsetRef = useRef(0);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
@@ -324,19 +326,22 @@ export function Canvas({
     );
   }, [viewModel.nodes]);
 
-  const hasClipboard = Boolean(clipboardRef.current && clipboardRef.current.nodes.length > 0);
+  const hasClipboard = useMemo(() => {
+    return Boolean(clipboardRef.current && clipboardRef.current.nodes.length > 0);
+  }, [clipboardVersion]);
 
   const copySelection = useCallback(
-    (includeExternalConnections: boolean): boolean => {
-      if (selectedNodeIds.length === 0) {
+    (includeExternalConnections: boolean, nodeIds?: string[]): boolean => {
+      const activeSelection = nodeIds ?? selectedNodeIds;
+      if (activeSelection.length === 0) {
         return false;
       }
-      const selectedSet = new Set(selectedNodeIds);
+      const selectedSet = new Set(activeSelection);
       const nodesToCopy: ClipboardNodeData[] = [];
       let minX = Infinity;
       let minY = Infinity;
 
-      for (const node of viewModel.nodes) {
+      for (const node of graph.nodes) {
         if (!selectedSet.has(node.id)) {
           continue;
         }
@@ -364,7 +369,7 @@ export function Canvas({
         minY = 0;
       }
 
-      const connections = viewModel.connections
+      const connections = graph.connections
         .filter((connection) => {
           const fromSelected = selectedSet.has(connection.from.node);
           const toSelected = selectedSet.has(connection.to.node);
@@ -378,15 +383,23 @@ export function Canvas({
           to: clone(connection.to)
         }));
 
-      clipboardRef.current = {
+      const payload: ClipboardPayload = {
         nodes: nodesToCopy,
         connections,
         bounds: { minX, minY }
       };
+      console.debug("[Canvas] copySelection", {
+        includeExternalConnections,
+        selection: activeSelection,
+        nodeCount: nodesToCopy.length,
+        connectionCount: connections.length
+      });
+      clipboardRef.current = payload;
+      setClipboardVersion((version) => version + 1);
       pasteOffsetRef.current = 0;
       return true;
     },
-    [selectedNodeIds, viewModel.connections, viewModel.nodes]
+    [graph, selectedNodeIds]
   );
 
   const pasteClipboard = useCallback(
@@ -397,18 +410,23 @@ export function Canvas({
       }
 
       const { bounds } = payload;
-      let offsetX = 0;
-      let offsetY = 0;
+      let targetMinX = bounds.minX;
+      let targetMinY = bounds.minY;
 
       if (anchor) {
-        offsetX = anchor.x - bounds.minX;
-        offsetY = anchor.y - bounds.minY;
+        targetMinX = anchor.x;
+        targetMinY = anchor.y;
         pasteOffsetRef.current = 0;
+
+        if (Math.abs(targetMinX - bounds.minX) < 1 && Math.abs(targetMinY - bounds.minY) < 1) {
+          targetMinX = clampCoordinate(targetMinX + 32);
+          targetMinY = clampCoordinate(targetMinY + 32);
+        }
       } else {
         pasteOffsetRef.current = (pasteOffsetRef.current % 16) + 1;
         const delta = 32 * pasteOffsetRef.current;
-        offsetX = delta;
-        offsetY = delta;
+        targetMinX = clampCoordinate(bounds.minX + delta);
+        targetMinY = clampCoordinate(bounds.minY + delta);
       }
 
       const idMap = new Map<string, string>();
@@ -428,8 +446,8 @@ export function Canvas({
         const baseX = node.position.x ?? 0;
         const baseY = node.position.y ?? 0;
         const position = {
-          x: clampCoordinate(baseX - bounds.minX + offsetX),
-          y: clampCoordinate(baseY - bounds.minY + offsetY)
+          x: clampCoordinate(baseX - bounds.minX + targetMinX),
+          y: clampCoordinate(baseY - bounds.minY + targetMinY)
         };
 
         descriptor.metadata = {
@@ -454,6 +472,12 @@ export function Canvas({
           continue;
         }
         try {
+          console.debug("[Canvas] paste connection", {
+            originalFrom: connection.from.node,
+            originalTo: connection.to.node,
+            fromNodeId,
+            toNodeId
+          });
           nextGraph = connectGraphNodes(nextGraph, {
             fromNodeId,
             fromPortId: connection.from.port,
@@ -464,7 +488,11 @@ export function Canvas({
           // Ignore connections that cannot be recreated (e.g., duplicates or validation issues).
         }
       }
-
+      console.debug("[Canvas] pasteClipboard", {
+        anchor,
+        nodeCount: newNodes.length,
+        connectionCount: payload.connections.length
+      });
       importPatch(nextGraph);
       selectNodes(newNodeIds);
       return true;
@@ -641,6 +669,9 @@ export function Canvas({
 
   const handleCanvasPointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
+      if (contextMenuRef.current?.contains(event.target as Node)) {
+        return;
+      }
       closeContextMenu();
       setPendingConnection(null);
       setPointerPosition(null);
@@ -1105,8 +1136,9 @@ export function Canvas({
       if (!anchor) {
         return;
       }
-      if (!selectedNodeIds.includes(nodeId)) {
-        selectNodes([nodeId]);
+      const selection = selectedNodeIds.includes(nodeId) ? [...selectedNodeIds] : [nodeId];
+      if (selection.includes(nodeId) && selection.length !== selectedNodeIds.length) {
+        selectNodes(selection);
       }
       setContextMenu({
         kind: "node",
@@ -1114,7 +1146,8 @@ export function Canvas({
           x: event.clientX - rect.left,
           y: event.clientY - rect.top
         },
-        anchor
+        anchor,
+        selection
       });
     },
     [closeContextMenu, screenToCanvas, selectNodes, selectedNodeIds]
@@ -1296,7 +1329,11 @@ export function Canvas({
                 className="canvas-context-menu__button"
                 onClick={(event) => {
                   event.stopPropagation();
-                  copySelection(false);
+                  console.debug("[Canvas] context-menu copy", {
+                    includeExternalConnections: false,
+                    selection: contextMenu.selection
+                  });
+                  copySelection(false, contextMenu.selection);
                   closeContextMenu();
                 }}
               >
@@ -1307,7 +1344,11 @@ export function Canvas({
                 className="canvas-context-menu__button"
                 onClick={(event) => {
                   event.stopPropagation();
-                  copySelection(true);
+                  console.debug("[Canvas] context-menu copy", {
+                    includeExternalConnections: true,
+                    selection: contextMenu.selection
+                  });
+                  copySelection(true, contextMenu.selection);
                   closeContextMenu();
                 }}
               >
