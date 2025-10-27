@@ -13,7 +13,7 @@
 - **Debugging**: Oscilloscope node captures patch signals with trigger support and streams history into the UI for real-time waveform inspection.
 - **Compilation Flow**: Compile logs surface module sizes and parameter counts. Topology changes invalidate the running artifact; parameter/position changes do not.
 - **Validation & Tests**: DAG validation, duplicate detection, control bindings, and codegen snippets are covered by Vitest; linting enforces TS/React style.
-- **Logic Gates**: AND/OR/XOR nodes emit 5 V on thresholded truth conditions, with a NOT inverter for quick boolean control routing.
+- **Logic Utilities**: AND/OR/XOR/NOT gates, a comparator, and a trigger-driven counter handle boolean logic and edge sequencing with 5 V high outputs.
 
 ## Known Constraints / Pending Work
 1. **Cycle Recovery**

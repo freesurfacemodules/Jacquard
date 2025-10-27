@@ -549,6 +549,58 @@ describe("code generation", () => {
     expect(source).toContain("const result: f32 = valueA > valueB ? 5.0 : 0.0;");
   });
 
+  it("emits logic counter wiring", () => {
+    let graph = createGraph();
+    const oscA = instantiateNode("osc.sine", "oscA");
+    const oscB = instantiateNode("osc.sine", "oscB");
+    const counter = instantiateNode("logic.counter", "ctr1");
+    counter.parameters.maxValue = 12;
+    const out = instantiateNode("io.output", "out1");
+
+    graph = addNode(graph, oscA);
+    graph = addNode(graph, oscB);
+    graph = addNode(graph, counter);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: oscA.id,
+      fromPortId: "out",
+      toNodeId: counter.id,
+      toPortId: "increment"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: oscB.id,
+      fromPortId: "out",
+      toNodeId: counter.id,
+      toPortId: "reset"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: counter.id,
+      fromPortId: "count",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: counter.id,
+      fromPortId: "max",
+      toNodeId: out.id,
+      toPortId: "right"
+    });
+
+    const { source } = emitAssemblyScript(graph);
+    expect(source).toContain("// Counter (ctr1)");
+    expect(source).toMatch(/const incrementSample: f32 = wire\d+;/);
+    expect(source).toMatch(/const resetSample: f32 = wire\d+;/);
+    expect(source).toContain("let maxSetting: f32 = getParameterValue");
+    expect(source).toContain("setMaxValue(maxSetting);");
+    expect(source).toContain("const counterResult = counter_ctr1.step(incrementSample, resetSample);");
+    expect(source).toMatch(/= counterResult\.value;/);
+    expect(source).toMatch(/= counterResult\.maxSignal;/);
+  });
+
   it("emits slew limiter node wiring", () => {
     let graph = createGraph();
     const osc = instantiateNode("osc.sine", "osc1");

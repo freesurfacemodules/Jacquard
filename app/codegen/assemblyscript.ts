@@ -642,6 +642,10 @@ function collectStateDeclarations(plan: ExecutionPlan): string {
         lines.push(`const snh_trig_${identifier} = new SchmittTrigger(2.5, 1.0);`);
         break;
       }
+      case "logic.counter": {
+        lines.push(`const counter_${identifier} = new CounterState();`);
+        break;
+      }
       default:
         break;
     }
