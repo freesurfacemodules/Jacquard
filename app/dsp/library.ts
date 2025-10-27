@@ -24,6 +24,7 @@ import { andNode } from "@dsp/nodes/logic/and/manifest";
 import { orNode } from "@dsp/nodes/logic/or/manifest";
 import { notNode } from "@dsp/nodes/logic/not/manifest";
 import { xorNode } from "@dsp/nodes/logic/xor/manifest";
+import { comparatorNode } from "@dsp/nodes/logic/comparator/manifest";
 import { addNode } from "@dsp/nodes/math/add/manifest";
 import { subtractNode } from "@dsp/nodes/math/subtract/manifest";
 import { multiplyNode } from "@dsp/nodes/math/multiply/manifest";
@@ -52,6 +53,7 @@ const implementations: NodeImplementation[] = [
   orNode,
   notNode,
   xorNode,
+  comparatorNode,
   addNode,
   subtractNode,
   multiplyNode,

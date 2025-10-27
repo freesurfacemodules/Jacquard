@@ -509,6 +509,46 @@ describe("code generation", () => {
     expect(source).toContain("const result: f32 = isExclusive ? 5.0 : 0.0;");
   });
 
+  it("emits logic comparator wiring", () => {
+    let graph = createGraph();
+    const oscA = instantiateNode("osc.sine", "oscA");
+    const oscB = instantiateNode("osc.sine", "oscB");
+    const comparator = instantiateNode("logic.comparator", "cmp1");
+    const out = instantiateNode("io.output", "out1");
+
+    graph = addNode(graph, oscA);
+    graph = addNode(graph, oscB);
+    graph = addNode(graph, comparator);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: oscA.id,
+      fromPortId: "out",
+      toNodeId: comparator.id,
+      toPortId: "a"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: oscB.id,
+      fromPortId: "out",
+      toNodeId: comparator.id,
+      toPortId: "b"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: comparator.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    const { source } = emitAssemblyScript(graph);
+    expect(source).toContain("// Comparator (cmp1)");
+    expect(source).toMatch(/const valueA: f32 = wire\d+;/);
+    expect(source).toMatch(/const valueB: f32 = wire\d+;/);
+    expect(source).toContain("const result: f32 = valueA > valueB ? 5.0 : 0.0;");
+  });
+
   it("emits slew limiter node wiring", () => {
     let graph = createGraph();
     const osc = instantiateNode("osc.sine", "osc1");
