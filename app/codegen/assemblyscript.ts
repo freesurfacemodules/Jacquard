@@ -14,6 +14,7 @@ import {
   nodeImplementations
 } from "@dsp/library";
 import type { NodeEmitHelpers } from "@dsp/types";
+import { flattenForCodegen } from "@graph/flatten";
 
 export interface EmitOptions {
   moduleName?: string;
@@ -29,7 +30,8 @@ export function emitAssemblyScript(
   options: EmitOptions = {}
 ): EmitResult {
   const moduleName = options.moduleName ?? "maxwasm_patch";
-  const plan = createExecutionPlan(graph);
+  const flattenedGraph = flattenForCodegen(graph);
+  const plan = createExecutionPlan(flattenedGraph);
 
   const delayPrefetchLines: string[] = [];
   for (const planNode of plan.nodes) {
@@ -61,14 +63,14 @@ export function emitAssemblyScript(
   const header = [
     "// Auto-generated AssemblyScript module",
     `// Module: ${moduleName}`,
-    `// Nodes: ${graph.nodes.length}`,
-    `// Connections: ${graph.connections.length}`
+    `// Nodes: ${flattenedGraph.nodes.length}`,
+    `// Connections: ${flattenedGraph.connections.length}`
   ].join("\n");
 
   const constants = [
-    `export const SAMPLE_RATE: f32 = ${numberLiteral(graph.sampleRate)};`,
-    `export const BLOCK_SIZE: i32 = ${graph.blockSize};`,
-    `export const OVERSAMPLING: i32 = ${graph.oversampling};`,
+    `export const SAMPLE_RATE: f32 = ${numberLiteral(flattenedGraph.sampleRate)};`,
+    `export const BLOCK_SIZE: i32 = ${flattenedGraph.blockSize};`,
+    `export const OVERSAMPLING: i32 = ${flattenedGraph.oversampling};`,
     "",
     "const INV_SAMPLE_RATE: f32 = 1.0 / SAMPLE_RATE;",
     "const INV_SAMPLE_RATE_OVERSAMPLED: f32 = INV_SAMPLE_RATE / (<f32>OVERSAMPLING);",

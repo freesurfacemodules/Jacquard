@@ -1,6 +1,7 @@
 import { ChangeEvent, useCallback, useMemo } from "react";
 import { Canvas } from "./Canvas";
 import { CommandPalette } from "./CommandPalette";
+import { SubpatchBreadcrumb } from "./SubpatchBreadcrumb";
 import { NodeBrowserPanel } from "./panels/NodeBrowserPanel";
 import { NodePropertiesPanel } from "./panels/NodePropertiesPanel";
 import { AssemblyPanel } from "./panels/AssemblyPanel";
@@ -90,6 +91,9 @@ export function Workspace({
         />
       ) : null}
       <div className="workspace-main">
+        <div className="workspace-overlay workspace-overlay--top-left">
+          <SubpatchBreadcrumb />
+        </div>
         <Canvas
           onOpenCommandPalette={onOpenCommandPalette}
           pendingNodeCreation={pendingNodeCreation}

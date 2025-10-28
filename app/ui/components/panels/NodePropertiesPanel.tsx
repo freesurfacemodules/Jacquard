@@ -1,6 +1,7 @@
-import { ChangeEvent, useMemo } from "react";
+import { ChangeEvent, KeyboardEvent, useEffect, useMemo, useState } from "react";
 import { usePatch } from "../../state/PatchContext";
 import { getNodeImplementation } from "@dsp/nodes";
+import type { SubpatchGraph } from "@graph/types";
 import { resolveControlMin, resolveControlMax, resolveControlStep } from "@dsp/utils/controls";
 
 interface NodePropertiesPanelProps {
@@ -15,7 +16,12 @@ export function NodePropertiesPanel({ onClose }: NodePropertiesPanelProps): JSX.
     getParameterValue,
     updateNodeParameter,
     disconnectConnection,
-    removeNode
+    removeNode,
+    renameNode,
+    openSubpatch,
+    rootGraph,
+    activeSubpatchPath,
+    renameSubpatchPort
   } = usePatch();
 
   const selectedNode = useMemo(() => {
@@ -24,6 +30,16 @@ export function NodePropertiesPanel({ onClose }: NodePropertiesPanelProps): JSX.
     }
     return viewModel.nodes.find((node) => node.id === selectedNodeId) ?? null;
   }, [selectedNodeId, viewModel.nodes]);
+
+  const [labelDraft, setLabelDraft] = useState<string>("");
+
+  useEffect(() => {
+    if (selectedNode) {
+      setLabelDraft(selectedNode.label);
+    } else {
+      setLabelDraft("");
+    }
+  }, [selectedNode?.id, selectedNode?.label]);
 
   const implementation = useMemo(() => {
     if (!selectedNode) {
@@ -79,6 +95,75 @@ export function NodePropertiesPanel({ onClose }: NodePropertiesPanelProps): JSX.
     updateNodeParameter(nodeId, controlId, value);
   };
 
+  const handleLabelBlur = () => {
+    if (!selectedNode) {
+      return;
+    }
+    if (!labelDraft.trim()) {
+      setLabelDraft(selectedNode.label);
+      return;
+    }
+    renameNode(selectedNode.id, labelDraft);
+  };
+
+  const handleLabelKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") {
+      (event.currentTarget as HTMLInputElement).blur();
+    }
+  };
+
+  const currentSubpatchEntry: SubpatchGraph | null = selectedNode?.subpatchId
+    ? rootGraph.subpatches?.[selectedNode.subpatchId] ?? null
+    : null;
+
+  const activeSubpatchId =
+    activeSubpatchPath.length > 0 ? activeSubpatchPath[activeSubpatchPath.length - 1] : null;
+  const activeSubpatchEntry: SubpatchGraph | null = activeSubpatchId
+    ? rootGraph.subpatches?.[activeSubpatchId] ?? null
+    : null;
+
+  const renderPortEditors = (
+    entry: SubpatchGraph | null,
+    direction: "input" | "output",
+    heading: string,
+    emptyMessage: string
+  ): JSX.Element => {
+    const specs = entry
+      ? (direction === "input" ? entry.inputs : entry.outputs)
+          .slice()
+          .sort((a, b) => a.order - b.order)
+      : [];
+
+    return (
+      <section className="properties-section">
+        <h4>{heading}</h4>
+        {specs.length === 0 ? (
+          <p className="dock-panel__placeholder">{emptyMessage}</p>
+        ) : (
+          specs.map((spec) => (
+            <label key={`${direction}-${spec.id}`} className="properties-field">
+              <span>{spec.name}</span>
+              <input
+                key={`${direction}-${spec.id}:${spec.name}`}
+                type="text"
+                defaultValue={spec.name}
+                onBlur={(event) =>
+                  entry &&
+                  renameSubpatchPort(entry.id, direction, spec.id, event.target.value)
+                }
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    (event.currentTarget as HTMLInputElement).blur();
+                  }
+                }}
+              />
+            </label>
+          ))
+        )}
+      </section>
+    );
+  };
+
   return (
     <aside className="dock-panel" aria-label="Node properties">
       <header className="dock-panel__header">
@@ -97,8 +182,26 @@ export function NodePropertiesPanel({ onClose }: NodePropertiesPanelProps): JSX.
         ) : selectedNode ? (
           <>
             <div className="properties-section">
-              <h3>{selectedNode.label}</h3>
+              <label className="properties-field">
+                <span>Name</span>
+                <input
+                  type="text"
+                  value={labelDraft}
+                  onChange={(event) => setLabelDraft(event.target.value)}
+                  onBlur={handleLabelBlur}
+                  onKeyDown={handleLabelKeyDown}
+                />
+              </label>
               <span className="properties-section__subtitle">{selectedNode.kind}</span>
+              {selectedNode.kind === "logic.subpatch" && selectedNode.subpatchId ? (
+                <button
+                  type="button"
+                  className="properties-action"
+                  onClick={() => openSubpatch(selectedNode.subpatchId!)}
+                >
+                  Open subpatch
+                </button>
+              ) : null}
             </div>
 
             {implementation?.manifest.controls?.length ? (
@@ -158,6 +261,43 @@ export function NodePropertiesPanel({ onClose }: NodePropertiesPanelProps): JSX.
                 </div>
               </section>
             ) : null}
+
+            {selectedNode.kind === "logic.subpatch"
+              ? (
+                  <>
+                    {renderPortEditors(
+                      currentSubpatchEntry,
+                      "input",
+                      "Inputs",
+                      "No inputs defined."
+                    )}
+                    {renderPortEditors(
+                      currentSubpatchEntry,
+                      "output",
+                      "Outputs",
+                      "No outputs defined."
+                    )}
+                  </>
+                )
+              : null}
+
+            {selectedNode.kind === "logic.subpatch.input"
+              ? renderPortEditors(
+                  activeSubpatchEntry,
+                  "input",
+                  "Subpatch inputs",
+                  "No subpatch inputs defined."
+                )
+              : null}
+
+            {selectedNode.kind === "logic.subpatch.output"
+              ? renderPortEditors(
+                  activeSubpatchEntry,
+                  "output",
+                  "Subpatch outputs",
+                  "No subpatch outputs defined."
+                )
+              : null}
 
             <section className="properties-section">
               <h4>Connections</h4>

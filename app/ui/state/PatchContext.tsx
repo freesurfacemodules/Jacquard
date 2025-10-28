@@ -29,7 +29,11 @@ import {
   ConnectNodesParams,
   NodeDescriptor,
   NodePosition,
-  PatchGraph
+  PatchGraph,
+  PortDescriptor,
+  SubpatchGraph,
+  SubpatchId,
+  SubpatchPortSpec
 } from "@graph/types";
 import { GraphValidationResult, validateGraph } from "@graph/validation";
 import { compilePatch, CompileResult } from "@compiler/compiler";
@@ -58,6 +62,9 @@ const makeParameterKey = (nodeId: string, controlId: string): string =>
 const DELAY_NODE_KINDS = new Set<string>(["delay.ddl", "delay.waveguide"]);
 const DELAY_CONTROL_ID = "delay";
 const isDelayNodeKind = (kind: string): boolean => DELAY_NODE_KINDS.has(kind);
+
+export const SUBPATCH_INPUT_DUMMY_PORT = "__subpatch_input_dummy__" as const;
+export const SUBPATCH_OUTPUT_DUMMY_PORT = "__subpatch_output_dummy__" as const;
 
 const clampControlValue = (
   kind: string,
@@ -93,6 +100,86 @@ const clampControlValue = (
     return Number.isFinite(quantized) ? quantized : clamped;
   }
   return clamped;
+};
+
+const cloneValue = <T,>(value: T): T =>
+  typeof structuredClone === "function"
+    ? structuredClone(value)
+    : (JSON.parse(JSON.stringify(value)) as T);
+
+const sortPortSpecs = (specs: SubpatchGraph["inputs"]): SubpatchGraph["inputs"] =>
+  specs
+    .slice()
+    .sort((lhs, rhs) => lhs.order - rhs.order)
+    .map((spec, index) => ({ ...spec, order: index }));
+
+const buildPortDescriptors = (specs: SubpatchGraph["inputs"]): PortDescriptor[] =>
+  specs.map((spec) => ({ id: spec.id, name: spec.name, type: "audio" }));
+
+const SUBPATCH_INPUT_DUMMY_DESCRIPTOR: PortDescriptor = {
+  id: SUBPATCH_INPUT_DUMMY_PORT,
+  name: "+ Add Output",
+  type: "audio"
+};
+
+const SUBPATCH_OUTPUT_DUMMY_DESCRIPTOR: PortDescriptor = {
+  id: SUBPATCH_OUTPUT_DUMMY_PORT,
+  name: "+ Add Input",
+  type: "audio"
+};
+
+const refreshSubpatchIONodes = (entry: SubpatchGraph): void => {
+  entry.inputs = sortPortSpecs(entry.inputs);
+  entry.outputs = sortPortSpecs(entry.outputs);
+
+  const sortedInputs = entry.inputs;
+  const sortedOutputs = entry.outputs;
+
+  const inputNodeIndex = entry.graph.nodes.findIndex((node) => node.id === entry.inputNodeId);
+  if (inputNodeIndex >= 0) {
+    const inputNode = entry.graph.nodes[inputNodeIndex];
+    entry.graph.nodes[inputNodeIndex] = {
+      ...inputNode,
+      outputs: [...buildPortDescriptors(sortedInputs), SUBPATCH_INPUT_DUMMY_DESCRIPTOR]
+    };
+  }
+
+  const outputNodeIndex = entry.graph.nodes.findIndex((node) => node.id === entry.outputNodeId);
+  if (outputNodeIndex >= 0) {
+    const outputNode = entry.graph.nodes[outputNodeIndex];
+    entry.graph.nodes[outputNodeIndex] = {
+      ...outputNode,
+      inputs: [...buildPortDescriptors(sortedOutputs), SUBPATCH_OUTPUT_DUMMY_DESCRIPTOR]
+    };
+  }
+};
+
+const resolveParentContainer = (
+  rootGraph: PatchGraph,
+  parentId: SubpatchId | null | undefined
+): { nodes: NodeDescriptor[]; connections: PatchGraph["connections"] } => {
+  if (!parentId) {
+    return rootGraph;
+  }
+  const entry = rootGraph.subpatches?.[parentId];
+  if (!entry) {
+    throw new Error(`Missing parent subpatch ${parentId}`);
+  }
+  return entry.graph;
+};
+
+const updateParentSubpatchNode = (rootGraph: PatchGraph, entry: SubpatchGraph): void => {
+  const container = resolveParentContainer(rootGraph, entry.parentId ?? null);
+  const nodeIndex = container.nodes.findIndex((node) => node.subpatchId === entry.id);
+  if (nodeIndex < 0) {
+    return;
+  }
+  const parentNode = container.nodes[nodeIndex];
+  container.nodes[nodeIndex] = {
+    ...parentNode,
+    inputs: buildPortDescriptors(entry.inputs),
+    outputs: buildPortDescriptors(entry.outputs)
+  };
 };
 
 type PatchChangeType = "topology" | "parameter" | "metadata";
@@ -207,6 +294,7 @@ export interface AudioControls {
 
 export interface PatchController {
   graph: PatchGraph;
+  rootGraph: PatchGraph;
   viewModel: GraphViewModel;
   validation: GraphValidationResult;
   artifact: CompileResult | null;
@@ -237,6 +325,21 @@ export interface PatchController {
   exportPatch(): PatchDocument;
   importPatch(document: PatchDocument | PatchGraph): void;
   updatePatchSettings(settings: PatchSettingsUpdate): void;
+  activeSubpatchPath: SubpatchId[];
+  openSubpatch(subpatchId: SubpatchId): void;
+  exitSubpatch(levels?: number): void;
+  renameNode(nodeId: string, label: string): void;
+  addSubpatchPort(
+    subpatchId: SubpatchId,
+    direction: "input" | "output",
+    preferredName?: string
+  ): SubpatchPortSpec | null;
+  renameSubpatchPort(
+    subpatchId: SubpatchId,
+    direction: "input" | "output",
+    portId: string,
+    name: string
+  ): void;
 }
 
 const PatchContext = createContext<PatchController | null>(null);
@@ -259,8 +362,32 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
   const [topologyVersion, setTopologyVersion] = useState(0);
   const [undoStack, setUndoStack] = useState<PatchSnapshot[]>([]);
   const [redoStack, setRedoStack] = useState<PatchSnapshot[]>([]);
+  const [subpatchPath, setSubpatchPath] = useState<SubpatchId[]>([]);
 
-  const viewModel = useMemo(() => graphViewModelFromGraph(graph), [graph]);
+  const activeGraph = useMemo(() => {
+    if (subpatchPath.length === 0) {
+      return graph;
+    }
+
+    const targetId = subpatchPath[subpatchPath.length - 1];
+    const target = graph.subpatches?.[targetId];
+    if (!target) {
+      console.warn("[PatchContext] Missing subpatch graph for id", targetId);
+      return graph;
+    }
+
+    return {
+      nodes: target.graph.nodes,
+      connections: target.graph.connections,
+      oversampling: graph.oversampling,
+      blockSize: graph.blockSize,
+      sampleRate: graph.sampleRate,
+      subpatches: graph.subpatches,
+      rootSubpatchId: graph.rootSubpatchId
+    };
+  }, [graph, subpatchPath]);
+
+  const viewModel = useMemo(() => graphViewModelFromGraph(activeGraph), [activeGraph]);
   const validation = useMemo(() => validateGraph(graph), [graph]);
 
   const audioSupported =
@@ -285,6 +412,7 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
   const graphRef = useRef<PatchGraph>(graph);
   const selectedNodeIdRef = useRef<string | null>(selectedNodeId);
   const selectedNodeIdsRef = useRef<string[]>(selectedNodeIds);
+  const subpatchPathRef = useRef<SubpatchId[]>(subpatchPath);
 
   useEffect(() => {
     parameterBindingsRef.current = parameterBindings;
@@ -293,6 +421,10 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
   useEffect(() => {
     selectedNodeIdsRef.current = selectedNodeIds;
   }, [selectedNodeIds]);
+
+  useEffect(() => {
+    subpatchPathRef.current = subpatchPath;
+  }, [subpatchPath]);
 
   useEffect(() => {
     artifactRef.current = artifact;
@@ -384,6 +516,56 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
     selectedNodeIdRef.current = selectedNodeId;
   }, [selectedNodeId]);
 
+  const produceGraphForActivePath = useCallback(
+    (updater: (graph: PatchGraph) => PatchGraph): PatchGraph => {
+      const rootGraph = graphRef.current;
+      const path = subpatchPathRef.current;
+      if (path.length === 0) {
+        return updater(rootGraph);
+      }
+
+      const subpatches = rootGraph.subpatches ?? {};
+      const targetId = path[path.length - 1];
+      const target = subpatches[targetId];
+      if (!target) {
+        console.warn("[PatchContext] Unable to locate subpatch for update", targetId);
+        return rootGraph;
+      }
+
+      const sliceGraph: PatchGraph = {
+        nodes: cloneValue(target.graph.nodes),
+        connections: cloneValue(target.graph.connections),
+        sampleRate: rootGraph.sampleRate,
+        blockSize: rootGraph.blockSize,
+        oversampling: rootGraph.oversampling,
+        subpatches: undefined,
+        rootSubpatchId: undefined
+      };
+
+      const updatedSlice = updater(sliceGraph);
+      if (updatedSlice === sliceGraph) {
+        return rootGraph;
+      }
+
+      const nextSubpatches = {
+        ...subpatches,
+        [targetId]: {
+          ...target,
+          graph: {
+            nodes: updatedSlice.nodes,
+            connections: updatedSlice.connections
+          }
+        }
+      };
+
+      return {
+        ...rootGraph,
+        subpatches: nextSubpatches
+      };
+    },
+    []
+  );
+
   const applyGraphChange = useCallback(
     (
       nextGraph: PatchGraph,
@@ -453,40 +635,325 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
     ]
   );
 
+  const applyActiveGraphChange = useCallback(
+    (
+      updater: (graph: PatchGraph) => PatchGraph,
+      options?: Parameters<typeof applyGraphChange>[1]
+    ) => {
+      const nextGraph = produceGraphForActivePath(updater);
+      return applyGraphChange(nextGraph, options);
+    },
+    [applyGraphChange, produceGraphForActivePath]
+  );
+
+  const openSubpatch = useCallback(
+    (subpatchId: SubpatchId) => {
+      const rootGraph = graphRef.current;
+      const entry = rootGraph.subpatches?.[subpatchId];
+      if (!entry) {
+        console.warn("[PatchContext] Attempted to open missing subpatch", subpatchId);
+        return;
+      }
+
+      const currentPath = subpatchPathRef.current;
+      const expectedParent = currentPath.length > 0 ? currentPath[currentPath.length - 1] : null;
+      const declaredParent = entry.parentId ?? null;
+      if (declaredParent !== null && declaredParent !== expectedParent) {
+        console.warn(
+          "[PatchContext] Subpatch parent mismatch",
+          { subpatchId, declaredParent, expectedParent }
+        );
+      }
+
+      const nextPath = [...currentPath, subpatchId];
+      setSubpatchPath(nextPath);
+      subpatchPathRef.current = nextPath;
+      setSelectedNodeIds([]);
+      selectedNodeIdsRef.current = [];
+      setSelectedNodeId(null);
+      selectedNodeIdRef.current = null;
+    },
+    [setSelectedNodeId, setSelectedNodeIds]
+  );
+
+  const exitSubpatch = useCallback(
+    (levels = 1) => {
+      if (levels <= 0) {
+        return;
+      }
+      const currentPath = subpatchPathRef.current;
+      if (currentPath.length === 0) {
+        return;
+      }
+      const nextLength = Math.max(0, currentPath.length - levels);
+      const nextPath = currentPath.slice(0, nextLength);
+      setSubpatchPath(nextPath);
+      subpatchPathRef.current = nextPath;
+      setSelectedNodeIds([]);
+      selectedNodeIdsRef.current = [];
+      setSelectedNodeId(null);
+      selectedNodeIdRef.current = null;
+    },
+    [setSelectedNodeId, setSelectedNodeIds]
+  );
+
   const addNodeToGraph = useCallback(
     (node: NodeDescriptor) => {
-      const nextGraph = addNode(graphRef.current, node);
-      applyGraphChange(nextGraph, { changeType: "topology", selectNode: node.id });
+      if (node.kind === "logic.subpatch") {
+        const subpatchId = nanoid();
+        node.subpatchId = subpatchId;
+        const parentId = subpatchPathRef.current.length > 0
+          ? subpatchPathRef.current[subpatchPathRef.current.length - 1]
+          : null;
+
+        const inputNode = instantiateNode("logic.subpatch.input", nanoid());
+        const outputNode = instantiateNode("logic.subpatch.output", nanoid());
+
+        inputNode.metadata = {
+          ...(inputNode.metadata ?? {}),
+          position: { x: 64, y: 120 }
+        };
+        outputNode.metadata = {
+          ...(outputNode.metadata ?? {}),
+          position: { x: 320, y: 120 }
+        };
+
+        const subpatchEntry: SubpatchGraph = {
+          id: subpatchId,
+          name: node.label,
+          parentId,
+          inputs: [],
+          outputs: [],
+          inputNodeId: inputNode.id,
+          outputNodeId: outputNode.id,
+          graph: {
+            nodes: [inputNode, outputNode],
+            connections: []
+          }
+        };
+
+        refreshSubpatchIONodes(subpatchEntry);
+
+        const nextGraph = produceGraphForActivePath((current) => addNode(current, node));
+        const nextSubpatches = {
+          ...(nextGraph.subpatches ?? {}),
+          [subpatchId]: subpatchEntry
+        };
+        const graphWithEntry = {
+          ...nextGraph,
+          subpatches: nextSubpatches
+        };
+
+        updateParentSubpatchNode(graphWithEntry, subpatchEntry);
+
+        applyGraphChange(graphWithEntry, { changeType: "topology", selectNode: node.id });
+        return;
+      }
+
+      applyActiveGraphChange(
+        (current) => addNode(current, node),
+        { changeType: "topology", selectNode: node.id }
+      );
+    },
+    [applyActiveGraphChange, applyGraphChange, produceGraphForActivePath]
+  );
+
+  const renameNode = useCallback(
+    (nodeId: string, rawLabel: string) => {
+      const nextLabel = rawLabel.trim();
+      if (!nextLabel) {
+        return;
+      }
+
+      let targetSubpatchId: SubpatchId | null = null;
+
+      const result = produceGraphForActivePath((current) => {
+        let changed = false;
+        const nodes = current.nodes.map((node) => {
+          if (node.id !== nodeId) {
+            return node;
+          }
+          if (node.label === nextLabel) {
+            return node;
+          }
+          changed = true;
+          if (node.subpatchId) {
+            targetSubpatchId = node.subpatchId;
+          }
+          return {
+            ...node,
+            label: nextLabel
+          };
+        });
+
+        if (!changed) {
+          return current;
+        }
+
+        return {
+          ...current,
+          nodes
+        };
+      });
+
+      if (result === graphRef.current) {
+        // No change necessary.
+        return;
+      }
+
+      let finalGraph = result;
+      if (targetSubpatchId) {
+        const existing = finalGraph.subpatches?.[targetSubpatchId];
+        if (existing && existing.name !== nextLabel) {
+          finalGraph = {
+            ...finalGraph,
+            subpatches: {
+              ...(finalGraph.subpatches ?? {}),
+              [targetSubpatchId]: {
+                ...existing,
+                name: nextLabel
+              }
+            }
+          };
+        }
+      }
+
+      applyGraphChange(finalGraph, {
+        changeType: "metadata",
+        recordHistory: false
+      });
+    },
+    [applyGraphChange, produceGraphForActivePath]
+  );
+
+  type SubpatchPortDirection = "input" | "output";
+
+  const addSubpatchPort = useCallback(
+    (subpatchId: SubpatchId, direction: SubpatchPortDirection, preferredName?: string): SubpatchPortSpec | null => {
+      const rootGraph = graphRef.current;
+      const entry = rootGraph.subpatches?.[subpatchId];
+      if (!entry) {
+        console.warn("[PatchContext] Missing subpatch for port addition", subpatchId);
+        return null;
+      }
+
+      const nextGraph = cloneValue(rootGraph);
+      const nextEntry = nextGraph.subpatches?.[subpatchId];
+      if (!nextEntry) {
+        return null;
+      }
+
+      const specs = direction === "input" ? nextEntry.inputs : nextEntry.outputs;
+      const baseIndex = specs.length + 1;
+      const rawName = preferredName ?? `${direction === "input" ? "Input" : "Output"} ${baseIndex}`;
+      const portName = rawName.trim() || `${direction === "input" ? "Input" : "Output"} ${baseIndex}`;
+      const newSpec: SubpatchPortSpec = {
+        id: nanoid(),
+        name: portName,
+        type: "audio",
+        order: specs.length
+      };
+
+      if (direction === "input") {
+        nextEntry.inputs = [...specs, newSpec];
+      } else {
+        nextEntry.outputs = [...specs, newSpec];
+      }
+
+      refreshSubpatchIONodes(nextEntry);
+      updateParentSubpatchNode(nextGraph, nextEntry);
+
+      applyGraphChange(nextGraph, { changeType: "topology" });
+      return newSpec;
+    },
+    [applyGraphChange]
+  );
+
+  const renameSubpatchPort = useCallback(
+    (
+      subpatchId: SubpatchId,
+      direction: SubpatchPortDirection,
+      portId: string,
+      rawName: string
+    ) => {
+      const trimmed = rawName.trim();
+      if (!trimmed) {
+        return;
+      }
+
+      const rootGraph = graphRef.current;
+      const entry = rootGraph.subpatches?.[subpatchId];
+      if (!entry) {
+        console.warn("[PatchContext] Missing subpatch for rename", subpatchId);
+        return;
+      }
+
+      const nextGraph = cloneValue(rootGraph);
+      const nextEntry = nextGraph.subpatches?.[subpatchId];
+      if (!nextEntry) {
+        return;
+      }
+
+      const specs = direction === "input" ? nextEntry.inputs : nextEntry.outputs;
+      const index = specs.findIndex((spec) => spec.id === portId);
+      if (index < 0) {
+        console.warn("[PatchContext] Missing port for rename", { subpatchId, portId });
+        return;
+      }
+      if (specs[index].name === trimmed) {
+        return;
+      }
+
+      const updatedSpec: SubpatchPortSpec = {
+        ...specs[index],
+        name: trimmed
+      };
+      if (direction === "input") {
+        nextEntry.inputs = specs.map((spec, idx) => (idx === index ? updatedSpec : spec));
+      } else {
+        nextEntry.outputs = specs.map((spec, idx) => (idx === index ? updatedSpec : spec));
+      }
+
+      refreshSubpatchIONodes(nextEntry);
+      updateParentSubpatchNode(nextGraph, nextEntry);
+
+      applyGraphChange(nextGraph, { changeType: "topology", recordHistory: false });
     },
     [applyGraphChange]
   );
 
   const connectNodes = useCallback(
     (params: ConnectNodesParams) => {
-      const nextGraph = connectGraphNodes(graphRef.current, params);
-      const validationResult = validateGraph(nextGraph);
-      const cycleIssue = validationResult.issues.find(
-        (issue) => issue.code === "CYCLE_DETECTED"
+      applyActiveGraphChange(
+        (current) => {
+          const next = connectGraphNodes(current, params);
+          const validationResult = validateGraph(next);
+          const cycleIssue = validationResult.issues.find(
+            (issue) => issue.code === "CYCLE_DETECTED"
+          );
+          if (cycleIssue) {
+            throw new Error(cycleIssue.message);
+          }
+          return next;
+        },
+        { changeType: "topology" }
       );
-      if (cycleIssue) {
-        throw new Error(cycleIssue.message);
-      }
-      applyGraphChange(nextGraph, { changeType: "topology" });
     },
-    [applyGraphChange]
+    [applyActiveGraphChange]
   );
 
   const disconnectConnection = useCallback(
     (connectionId: string) => {
-      const nextGraph = removeConnection(graphRef.current, connectionId);
-      applyGraphChange(nextGraph, { changeType: "topology" });
+      applyActiveGraphChange(
+        (current) => removeConnection(current, connectionId),
+        { changeType: "topology" }
+      );
     },
-    [applyGraphChange]
+    [applyActiveGraphChange]
   );
 
   const removeNodeFromGraph = useCallback(
     (nodeId: string) => {
-      const nextGraph = removeGraphNode(graphRef.current, nodeId);
       const options: {
         changeType: PatchChangeType;
         selectNode?: string | null;
@@ -504,9 +971,12 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       if (selectedNodeIdRef.current === nodeId) {
         options.selectNode = null;
       }
-      applyGraphChange(nextGraph, options);
+      applyActiveGraphChange(
+        (current) => removeGraphNode(current, nodeId),
+        options
+      );
     },
-    [applyGraphChange]
+    [applyActiveGraphChange]
   );
 
   const removeNodesFromGraph = useCallback(
@@ -515,39 +985,48 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       if (uniqueIds.length === 0) {
         return;
       }
-      let nextGraph = graphRef.current;
-      for (const id of uniqueIds) {
-        nextGraph = removeGraphNode(nextGraph, id);
-      }
-      applyGraphChange(nextGraph, {
-        changeType: "topology",
-        selectNode: null,
-        afterCommit: (_prev, updated) => {
-          setParameterValues((prevValues) => {
-            const filtered = filterParameterValuesForGraph(prevValues, updated);
-            parameterValuesRef.current = filtered;
-            return filtered;
-          });
+      applyActiveGraphChange(
+        (current) => {
+          let next = current;
+          for (const id of uniqueIds) {
+            next = removeGraphNode(next, id);
+          }
+          return next;
+        },
+        {
+          changeType: "topology",
+          selectNode: null,
+          afterCommit: (_prev, updated) => {
+            setParameterValues((prevValues) => {
+              const filtered = filterParameterValuesForGraph(prevValues, updated);
+              parameterValuesRef.current = filtered;
+              return filtered;
+            });
+          }
         }
-      });
+      );
     },
-    [applyGraphChange]
+    [applyActiveGraphChange]
   );
 
   const removeConnectionsFromPort = useCallback(
     (nodeId: string, portId: string) => {
-      const nextGraph = removeGraphConnectionsFromPort(graphRef.current, nodeId, portId);
-      applyGraphChange(nextGraph, { changeType: "topology" });
+      applyActiveGraphChange(
+        (current) => removeGraphConnectionsFromPort(current, nodeId, portId),
+        { changeType: "topology" }
+      );
     },
-    [applyGraphChange]
+    [applyActiveGraphChange]
   );
 
   const removeConnectionsToPort = useCallback(
     (nodeId: string, portId: string) => {
-      const nextGraph = removeGraphConnectionsToPort(graphRef.current, nodeId, portId);
-      applyGraphChange(nextGraph, { changeType: "topology" });
+      applyActiveGraphChange(
+        (current) => removeGraphConnectionsToPort(current, nodeId, portId),
+        { changeType: "topology" }
+      );
     },
-    [applyGraphChange]
+    [applyActiveGraphChange]
   );
 
   const updatePatchSettings = useCallback(
@@ -581,13 +1060,15 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
 
   const updateNodePosition = useCallback(
     (nodeId: string, position: NodePosition) => {
-      const nextGraph = updateGraphNodePosition(graphRef.current, nodeId, position);
-      applyGraphChange(nextGraph, {
-        changeType: "metadata",
-        recordHistory: false
-      });
+      applyActiveGraphChange(
+        (current) => updateGraphNodePosition(current, nodeId, position),
+        {
+          changeType: "metadata",
+          recordHistory: false
+        }
+      );
     },
-    [applyGraphChange]
+    [applyActiveGraphChange]
   );
 
   const getParameterValue = useCallback(
@@ -596,11 +1077,11 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       if (key in parameterValues) {
         return parameterValues[key];
       }
-      const node = graph.nodes.find((candidate) => candidate.id === nodeId);
+      const node = activeGraph.nodes.find((candidate) => candidate.id === nodeId);
       if (node && typeof node.parameters[controlId] === "number") {
         const raw = node.parameters[controlId];
         if (isDelayNodeKind(node.kind)) {
-          return clampControlValue(node.kind, controlId, raw, graph.oversampling);
+          return clampControlValue(node.kind, controlId, raw, activeGraph.oversampling);
         }
         return raw;
       }
@@ -609,14 +1090,14 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
         const fallback = implementation?.manifest.defaultParams?.[controlId];
         if (typeof fallback === "number") {
           if (isDelayNodeKind(node.kind)) {
-            return clampControlValue(node.kind, controlId, fallback, graph.oversampling);
+            return clampControlValue(node.kind, controlId, fallback, activeGraph.oversampling);
           }
           return fallback;
         }
       }
       return 0;
     },
-    [graph.nodes, parameterValues]
+    [activeGraph.nodes, activeGraph.oversampling, parameterValues]
   );
 
   const getEnvelopeSnapshot = useCallback(
@@ -643,23 +1124,19 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
 
   const updateNodeParameter = useCallback(
     (nodeId: string, parameterId: string, value: number) => {
-      const currentGraph = graphRef.current;
-      const oversampling = currentGraph.oversampling;
-      const targetNode = currentGraph.nodes.find((candidate) => candidate.id === nodeId);
+      const oversampling = activeGraph.oversampling;
+      const targetNode = activeGraph.nodes.find((candidate) => candidate.id === nodeId);
       let adjustedValue = value;
       if (targetNode && isDelayNodeKind(targetNode.kind)) {
         adjustedValue = clampControlValue(targetNode.kind, parameterId, value, oversampling);
       }
-      const nextGraph = updateGraphNodeParameter(
-        currentGraph,
-        nodeId,
-        parameterId,
-        adjustedValue
+      const changed = applyActiveGraphChange(
+        (current) => updateGraphNodeParameter(current, nodeId, parameterId, adjustedValue),
+        {
+          changeType: "parameter",
+          recordHistory: false
+        }
       );
-      const changed = applyGraphChange(nextGraph, {
-        changeType: "parameter",
-        recordHistory: false
-      });
       const key = makeParameterKey(nodeId, parameterId);
       setParameterValues((prev) => {
         if (!changed && prev[key] === adjustedValue) {
@@ -682,7 +1159,7 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
         });
       }
     },
-    []
+    [activeGraph.nodes, activeGraph.oversampling, applyActiveGraphChange]
   );
 
   const selectNodes = useCallback((nodeIds: string[]) => {
@@ -1175,7 +1652,8 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
 
   const value = useMemo<PatchController>(
     () => ({
-      graph,
+      graph: activeGraph,
+      rootGraph: graph,
       viewModel,
       validation,
       artifact,
@@ -1211,9 +1689,16 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       canRedo,
       exportPatch,
       importPatch,
-      updatePatchSettings
+      updatePatchSettings,
+      activeSubpatchPath: subpatchPath,
+      openSubpatch,
+      exitSubpatch,
+      renameNode,
+      addSubpatchPort,
+      renameSubpatchPort
     }),
     [
+      activeGraph,
       graph,
       viewModel,
       validation,
@@ -1248,7 +1733,13 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       canRedo,
       exportPatch,
       importPatch,
-      updatePatchSettings
+      updatePatchSettings,
+      subpatchPath,
+      openSubpatch,
+      exitSubpatch,
+      renameNode,
+      addSubpatchPort,
+      renameSubpatchPort
     ]
   );
 

@@ -42,6 +42,7 @@ interface PatchNodeProps {
   onControlChange(nodeId: string, controlId: string, value: number): void;
   widget?: ReactNode;
   onContextMenu(nodeId: string, event: ReactMouseEvent<HTMLDivElement>): void;
+  onDoubleClick?(nodeId: string, event: ReactMouseEvent<HTMLDivElement>): void;
 }
 
 const classNames = (
@@ -72,7 +73,8 @@ export const PatchNode = memo(function PatchNode({
   activeOutputPortId,
   onControlChange,
   widget,
-  onContextMenu
+  onContextMenu,
+  onDoubleClick
 }: PatchNodeProps): JSX.Element {
   const handleContainerPointerDown = (
     event: ReactPointerEvent<HTMLDivElement>
@@ -86,6 +88,9 @@ export const PatchNode = memo(function PatchNode({
   ): void => {
     event.stopPropagation();
     onPointerDown(node.id, event, "header");
+    if (event.button !== 0) {
+      return;
+    }
     event.currentTarget.setPointerCapture(event.pointerId);
     onDragStart(node.id, event);
   };
@@ -125,6 +130,10 @@ export const PatchNode = memo(function PatchNode({
       onContextMenu={(event) => {
         event.stopPropagation();
         onContextMenu(node.id, event);
+      }}
+      onDoubleClick={(event) => {
+        event.stopPropagation();
+        onDoubleClick?.(node.id, event);
       }}
     >
       <div

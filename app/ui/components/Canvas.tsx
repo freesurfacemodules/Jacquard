@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { usePatch } from "../state/PatchContext";
+import { usePatch, SUBPATCH_INPUT_DUMMY_PORT, SUBPATCH_OUTPUT_DUMMY_PORT } from "../state/PatchContext";
 import { getNodeImplementation, instantiateNode } from "@dsp/nodes";
 import { nanoid } from "@codegen/utils/nanoid";
 import { PatchNode, type PortKind } from "./PatchNode";
@@ -201,7 +201,10 @@ export function Canvas({
     scopeSnapshots,
     getScopeSnapshot,
     getParameterValue,
-    importPatch
+    importPatch,
+    openSubpatch,
+    activeSubpatchPath,
+    addSubpatchPort
   } = usePatch();
 
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -928,19 +931,54 @@ export function Canvas({
       if (!node || !position) {
         return;
       }
-      const domAnchor = getDomPortAnchor(nodeId, portId, "output", screenToCanvas);
-      const fallbackAnchor = getPortAnchor(node, "output", portIndex, toDisplay(position));
+      let effectiveNode = node;
+      let effectivePortId = portId;
+      let effectivePortIndex = portIndex;
+
+      if (node.kind === "logic.subpatch.input" && portId === SUBPATCH_INPUT_DUMMY_PORT) {
+        const currentSubpatchId = activeSubpatchPath[activeSubpatchPath.length - 1];
+        if (!currentSubpatchId) {
+          return;
+        }
+        const spec = addSubpatchPort(currentSubpatchId, "input");
+        if (!spec) {
+          return;
+        }
+        const withoutDummy = node.outputs.filter((port) => port.id !== SUBPATCH_INPUT_DUMMY_PORT);
+        const dummyPort = node.outputs.find((port) => port.id === SUBPATCH_INPUT_DUMMY_PORT) ?? {
+          id: SUBPATCH_INPUT_DUMMY_PORT,
+          name: "+ Add Output",
+          type: "audio"
+        };
+        const newOutputs = [...withoutDummy, { id: spec.id, name: spec.name, type: "audio" }, dummyPort];
+        effectiveNode = {
+          ...node,
+          outputs: newOutputs
+        };
+        effectivePortId = spec.id;
+        effectivePortIndex = newOutputs.findIndex((port) => port.id === spec.id);
+      }
+
+      const domAnchor = effectiveNode === node
+        ? getDomPortAnchor(nodeId, effectivePortId, "output", screenToCanvas)
+        : null;
+      const fallbackAnchor = getPortAnchor(
+        effectiveNode,
+        "output",
+        effectivePortIndex,
+        toDisplay(position)
+      );
       const anchor = domAnchor ? toDisplay(domAnchor) : fallbackAnchor;
       setPendingConnection({
         fromNodeId: nodeId,
-        fromPortId: portId,
-        fromPortIndex: portIndex,
+        fromPortId: effectivePortId,
+        fromPortIndex: effectivePortIndex,
         anchor
       });
       setPointerPosition(anchor);
       setConnectionError(null);
     },
-    [nodesById, nodePositions, removeConnectionsFromPort, screenToCanvas]
+    [activeSubpatchPath, addSubpatchPort, nodesById, nodePositions, removeConnectionsFromPort, screenToCanvas]
   );
 
   const handleInputPointerUp = useCallback(
@@ -962,12 +1000,26 @@ export function Canvas({
         return;
       }
 
+      let targetPortId = portId;
+      const targetNode = nodesById.get(nodeId);
+      if (targetNode?.kind === "logic.subpatch.output" && portId === SUBPATCH_OUTPUT_DUMMY_PORT) {
+        const currentSubpatchId = activeSubpatchPath[activeSubpatchPath.length - 1];
+        if (!currentSubpatchId) {
+          return;
+        }
+        const spec = addSubpatchPort(currentSubpatchId, "output");
+        if (!spec) {
+          return;
+        }
+        targetPortId = spec.id;
+      }
+
       try {
         connectNodes({
           fromNodeId: pendingConnection.fromNodeId,
           fromPortId: pendingConnection.fromPortId,
           toNodeId: nodeId,
-          toPortId: portId
+          toPortId: targetPortId
         });
         setPendingConnection(null);
         setPointerPosition(null);
@@ -977,7 +1029,7 @@ export function Canvas({
         setConnectionError(message);
       }
     },
-    [pendingConnection, connectNodes, removeConnectionsToPort]
+    [activeSubpatchPath, addSubpatchPort, pendingConnection, connectNodes, nodesById, removeConnectionsToPort]
   );
 
   useEffect(() => {
@@ -1085,6 +1137,9 @@ export function Canvas({
     (nodeId: string, event: React.PointerEvent, region: "body" | "header") => {
       event.stopPropagation();
       closeContextMenu();
+      if (event.button !== 0) {
+        return;
+      }
       const isSelected = selectedNodeIds.includes(nodeId);
 
       if (event.shiftKey) {
@@ -1122,6 +1177,16 @@ export function Canvas({
       nodePointerStateRef.current = null;
     },
     [selectNodes]
+  );
+
+  const handleNodeDoubleClick = useCallback(
+    (nodeId: string) => {
+      const targetNode = nodesById.get(nodeId);
+      if (targetNode?.kind === "logic.subpatch" && targetNode.subpatchId) {
+        openSubpatch(targetNode.subpatchId);
+      }
+    },
+    [nodesById, openSubpatch]
   );
 
   const handleNodeContextMenu = useCallback(
@@ -1284,6 +1349,7 @@ export function Canvas({
                 onControlChange={handleControlChange}
                 widget={widget}
                 onContextMenu={handleNodeContextMenu}
+                onDoubleClick={handleNodeDoubleClick}
               />
             );
           })}
@@ -1324,6 +1390,29 @@ export function Canvas({
         >
           {contextMenu.kind === "node" ? (
             <>
+              {(() => {
+                const singleSelection =
+                  contextMenu.selection.length === 1 ? contextMenu.selection[0] : null;
+                const selectedNode = singleSelection ? nodesById.get(singleSelection) : null;
+                const canOpenSubpatch =
+                  selectedNode?.kind === "logic.subpatch" && selectedNode.subpatchId;
+                return canOpenSubpatch ? (
+                  <>
+                    <button
+                      type="button"
+                      className="canvas-context-menu__button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openSubpatch(selectedNode.subpatchId!);
+                        closeContextMenu();
+                      }}
+                    >
+                      Open subpatch
+                    </button>
+                    <div className="canvas-context-menu__separator" />
+                  </>
+                ) : null;
+              })()}
               <button
                 type="button"
                 className="canvas-context-menu__button"

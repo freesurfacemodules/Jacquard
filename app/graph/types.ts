@@ -1,5 +1,6 @@
 export type NodeId = string;
 export type PortId = string;
+export type SubpatchId = string;
 
 export type DataType = "audio";
 
@@ -27,6 +28,7 @@ export interface NodeDescriptor {
   outputs: PortDescriptor[];
   parameters: Record<string, number>;
   metadata?: NodeMetadata;
+  subpatchId?: SubpatchId;
 }
 
 export interface Connection {
@@ -47,4 +49,27 @@ export interface PatchGraph {
   oversampling: 1 | 2 | 4 | 8;
   blockSize: 128 | 256 | 512;
   sampleRate: number;
+  subpatches?: Record<SubpatchId, SubpatchGraph>;
+  rootSubpatchId?: SubpatchId;
+}
+
+export interface SubpatchPortSpec {
+  id: PortId;
+  name: string;
+  type: DataType;
+  order: number;
+}
+
+export interface SubpatchGraph {
+  id: SubpatchId;
+  name: string;
+  parentId?: SubpatchId | null;
+  inputs: SubpatchPortSpec[];
+  outputs: SubpatchPortSpec[];
+  inputNodeId: NodeId;
+  outputNodeId: NodeId;
+  graph: {
+    nodes: NodeDescriptor[];
+    connections: Connection[];
+  };
 }

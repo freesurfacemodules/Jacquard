@@ -19,7 +19,9 @@ export function createGraph(options: CreateGraphOptions = {}): PatchGraph {
     connections: [],
     sampleRate: options.sampleRate ?? 48_000,
     blockSize: options.blockSize ?? 128,
-    oversampling: options.oversampling ?? 1
+    oversampling: options.oversampling ?? 1,
+    subpatches: {},
+    rootSubpatchId: undefined
   };
 }
 

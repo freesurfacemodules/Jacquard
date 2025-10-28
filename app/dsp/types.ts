@@ -26,6 +26,7 @@ export interface DspNodeManifest {
     icon?: string;
   };
   controls?: NodeControl[];
+  hidden?: boolean;
 }
 
 export interface NodeEmitHelpers {

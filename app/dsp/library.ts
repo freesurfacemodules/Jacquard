@@ -25,6 +25,9 @@ import { orNode } from "@dsp/nodes/logic/or/manifest";
 import { notNode } from "@dsp/nodes/logic/not/manifest";
 import { xorNode } from "@dsp/nodes/logic/xor/manifest";
 import { counterNode } from "@dsp/nodes/logic/counter/manifest";
+import { subpatchNode } from "@dsp/nodes/logic/subpatch/manifest";
+import { subpatchInputNode } from "@dsp/nodes/logic/subpatch/input";
+import { subpatchOutputNode } from "@dsp/nodes/logic/subpatch/output";
 import { comparatorNode } from "@dsp/nodes/logic/comparator/manifest";
 import { addNode } from "@dsp/nodes/math/add/manifest";
 import { subtractNode } from "@dsp/nodes/math/subtract/manifest";
@@ -56,6 +59,9 @@ const implementations: NodeImplementation[] = [
   xorNode,
   comparatorNode,
   counterNode,
+  subpatchNode,
+  subpatchInputNode,
+  subpatchOutputNode,
   addNode,
   subtractNode,
   multiplyNode,
@@ -72,7 +78,9 @@ for (const implementation of implementations) {
 
 export const nodeImplementations = implementations;
 
-export const builtinNodes = implementations.map((impl) => impl.manifest);
+export const builtinNodes = implementations
+  .map((impl) => impl.manifest)
+  .filter((manifest) => !manifest.hidden);
 
 export function getNodeImplementation(kind: string): NodeImplementation | undefined {
   return implementationMap.get(kind);
