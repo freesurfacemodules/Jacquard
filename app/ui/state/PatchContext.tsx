@@ -118,13 +118,13 @@ const buildPortDescriptors = (specs: SubpatchGraph["inputs"]): PortDescriptor[] 
 
 const SUBPATCH_INPUT_DUMMY_DESCRIPTOR: PortDescriptor = {
   id: SUBPATCH_INPUT_DUMMY_PORT,
-  name: "+ Add Output",
+  name: "+ Add Input",
   type: "audio"
 };
 
 const SUBPATCH_OUTPUT_DUMMY_DESCRIPTOR: PortDescriptor = {
   id: SUBPATCH_OUTPUT_DUMMY_PORT,
-  name: "+ Add Input",
+  name: "+ Add Output",
   type: "audio"
 };
 
