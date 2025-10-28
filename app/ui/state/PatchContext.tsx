@@ -27,6 +27,7 @@ import {
 } from "@graph/view-model";
 import {
   ConnectNodesParams,
+  Connection,
   NodeDescriptor,
   NodePosition,
   PatchGraph,
@@ -180,6 +181,25 @@ const updateParentSubpatchNode = (rootGraph: PatchGraph, entry: SubpatchGraph): 
     inputs: buildPortDescriptors(entry.inputs),
     outputs: buildPortDescriptors(entry.outputs)
   };
+};
+
+const resolveMutableContainer = (
+  rootGraph: PatchGraph,
+  path: SubpatchId[]
+): {
+  container: { nodes: NodeDescriptor[]; connections: Connection[] };
+  entry?: SubpatchGraph | null;
+} => {
+  let container: { nodes: NodeDescriptor[]; connections: Connection[] } = rootGraph;
+  let entry: SubpatchGraph | null | undefined = null;
+  for (const id of path) {
+    entry = rootGraph.subpatches?.[id];
+    if (!entry) {
+      return { container, entry: null };
+    }
+    container = entry.graph;
+  }
+  return { container, entry };
 };
 
 type PatchChangeType = "topology" | "parameter" | "metadata";
@@ -340,6 +360,12 @@ export interface PatchController {
     portId: string,
     name: string
   ): void;
+  removeSubpatchPort(
+    subpatchId: SubpatchId,
+    direction: "input" | "output",
+    portId: string
+  ): void;
+  createSubpatchFromSelection(nodeIds: string[]): void;
 }
 
 const PatchContext = createContext<PatchController | null>(null);
@@ -918,6 +944,331 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       updateParentSubpatchNode(nextGraph, nextEntry);
 
       applyGraphChange(nextGraph, { changeType: "topology", recordHistory: false });
+    },
+    [applyGraphChange]
+  );
+
+  const removeSubpatchPort = useCallback(
+    (subpatchId: SubpatchId, direction: SubpatchPortDirection, portId: string): void => {
+      const rootGraph = cloneValue(graphRef.current);
+      const entry = rootGraph.subpatches?.[subpatchId];
+      if (!entry) {
+        console.warn("[PatchContext] Missing subpatch for removal", subpatchId);
+        return;
+      }
+
+      const specs = direction === "input" ? entry.inputs : entry.outputs;
+      const index = specs.findIndex((spec) => spec.id === portId);
+      if (index < 0) {
+        return;
+      }
+
+      const parentContainer = resolveParentContainer(rootGraph, entry.parentId ?? null);
+      const parentNode = parentContainer.nodes.find((node) => node.subpatchId === subpatchId);
+      if (!parentNode) {
+        console.warn("[PatchContext] Subpatch parent node missing", subpatchId);
+        return;
+      }
+
+      const parentNodeId = parentNode.id;
+
+      const filterParentConnections = (conn: Connection): boolean => {
+        if (direction === "input") {
+          return !(conn.to.node === parentNodeId && conn.to.port === portId);
+        }
+        return !(conn.from.node === parentNodeId && conn.from.port === portId);
+      };
+
+      parentContainer.connections = parentContainer.connections.filter((conn) => filterParentConnections(conn));
+
+      if (direction === "input") {
+        entry.graph.connections = entry.graph.connections.filter(
+          (conn) => !(conn.from.node === entry.inputNodeId && conn.from.port === portId)
+        );
+        entry.inputs = specs.filter((spec) => spec.id !== portId).map((spec, idx) => ({ ...spec, order: idx }));
+      } else {
+        entry.graph.connections = entry.graph.connections.filter(
+          (conn) => !(conn.to.node === entry.outputNodeId && conn.to.port === portId)
+        );
+        entry.outputs = specs.filter((spec) => spec.id !== portId).map((spec, idx) => ({ ...spec, order: idx }));
+      }
+
+      refreshSubpatchIONodes(entry);
+      updateParentSubpatchNode(rootGraph, entry);
+
+      applyGraphChange(rootGraph, { changeType: "topology", recordHistory: true });
+    },
+    [applyGraphChange]
+  );
+
+  const createSubpatchFromSelection = useCallback(
+    (nodeIds: string[]) => {
+      const uniqueIds = Array.from(new Set(nodeIds));
+      if (uniqueIds.length === 0) {
+        return;
+      }
+
+      const rootGraph = cloneValue(graphRef.current);
+      const { container } = resolveMutableContainer(rootGraph, subpatchPathRef.current);
+      if (!container) {
+        return;
+      }
+
+      const nodesById = new Map(container.nodes.map((node) => [node.id, node]));
+      const selectedNodes = uniqueIds
+        .map((id) => nodesById.get(id))
+        .filter((node): node is NodeDescriptor => Boolean(node));
+
+      if (selectedNodes.length === 0 || selectedNodes.some((node) => node.kind === "logic.subpatch.input" || node.kind === "logic.subpatch.output")) {
+        return;
+      }
+
+      const selectedSet = new Set(selectedNodes.map((node) => node.id));
+      const selectedNodeMap = new Map(selectedNodes.map((node) => [node.id, node]));
+
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+
+      for (const node of selectedNodes) {
+        const pos = (node.metadata?.position as NodePosition | undefined) ?? { x: 0, y: 0 };
+        minX = Math.min(minX, pos.x);
+        minY = Math.min(minY, pos.y);
+        maxX = Math.max(maxX, pos.x);
+        maxY = Math.max(maxY, pos.y);
+      }
+
+      if (!Number.isFinite(minX) || !Number.isFinite(minY)) {
+        minX = 0;
+        minY = 0;
+        maxX = 0;
+        maxY = 0;
+      }
+
+      const internalConnections: Connection[] = [];
+      const incomingConnections: Connection[] = [];
+      const outgoingConnections: Connection[] = [];
+      const remainingConnections: Connection[] = [];
+
+      for (const connection of container.connections) {
+        const fromSelected = selectedSet.has(connection.from.node);
+        const toSelected = selectedSet.has(connection.to.node);
+        if (fromSelected && toSelected) {
+          internalConnections.push(connection);
+          continue;
+        }
+        if (!fromSelected && toSelected) {
+          incomingConnections.push(connection);
+          continue;
+        }
+        if (fromSelected && !toSelected) {
+          outgoingConnections.push(connection);
+          continue;
+        }
+        remainingConnections.push(connection);
+      }
+
+      container.connections = remainingConnections;
+
+      const inputGroups = new Map<string, { spec: SubpatchPortSpec; connections: Connection[] }>();
+      const outputGroups = new Map<string, { spec: SubpatchPortSpec; connections: Connection[] }>();
+      const usedInputNames = new Set<string>();
+      const usedOutputNames = new Set<string>();
+
+      const ensureUnique = (base: string, used: Set<string>, fallbackPrefix: string): string => {
+        const trimmed = base.trim();
+        let candidate = trimmed.length > 0 ? trimmed : fallbackPrefix;
+        let counter = 1;
+        while (used.has(candidate)) {
+          candidate = `${trimmed.length > 0 ? trimmed : fallbackPrefix} ${++counter}`;
+        }
+        used.add(candidate);
+        return candidate;
+      };
+
+      const getPortLabel = (nodeId: string, portId: string, direction: "input" | "output"): string => {
+        const node = selectedNodeMap.get(nodeId);
+        if (!node) {
+          return portId;
+        }
+        const port = (direction === "input" ? node.inputs : node.outputs).find((entry) => entry.id === portId);
+        return port?.name ?? portId;
+      };
+
+      const createPortSpec = (
+        direction: SubpatchPortDirection,
+        label: string,
+        used: Set<string>,
+        count: number
+      ): SubpatchPortSpec => ({
+        id: nanoid(),
+        name: ensureUnique(label, used, direction === "input" ? `Input ${count}` : `Output ${count}`),
+        type: "audio",
+        order: count - 1
+      });
+
+      for (const connection of incomingConnections) {
+        const groupKey = `${connection.from.node}::${connection.from.port}`;
+        let existing = inputGroups.get(groupKey);
+        if (!existing) {
+          const label = getPortLabel(connection.to.node, connection.to.port, "input");
+          const spec = createPortSpec("input", label, usedInputNames, inputGroups.size + 1);
+          existing = { spec, connections: [] };
+          inputGroups.set(groupKey, existing);
+        }
+        existing.connections.push(connection);
+      }
+
+      for (const connection of outgoingConnections) {
+        const groupKey = `${connection.to.node}::${connection.to.port}`;
+        let existing = outputGroups.get(groupKey);
+        if (!existing) {
+          const label = getPortLabel(connection.from.node, connection.from.port, "output");
+          const spec = createPortSpec("output", label, usedOutputNames, outputGroups.size + 1);
+          existing = { spec, connections: [] };
+          outputGroups.set(groupKey, existing);
+        }
+        existing.connections.push(connection);
+      }
+
+      const subpatchId = nanoid();
+      const parentId = subpatchPathRef.current.length > 0
+        ? subpatchPathRef.current[subpatchPathRef.current.length - 1]
+        : null;
+
+      const subpatchNode = instantiateNode("logic.subpatch", nanoid());
+      subpatchNode.subpatchId = subpatchId;
+      subpatchNode.label = "Subpatch";
+
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+      subpatchNode.metadata = {
+        position: {
+          x: Number.isFinite(centerX) ? centerX : 0,
+          y: Number.isFinite(centerY) ? centerY : 0
+        }
+      };
+
+      const inputNode = instantiateNode("logic.subpatch.input", nanoid());
+      const outputNode = instantiateNode("logic.subpatch.output", nanoid());
+
+      const offsetX = Number.isFinite(minX) ? minX : 0;
+      const offsetY = Number.isFinite(minY) ? minY : 0;
+      const spanY = Number.isFinite(maxY) && Number.isFinite(minY) ? Math.max(120, maxY - minY) : 240;
+
+      inputNode.metadata = {
+        position: {
+          x: 40,
+          y: spanY / 2 + 40
+        }
+      };
+      outputNode.metadata = {
+        position: {
+          x: 480,
+          y: spanY / 2 + 40
+        }
+      };
+
+      const clonedSelectedNodes = selectedNodes.map((node) => {
+        const clone = cloneValue(node);
+        const pos = (clone.metadata?.position as NodePosition | undefined) ?? { x: 0, y: 0 };
+        clone.metadata = {
+          position: {
+            x: pos.x - offsetX + 200,
+            y: pos.y - offsetY + 40
+          }
+        };
+        return clone;
+      });
+
+      const entry: SubpatchGraph = {
+        id: subpatchId,
+        name: subpatchNode.label,
+        parentId,
+        inputs: Array.from(inputGroups.values()).map((group, index) => ({ ...group.spec, order: index })),
+        outputs: Array.from(outputGroups.values()).map((group, index) => ({ ...group.spec, order: index })),
+        inputNodeId: inputNode.id,
+        outputNodeId: outputNode.id,
+        graph: {
+          nodes: [...clonedSelectedNodes, inputNode, outputNode],
+          connections: []
+        }
+      };
+
+      const entryConnections: Connection[] = [];
+      for (const conn of internalConnections) {
+        if (!selectedSet.has(conn.from.node) || !selectedSet.has(conn.to.node)) {
+          continue;
+        }
+        entryConnections.push({ ...conn });
+      }
+
+      for (const group of inputGroups.values()) {
+        for (const conn of group.connections) {
+          entryConnections.push({
+            id: nanoid(),
+            from: { node: inputNode.id, port: group.spec.id },
+            to: { node: conn.to.node, port: conn.to.port }
+          });
+        }
+      }
+
+      for (const group of outputGroups.values()) {
+        for (const conn of group.connections) {
+          entryConnections.push({
+            id: nanoid(),
+            from: { node: conn.from.node, port: conn.from.port },
+            to: { node: outputNode.id, port: group.spec.id }
+          });
+        }
+      }
+
+      entry.graph.connections = entryConnections;
+
+      rootGraph.subpatches = {
+        ...(rootGraph.subpatches ?? {}),
+        [subpatchId]: entry
+      };
+
+      refreshSubpatchIONodes(entry);
+
+      container.nodes = container.nodes.filter((node) => !selectedSet.has(node.id));
+      container.nodes.push(subpatchNode);
+
+      updateParentSubpatchNode(rootGraph, entry);
+
+      for (const [key, group] of inputGroups.entries()) {
+        for (const conn of group.connections) {
+          container.connections.push({
+            id: nanoid(),
+            from: { ...conn.from },
+            to: { node: subpatchNode.id, port: group.spec.id }
+          });
+        }
+      }
+
+      for (const [key, group] of outputGroups.entries()) {
+        for (const conn of group.connections) {
+          container.connections.push({
+            id: nanoid(),
+            from: { node: subpatchNode.id, port: group.spec.id },
+            to: { ...conn.to }
+          });
+        }
+      }
+
+      applyGraphChange(rootGraph, {
+        changeType: "topology",
+        selectNode: subpatchNode.id,
+        afterCommit: (_prev, updated) => {
+          setParameterValues((prev) => {
+            const filtered = filterParameterValuesForGraph(prev, updated);
+            parameterValuesRef.current = filtered;
+            return filtered;
+          });
+        }
+      });
     },
     [applyGraphChange]
   );
@@ -1695,7 +2046,9 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       exitSubpatch,
       renameNode,
       addSubpatchPort,
-      renameSubpatchPort
+      renameSubpatchPort,
+      removeSubpatchPort,
+      createSubpatchFromSelection
     }),
     [
       activeGraph,
@@ -1739,7 +2092,9 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       exitSubpatch,
       renameNode,
       addSubpatchPort,
-      renameSubpatchPort
+      renameSubpatchPort,
+      removeSubpatchPort,
+      createSubpatchFromSelection
     ]
   );
 

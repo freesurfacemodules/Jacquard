@@ -314,6 +314,12 @@ option {
     gap: 0.3rem;
 }
 
+.properties-field__control {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
 .properties-field input[type="text"] {
     background: var(--bg-3);
     border: 1px solid var(--surface-border);
@@ -324,6 +330,20 @@ option {
 
 .properties-field input[type="text"]:focus {
     outline: 1px solid var(--accent);
+}
+
+.properties-field__remove {
+    padding: 0.25rem 0.5rem;
+    background: rgba(255, 72, 66, 0.15);
+    border: 1px solid rgba(255, 72, 66, 0.4);
+    color: var(--danger-text);
+    border-radius: 4px;
+    font-size: 0.7rem;
+    cursor: pointer;
+}
+
+.properties-field__remove:hover {
+    background: rgba(255, 72, 66, 0.3);
 }
 
 .properties-action {
@@ -341,6 +361,17 @@ option {
 .properties-action:hover {
     background: var(--accent);
     color: var(--bg-1);
+}
+
+.properties-action--inline {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.7rem;
+}
+
+.properties-section__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 }
 
 .properties-control {

@@ -204,7 +204,8 @@ export function Canvas({
     importPatch,
     openSubpatch,
     activeSubpatchPath,
-    addSubpatchPort
+    addSubpatchPort,
+    createSubpatchFromSelection
   } = usePatch();
 
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -1396,23 +1397,56 @@ export function Canvas({
                 const selectedNode = singleSelection ? nodesById.get(singleSelection) : null;
                 const canOpenSubpatch =
                   selectedNode?.kind === "logic.subpatch" && selectedNode.subpatchId;
-                return canOpenSubpatch ? (
+                const canCreateSubpatch = contextMenu.selection.some((id) => {
+                  const node = nodesById.get(id);
+                  return !!node && node.kind !== "logic.subpatch.input" && node.kind !== "logic.subpatch.output";
+                });
+                return (
                   <>
+                    {canOpenSubpatch ? (
+                      <>
+                        <button
+                          type="button"
+                          className="canvas-context-menu__button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openSubpatch(selectedNode.subpatchId!);
+                            closeContextMenu();
+                          }}
+                        >
+                          Open subpatch
+                        </button>
+                        <div className="canvas-context-menu__separator" />
+                      </>
+                    ) : null}
                     <button
                       type="button"
                       className="canvas-context-menu__button"
+                      disabled={!canCreateSubpatch}
                       onClick={(event) => {
                         event.stopPropagation();
-                        openSubpatch(selectedNode.subpatchId!);
+                        createSubpatchFromSelection(contextMenu.selection);
                         closeContextMenu();
                       }}
                     >
-                      Open subpatch
+                      Create subpatch
                     </button>
                     <div className="canvas-context-menu__separator" />
                   </>
-                ) : null;
+                );
               })()}
+              <button
+                type="button"
+                className="canvas-context-menu__button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  createSubpatchFromSelection(contextMenu.selection);
+                  closeContextMenu();
+                }}
+              >
+                Create subpatch
+              </button>
+              <div className="canvas-context-menu__separator" />
               <button
                 type="button"
                 className="canvas-context-menu__button"

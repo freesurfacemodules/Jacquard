@@ -49,14 +49,9 @@ This document captures the remaining work required to deliver fully‑functional
 
 ## 3. Port Management UX
 
-### 3.1 Explicit Port Add/Remove Controls
-- **Goal:** Allow managing subpatch inputs/outputs via UI beyond dummy drag.
-- **Key work**
-  - Add “+ Input” / “+ Output” buttons in the Node Properties panel for subpatch nodes and their IO helpers.
-  - Provide delete buttons to remove unused ports (with confirmation modal if connections exist).
-  - Update PatchContext with `removeSubpatchPort` (with safe connection teardown).
-- **Touches:** `NodePropertiesPanel.tsx`, `PatchContext.tsx`, CSS for buttons.
-- **Tests:** Unit tests for port addition/removal ensuring parent node manifests sync correctly; integration tests covering undo/redo.
+### 3.1 Explicit Port Add/Remove Controls ✅
+- **Status:** Implemented — Node Properties panel now exposes add/remove buttons for subpatch ports, wiring through new `removeSubpatchPort` logic that tears down parent/child connections safely. Dummy ports remain for drag-to-add as an additional affordance.
+- **Follow-ups:** Consider confirmation modal when removing ports with existing connections (currently removal is immediate).
 
 ### 3.2 Connection Re-routing on Port Removal
 - **Goal:** Maintain graph integrity when a port is removed.

@@ -21,7 +21,9 @@ export function NodePropertiesPanel({ onClose }: NodePropertiesPanelProps): JSX.
     openSubpatch,
     rootGraph,
     activeSubpatchPath,
-    renameSubpatchPort
+    renameSubpatchPort,
+    addSubpatchPort,
+    removeSubpatchPort
   } = usePatch();
 
   const selectedNode = useMemo(() => {
@@ -126,7 +128,8 @@ export function NodePropertiesPanel({ onClose }: NodePropertiesPanelProps): JSX.
     entry: SubpatchGraph | null,
     direction: "input" | "output",
     heading: string,
-    emptyMessage: string
+    emptyMessage: string,
+    options?: { allowAdd?: boolean; allowRemove?: boolean }
   ): JSX.Element => {
     const specs = entry
       ? (direction === "input" ? entry.inputs : entry.outputs)
@@ -136,27 +139,49 @@ export function NodePropertiesPanel({ onClose }: NodePropertiesPanelProps): JSX.
 
     return (
       <section className="properties-section">
-        <h4>{heading}</h4>
+        <div className="properties-section__header">
+          <h4>{heading}</h4>
+          {options?.allowAdd && entry ? (
+            <button
+              type="button"
+              className="properties-action properties-action--inline"
+              onClick={() => addSubpatchPort(entry.id, direction)}
+            >
+              Add {direction === "input" ? "input" : "output"}
+            </button>
+          ) : null}
+        </div>
         {specs.length === 0 ? (
           <p className="dock-panel__placeholder">{emptyMessage}</p>
         ) : (
           specs.map((spec) => (
             <label key={`${direction}-${spec.id}`} className="properties-field">
               <span>{spec.name}</span>
-              <input
-                key={`${direction}-${spec.id}:${spec.name}`}
-                type="text"
-                defaultValue={spec.name}
-                onBlur={(event) =>
-                  entry &&
-                  renameSubpatchPort(entry.id, direction, spec.id, event.target.value)
-                }
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    (event.currentTarget as HTMLInputElement).blur();
+              <div className="properties-field__control">
+                <input
+                  key={`${direction}-${spec.id}:${spec.name}`}
+                  type="text"
+                  defaultValue={spec.name}
+                  onBlur={(event) =>
+                    entry &&
+                    renameSubpatchPort(entry.id, direction, spec.id, event.target.value)
                   }
-                }}
-              />
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      (event.currentTarget as HTMLInputElement).blur();
+                    }
+                  }}
+                />
+                {options?.allowRemove && entry ? (
+                  <button
+                    type="button"
+                    className="properties-field__remove"
+                    onClick={() => removeSubpatchPort(entry.id, direction, spec.id)}
+                  >
+                    Remove
+                  </button>
+                ) : null}
+              </div>
             </label>
           ))
         )}
@@ -193,15 +218,15 @@ export function NodePropertiesPanel({ onClose }: NodePropertiesPanelProps): JSX.
                 />
               </label>
               <span className="properties-section__subtitle">{selectedNode.kind}</span>
-              {selectedNode.kind === "logic.subpatch" && selectedNode.subpatchId ? (
-                <button
-                  type="button"
-                  className="properties-action"
-                  onClick={() => openSubpatch(selectedNode.subpatchId!)}
-                >
-                  Open subpatch
-                </button>
-              ) : null}
+            {selectedNode.kind === "logic.subpatch" && selectedNode.subpatchId ? (
+              <button
+                type="button"
+                className="properties-action"
+                onClick={() => openSubpatch(selectedNode.subpatchId!)}
+              >
+                Open subpatch
+              </button>
+            ) : null}
             </div>
 
             {implementation?.manifest.controls?.length ? (
@@ -269,13 +294,15 @@ export function NodePropertiesPanel({ onClose }: NodePropertiesPanelProps): JSX.
                       currentSubpatchEntry,
                       "input",
                       "Inputs",
-                      "No inputs defined."
+                      "No inputs defined.",
+                      { allowAdd: true, allowRemove: true }
                     )}
                     {renderPortEditors(
                       currentSubpatchEntry,
                       "output",
                       "Outputs",
-                      "No outputs defined."
+                      "No outputs defined.",
+                      { allowAdd: true, allowRemove: true }
                     )}
                   </>
                 )
@@ -286,7 +313,8 @@ export function NodePropertiesPanel({ onClose }: NodePropertiesPanelProps): JSX.
                   activeSubpatchEntry,
                   "input",
                   "Subpatch inputs",
-                  "No subpatch inputs defined."
+                  "No subpatch inputs defined.",
+                  { allowRemove: true }
                 )
               : null}
 
@@ -295,7 +323,8 @@ export function NodePropertiesPanel({ onClose }: NodePropertiesPanelProps): JSX.
                   activeSubpatchEntry,
                   "output",
                   "Subpatch outputs",
-                  "No subpatch outputs defined."
+                  "No subpatch outputs defined.",
+                  { allowRemove: true }
                 )
               : null}
 
