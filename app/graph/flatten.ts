@@ -11,12 +11,6 @@ interface Endpoint {
   portId: string;
 }
 
-interface SubpatchBridge {
-  inputTargets: Map<string, Endpoint[]>;
-  outputSources: Map<string, Endpoint[]>;
-  passThrough: Map<string, string>;
-}
-
 const makeScopedId = (path: string[], baseId: string): string => {
   if (path.length === 0) {
     return baseId;
@@ -25,10 +19,20 @@ const makeScopedId = (path: string[], baseId: string): string => {
 };
 
 export function flattenForCodegen(root: PatchGraph): PatchGraph {
-  const flatNodes: NodeDescriptor[] = [];
-  const flatConnections: Connection[] = [];
-  const usedIds = new Set<string>();
+  const subpatches = root.subpatches ?? {};
 
+  const cloneNode = (node: NodeDescriptor, idOverride?: string): NodeDescriptor => ({
+    id: idOverride ?? node.id,
+    kind: node.kind,
+    label: node.label,
+    inputs: node.inputs.map((port) => ({ ...port })),
+    outputs: node.outputs.map((port) => ({ ...port })),
+    parameters: { ...(node.parameters ?? {}) },
+    metadata: undefined,
+    subpatchId: node.subpatchId
+  });
+
+  const usedIds = new Set<string>();
   const allocateId = (desired: string): string => {
     let id = desired;
     let counter = 1;
@@ -39,213 +43,184 @@ export function flattenForCodegen(root: PatchGraph): PatchGraph {
     return id;
   };
 
-  const cloneNode = (node: NodeDescriptor, newId: string): NodeDescriptor => ({
-    id: newId,
-    kind: node.kind,
-    label: node.label,
-    inputs: node.inputs.map((port) => ({ ...port })),
-    outputs: node.outputs.map((port) => ({ ...port })),
-    parameters: { ...(node.parameters ?? {}) },
-    metadata: undefined
+  const nodes: NodeDescriptor[] = root.nodes.map((node) => {
+    usedIds.add(node.id);
+    return cloneNode(node);
   });
 
-  const nodeIdMap = new Map<string, string>();
-  const subpatchBridges = new Map<string, SubpatchBridge>();
-  const subpatches = root.subpatches ?? {};
-
-  // Clone all non-subpatch root nodes first
-  const rootKindMap = new Map<string, string>();
-  for (const node of root.nodes) {
-    rootKindMap.set(node.id, node.kind);
-    if (node.kind === "logic.subpatch") {
-      continue;
+  const connectionSet = new Set<string>();
+  const connections: Connection[] = [];
+  const addConnection = (fromNode: string, fromPort: string, toNode: string, toPort: string): void => {
+    const key = `${fromNode}::${fromPort}=>${toNode}::${toPort}`;
+    if (connectionSet.has(key)) {
+      return;
     }
-    const newId = allocateId(node.id);
-    flatNodes.push(cloneNode(node, newId));
-    nodeIdMap.set(node.id, newId);
+    connectionSet.add(key);
+    connections.push({
+      id: nanoid(),
+      from: { node: fromNode, port: fromPort },
+      to: { node: toNode, port: toPort }
+    });
+  };
+
+  for (const conn of root.connections) {
+    const key = `${conn.from.node}::${conn.from.port}=>${conn.to.node}::${conn.to.port}`;
+    if (!connectionSet.has(key)) {
+      connectionSet.add(key);
+      connections.push({ ...conn });
+    }
   }
 
-  // Expand subpatch nodes (no nested subpatch support yet)
-  for (const node of root.nodes) {
-    if (node.kind !== "logic.subpatch" || !node.subpatchId) {
-      continue;
+  const expandSubpatch = (nodeIndex: number): void => {
+    const node = nodes[nodeIndex];
+    if (!node.subpatchId) {
+      return;
     }
-    const entry = subpatches[node.subpatchId];
+    const entry: SubpatchGraph | undefined = subpatches[node.subpatchId];
     if (!entry) {
-      continue;
+      // Remove node and associated edges.
+      nodes.splice(nodeIndex, 1);
+      const remaining: Connection[] = [];
+      connectionSet.clear();
+      for (const conn of connections) {
+        if (conn.from.node === node.id || conn.to.node === node.id) {
+          continue;
+        }
+        const key = `${conn.from.node}::${conn.from.port}=>${conn.to.node}::${conn.to.port}`;
+        connectionSet.add(key);
+        remaining.push(conn);
+      }
+      connections.length = 0;
+      connections.push(...remaining);
+      return;
     }
 
-    const basePath = [node.id];
+    const path = [node.id];
     const idMap = new Map<string, string>();
 
     for (const inner of entry.graph.nodes) {
       if (inner.id === entry.inputNodeId || inner.id === entry.outputNodeId) {
         continue;
       }
-      if (inner.kind === "logic.subpatch") {
-        throw new Error("Nested subpatches are not yet supported during compilation.");
-      }
-      const scopedId = makeScopedId(basePath, inner.id);
+      const scopedId = makeScopedId(path, inner.id);
       const newId = allocateId(scopedId);
-      flatNodes.push(cloneNode(inner, newId));
+      nodes.push(cloneNode(inner, newId));
       idMap.set(inner.id, newId);
     }
+
+    // Remove the subpatch node.
+    nodes.splice(nodeIndex, 1);
+
+    // Rebuild connection list excluding edges touching the subpatch node.
+    const incomingByPort = new Map<string, Connection[]>();
+    const outgoingByPort = new Map<string, Connection[]>();
+    const remainingConnections: Connection[] = [];
+    connectionSet.clear();
+
+    for (const conn of connections) {
+      if (conn.to.node === node.id) {
+        const arr = incomingByPort.get(conn.to.port) ?? [];
+        arr.push(conn);
+        incomingByPort.set(conn.to.port, arr);
+        continue;
+      }
+      if (conn.from.node === node.id) {
+        const arr = outgoingByPort.get(conn.from.port) ?? [];
+        arr.push(conn);
+        outgoingByPort.set(conn.from.port, arr);
+        continue;
+      }
+      remainingConnections.push(conn);
+      connectionSet.add(`${conn.from.node}::${conn.from.port}=>${conn.to.node}::${conn.to.port}`);
+    }
+    connections.length = 0;
+    connections.push(...remainingConnections);
 
     const inputTargets = new Map<string, Endpoint[]>();
     const outputSources = new Map<string, Endpoint[]>();
     const passThrough = new Map<string, string>();
 
-    for (const connection of entry.graph.connections) {
-      const { from, to } = connection;
+    for (const innerConn of entry.graph.connections) {
+      const { from, to } = innerConn;
       if (from.node === entry.inputNodeId && to.node === entry.outputNodeId) {
         passThrough.set(from.port, to.port);
         continue;
       }
       if (from.node === entry.inputNodeId) {
-        const targetId = idMap.get(to.node);
-        if (!targetId) {
-          throw new Error("Subpatch references unsupported targets (nested subpatch not expanded).");
+        const mappedTarget = idMap.get(to.node);
+        if (mappedTarget) {
+          const arr = inputTargets.get(from.port) ?? [];
+          arr.push({ nodeId: mappedTarget, portId: to.port });
+          inputTargets.set(from.port, arr);
         }
-        const arr = inputTargets.get(from.port) ?? [];
-        arr.push({ nodeId: targetId, portId: to.port });
-        inputTargets.set(from.port, arr);
         continue;
       }
       if (to.node === entry.outputNodeId) {
-        const sourceId = idMap.get(from.node);
-        if (!sourceId) {
-          throw new Error("Subpatch references unsupported sources (nested subpatch not expanded).");
+        const mappedSource = idMap.get(from.node);
+        if (mappedSource) {
+          const arr = outputSources.get(to.port) ?? [];
+          arr.push({ nodeId: mappedSource, portId: from.port });
+          outputSources.set(to.port, arr);
         }
-        const arr = outputSources.get(to.port) ?? [];
-        arr.push({ nodeId: sourceId, portId: from.port });
-        outputSources.set(to.port, arr);
         continue;
       }
-
-      const fromId = idMap.get(from.node);
-      const toId = idMap.get(to.node);
-      if (!fromId || !toId) {
-        throw new Error("Subpatch internal connection references unsupported nodes.");
+      const mappedFrom = idMap.get(from.node);
+      const mappedTo = idMap.get(to.node);
+      if (mappedFrom && mappedTo) {
+        addConnection(mappedFrom, from.port, mappedTo, to.port);
       }
-      flatConnections.push({
-        id: nanoid(),
-        from: { node: fromId, port: from.port },
-        to: { node: toId, port: to.port }
-      });
     }
 
-    subpatchBridges.set(node.id, { inputTargets, outputSources, passThrough });
-  }
-
-  // Collect parent level connections for subpatch bridging
-  const incomingSources = new Map<string, Map<string, Endpoint[]>>(); // nodeId -> port -> sources
-  const outgoingTargets = new Map<string, Map<string, Endpoint[]>>(); // nodeId -> port -> targets
-
-  const addIncomingSource = (nodeId: string, portId: string, endpoint: Endpoint) => {
-    const byPort = incomingSources.get(nodeId) ?? new Map<string, Endpoint[]>();
-    const arr = byPort.get(portId) ?? [];
-    arr.push(endpoint);
-    byPort.set(portId, arr);
-    incomingSources.set(nodeId, byPort);
-  };
-
-  const addOutgoingTarget = (nodeId: string, portId: string, endpoint: Endpoint) => {
-    const byPort = outgoingTargets.get(nodeId) ?? new Map<string, Endpoint[]>();
-    const arr = byPort.get(portId) ?? [];
-    arr.push(endpoint);
-    byPort.set(portId, arr);
-    outgoingTargets.set(nodeId, byPort);
-  };
-
-  for (const connection of root.connections) {
-    const { from, to } = connection;
-    const fromIsSubpatch = rootKindMap.get(from.node) === "logic.subpatch";
-    const toIsSubpatch = rootKindMap.get(to.node) === "logic.subpatch";
-
-    if (!fromIsSubpatch && !toIsSubpatch) {
-      const mappedFrom = nodeIdMap.get(from.node);
-      const mappedTo = nodeIdMap.get(to.node);
-      if (!mappedFrom || !mappedTo) {
+    for (const [portId, externalConns] of incomingByPort.entries()) {
+      const targets = inputTargets.get(portId) ?? [];
+      if (targets.length === 0) {
         continue;
       }
-      flatConnections.push({
-        id: connection.id,
-        from: { node: mappedFrom, port: from.port },
-        to: { node: mappedTo, port: to.port }
-      });
-      continue;
-    }
-
-    if (toIsSubpatch) {
-      const mappedFrom = nodeIdMap.get(from.node);
-      if (mappedFrom) {
-        addIncomingSource(to.node, to.port, { nodeId: mappedFrom, portId: from.port });
+      for (const external of externalConns) {
+        for (const target of targets) {
+          addConnection(external.from.node, external.from.port, target.nodeId, target.portId);
+        }
       }
     }
 
-    if (fromIsSubpatch) {
-      const mappedTo = nodeIdMap.get(to.node);
-      if (mappedTo) {
-        addOutgoingTarget(from.node, from.port, { nodeId: mappedTo, portId: to.port });
+    for (const [portId, externalConns] of outgoingByPort.entries()) {
+      const sources = outputSources.get(portId) ?? [];
+      if (sources.length === 0) {
+        continue;
+      }
+      for (const external of externalConns) {
+        for (const source of sources) {
+          addConnection(source.nodeId, source.portId, external.to.node, external.to.port);
+        }
       }
     }
+
+    for (const [inputPort, outputPort] of passThrough.entries()) {
+      const incoming = incomingByPort.get(inputPort) ?? [];
+      const outgoing = outgoingByPort.get(outputPort) ?? [];
+      for (const incomingConn of incoming) {
+        for (const outgoingConn of outgoing) {
+          addConnection(incomingConn.from.node, incomingConn.from.port, outgoingConn.to.node, outgoingConn.to.port);
+        }
+      }
+    }
+  };
+
+  while (true) {
+    const index = nodes.findIndex((node) => node.kind === "logic.subpatch");
+    if (index === -1) {
+      break;
+    }
+    expandSubpatch(index);
   }
 
-  // Wire subpatch bridges
-  for (const [nodeId, bridge] of subpatchBridges.entries()) {
-    const sourcesByPort = incomingSources.get(nodeId) ?? new Map<string, Endpoint[]>();
-    const targetsByPort = outgoingTargets.get(nodeId) ?? new Map<string, Endpoint[]>();
-
-    for (const [portId, sources] of sourcesByPort.entries()) {
-      const targets = bridge.inputTargets.get(portId) ?? [];
-      for (const source of sources) {
-        for (const target of targets) {
-          flatConnections.push({
-            id: nanoid(),
-            from: { node: source.nodeId, port: source.portId },
-            to: { node: target.nodeId, port: target.portId }
-          });
-        }
-      }
-    }
-
-    for (const [portId, targets] of targetsByPort.entries()) {
-      const sources = bridge.outputSources.get(portId) ?? [];
-      for (const source of sources) {
-        for (const target of targets) {
-          flatConnections.push({
-            id: nanoid(),
-            from: { node: source.nodeId, port: source.portId },
-            to: { node: target.nodeId, port: target.portId }
-          });
-        }
-      }
-    }
-
-    for (const [inputSpec, outputSpec] of bridge.passThrough.entries()) {
-      const sources = sourcesByPort.get(inputSpec) ?? [];
-      const targets = targetsByPort.get(outputSpec) ?? [];
-      for (const source of sources) {
-        for (const target of targets) {
-          flatConnections.push({
-            id: nanoid(),
-            from: { node: source.nodeId, port: source.portId },
-            to: { node: target.nodeId, port: target.portId }
-          });
-        }
-      }
-    }
-  }
-
-  const flattened: PatchGraph = {
-    nodes: flatNodes,
-    connections: flatConnections,
+  return {
+    nodes,
+    connections,
     sampleRate: root.sampleRate,
     blockSize: root.blockSize,
     oversampling: root.oversampling,
     subpatches: {},
     rootSubpatchId: root.rootSubpatchId
   };
-
-  return flattened;
 }

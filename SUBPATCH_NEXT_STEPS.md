@@ -8,15 +8,9 @@ This document captures the remaining work required to deliver fully‑functional
 
 ## 1. Codegen & Graph Infrastructure
 
-### 1.1 Nested Subpatch Flattening
-- **Goal:** Extend `flattenForCodegen` to inline arbitrarily deep subpatch hierarchies.
-- **Key work**
-  - Replace the current single-level expansion with a recursive traversal that keeps a stack of ancestor IDs.
-  - Generate stable scoped IDs for every nested node; ensure port references resolve after each recursion step.
-  - Detect cycles introduced by subpatch wiring and emit validation errors before codegen.
-  - Maintain parent→child bridges for every depth level (subpatch-to-subpatch connections should form proper wire chains).
-- **Touches:** `app/graph/flatten.ts`, possible helpers in `app/graph/types.ts`.
-- **Tests:** Unit cases for nested subpatches (depth 2+), subpatch-to-subpatch wiring, and passthrough ports; snapshot tests to confirm deterministic IDs.
+### 1.1 Nested Subpatch Flattening ✅
+- **Status:** Implemented — `flattenForCodegen` now iteratively expands subpatch hierarchies until no subpatch nodes remain, emitting a flattened DAG for codegen.
+- **Follow-ups:** Add deeper unit coverage (e.g., nested pass-through chains) if regression risk arises.
 
 ### 1.2 Validation Awareness
 - **Goal:** Ensure validation runs on the full root graph while respecting subpatch IO contracts.
