@@ -38,7 +38,7 @@ import {
   loadPatchProcessor,
   WorkletHandle
 } from "@audio/worklet-loader";
-import { getNodeImplementation } from "@dsp/nodes";
+import { getNodeImplementation, instantiateNode } from "@dsp/nodes";
 import { resolveControlMin, resolveControlMax, resolveControlStep } from "@dsp/utils/controls";
 import type { PlanControl, EnvelopeMonitor } from "@codegen/plan";
 import {
@@ -47,6 +47,7 @@ import {
   PATCH_DOCUMENT_VERSION,
   PatchDocument
 } from "@graph/persistence";
+import { nanoid } from "@codegen/utils/nanoid";
 
 const PARAM_MESSAGE_BATCH = "parameterBatch";
 const PARAM_MESSAGE_SINGLE = "parameter";
@@ -241,7 +242,11 @@ export interface PatchController {
 const PatchContext = createContext<PatchController | null>(null);
 
 export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
-  const [graph, setGraph] = useState<PatchGraph>(() => createGraph());
+  const [graph, setGraph] = useState<PatchGraph>(() => {
+    const baseGraph = createGraph();
+    const outputNode = instantiateNode("io.output", nanoid());
+    return addNode(baseGraph, outputNode);
+  });
   const [artifact, setArtifact] = useState<CompileResult | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
