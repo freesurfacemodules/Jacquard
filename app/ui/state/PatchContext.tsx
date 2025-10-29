@@ -53,6 +53,7 @@ import {
   PatchDocument
 } from "@graph/persistence";
 import { nanoid } from "@codegen/utils/nanoid";
+import { loadAutosavePatch, saveAutosavePatch } from "@ui/utils/indexedDb";
 
 const PARAM_MESSAGE_BATCH = "parameterBatch";
 const PARAM_MESSAGE_SINGLE = "parameter";
@@ -63,6 +64,12 @@ const makeParameterKey = (nodeId: string, controlId: string): string =>
 const DELAY_NODE_KINDS = new Set<string>(["delay.ddl", "delay.waveguide"]);
 const DELAY_CONTROL_ID = "delay";
 const isDelayNodeKind = (kind: string): boolean => DELAY_NODE_KINDS.has(kind);
+
+const createInitialGraph = (): PatchGraph => {
+  const baseGraph = createGraph();
+  const outputNode = instantiateNode("io.output", nanoid());
+  return addNode(baseGraph, outputNode);
+};
 
 export const SUBPATCH_INPUT_DUMMY_PORT = "__subpatch_input_dummy__" as const;
 export const SUBPATCH_OUTPUT_DUMMY_PORT = "__subpatch_output_dummy__" as const;
@@ -343,7 +350,7 @@ export interface PatchController {
   canUndo: boolean;
   canRedo: boolean;
   exportPatch(): PatchDocument;
-  importPatch(document: PatchDocument | PatchGraph): void;
+  importPatch(document: PatchDocument | PatchGraph, options?: { recordHistory?: boolean }): void;
   updatePatchSettings(settings: PatchSettingsUpdate): void;
   activeSubpatchPath: SubpatchId[];
   openSubpatch(subpatchId: SubpatchId): void;
@@ -366,16 +373,13 @@ export interface PatchController {
     portId: string
   ): void;
   createSubpatchFromSelection(nodeIds: string[]): void;
+  resetPatch(): void;
 }
 
 const PatchContext = createContext<PatchController | null>(null);
 
 export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
-  const [graph, setGraph] = useState<PatchGraph>(() => {
-    const baseGraph = createGraph();
-    const outputNode = instantiateNode("io.output", nanoid());
-    return addNode(baseGraph, outputNode);
-  });
+  const [graph, setGraph] = useState<PatchGraph>(() => createInitialGraph());
   const [artifact, setArtifact] = useState<CompileResult | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
@@ -439,6 +443,7 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
   const selectedNodeIdRef = useRef<string | null>(selectedNodeId);
   const selectedNodeIdsRef = useRef<string[]>(selectedNodeIds);
   const subpatchPathRef = useRef<SubpatchId[]>(subpatchPath);
+  const autosaveHydratedRef = useRef(false);
 
   useEffect(() => {
     parameterBindingsRef.current = parameterBindings;
@@ -1647,6 +1652,36 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
     }
   }, []);
 
+  const resetPatch = useCallback(() => {
+    const initialGraph = createInitialGraph();
+    void stopAudioInternal();
+    setAudioState(audioSupported ? "idle" : "unsupported");
+    setAudioError(null);
+    setArtifact(null);
+    artifactRef.current = null;
+    setParameterBindings([]);
+    parameterBindingsRef.current = [];
+    setGraph(initialGraph);
+    graphRef.current = initialGraph;
+    const initialValues = buildParameterValuesForGraph(initialGraph);
+    setParameterValues(initialValues);
+    parameterValuesRef.current = initialValues;
+    setUndoStack([]);
+    setRedoStack([]);
+    setSelectedNodeId(null);
+    selectedNodeIdRef.current = null;
+    setSelectedNodeIds([]);
+    selectedNodeIdsRef.current = [];
+    setSubpatchPath([]);
+    subpatchPathRef.current = [];
+    setEnvelopeSnapshots({});
+    envelopeSnapshotsRef.current = {};
+    setScopeSnapshots({});
+    scopeSnapshotsRef.current = {};
+    autosaveHydratedRef.current = true;
+    setTopologyVersion((version) => version + 1);
+  }, [audioSupported, stopAudioInternal]);
+
   useEffect(() => {
     setArtifact(null);
     if (!audioSupported) {
@@ -1961,7 +1996,7 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
   }, []);
 
   const importPatch = useCallback(
-    (input: PatchDocument | PatchGraph) => {
+    (input: PatchDocument | PatchGraph, options?: { recordHistory?: boolean }) => {
       const document = normalizePatchDocument(input);
       if (document.version > PATCH_DOCUMENT_VERSION) {
         throw new Error(
@@ -1982,9 +2017,17 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
         throw new Error(detail);
       }
 
+      setSubpatchPath([]);
+      subpatchPathRef.current = [];
+      setSelectedNodeIds([]);
+      selectedNodeIdsRef.current = [];
+      setSelectedNodeId(null);
+      selectedNodeIdRef.current = null;
+
       applyGraphChange(normalizedGraph, {
         changeType: "topology",
         selectNode: null,
+        recordHistory: options?.recordHistory ?? true,
         afterCommit: (_prev, updated) => {
           const derivedValues = buildParameterValuesForGraph(updated);
           for (const [nodeId, value] of Object.entries(updatedValues)) {
@@ -1997,6 +2040,51 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
     },
     [applyGraphChange]
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const stored = await loadAutosavePatch();
+        if (cancelled) {
+          return;
+        }
+        if (stored) {
+          importPatch(stored, { recordHistory: false });
+          setUndoStack([]);
+          setRedoStack([]);
+          setSelectedNodeId(null);
+          selectedNodeIdRef.current = null;
+          setSelectedNodeIds([]);
+          selectedNodeIdsRef.current = [];
+        }
+      } catch (error) {
+        console.warn("[PatchContext] Failed to restore autosave", error);
+      } finally {
+        if (!cancelled) {
+          autosaveHydratedRef.current = true;
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [importPatch]);
+
+  useEffect(() => {
+    if (!autosaveHydratedRef.current) {
+      return;
+    }
+    const handle = window.setTimeout(() => {
+      const document = createPatchDocument(graphRef.current);
+      void saveAutosavePatch(document).catch((error) => {
+        console.warn("[PatchContext] Failed to write autosave", error);
+      });
+    }, 300);
+    return () => {
+      window.clearTimeout(handle);
+    };
+  }, [graph]);
 
   const canUndo = undoStack.length > 0;
   const canRedo = redoStack.length > 0;
@@ -2048,7 +2136,8 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       addSubpatchPort,
       renameSubpatchPort,
       removeSubpatchPort,
-      createSubpatchFromSelection
+      createSubpatchFromSelection,
+      resetPatch
     }),
     [
       activeGraph,
@@ -2094,7 +2183,8 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       addSubpatchPort,
       renameSubpatchPort,
       removeSubpatchPort,
-      createSubpatchFromSelection
+      createSubpatchFromSelection,
+      resetPatch
     ]
   );
 

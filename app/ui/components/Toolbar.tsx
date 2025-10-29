@@ -32,7 +32,8 @@ export function Toolbar({ windows, onToggleWindow }: ToolbarProps): JSX.Element 
     canUndo,
     canRedo,
     exportPatch,
-    importPatch
+    importPatch,
+    resetPatch
   } = usePatch();
 
   const [compileStatus, setCompileStatus] = useState<"idle" | "compiling" | "ready" | "error">(
@@ -184,7 +185,8 @@ export function Toolbar({ windows, onToggleWindow }: ToolbarProps): JSX.Element 
       try {
         const text = await file.text();
         const payload = JSON.parse(text);
-        importPatch(payload);
+        await audio.stop().catch(() => undefined);
+        importPatch(payload, { recordHistory: false });
         setSuccessMessage(`Loaded patch from ${file.name}.`);
         setErrorMessage(null);
       } catch (error) {
@@ -195,8 +197,14 @@ export function Toolbar({ windows, onToggleWindow }: ToolbarProps): JSX.Element 
         event.target.value = "";
       }
     },
-    [importPatch]
+    [audio, importPatch]
   );
+
+  const handleNewPatch = useCallback(() => {
+    resetPatch();
+    setSuccessMessage(null);
+    setErrorMessage(null);
+  }, [resetPatch]);
 
   const isRunning = audio.state === "running";
   const runDisabled =
@@ -264,12 +272,13 @@ export function Toolbar({ windows, onToggleWindow }: ToolbarProps): JSX.Element 
 
   const patchMenuItems = useMemo(
     () => [
+      { id: "new", label: "New Patch", disabled: false, action: handleNewPatch, hint: "" },
       { id: "undo", label: "Undo", disabled: !canUndo, action: handleUndo, hint: hotkeyLabels.undo },
       { id: "redo", label: "Redo", disabled: !canRedo, action: handleRedo, hint: hotkeyLabels.redo },
       { id: "save", label: "Save Patch…", disabled: false, action: handleSavePatch, hint: hotkeyLabels.save },
       { id: "load", label: "Load Patch…", disabled: false, action: handleLoadClick, hint: hotkeyLabels.load }
     ],
-    [canRedo, canUndo, handleLoadClick, handleRedo, handleSavePatch, handleUndo, hotkeyLabels]
+    [canRedo, canUndo, handleLoadClick, handleNewPatch, handleRedo, handleSavePatch, handleUndo, hotkeyLabels]
   );
 
   return (
