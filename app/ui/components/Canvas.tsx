@@ -960,6 +960,26 @@ export function Canvas({
         effectivePortIndex = newOutputs.findIndex((port) => port.id === spec.id);
       }
 
+      if (node.kind === "logic.subpatch" && portId === SUBPATCH_OUTPUT_DUMMY_PORT && node.subpatchId) {
+        const spec = addSubpatchPort(node.subpatchId, "output");
+        if (!spec) {
+          return;
+        }
+        const withoutDummy = node.outputs.filter((port) => port.id !== SUBPATCH_OUTPUT_DUMMY_PORT);
+        const dummyPort = node.outputs.find((port) => port.id === SUBPATCH_OUTPUT_DUMMY_PORT) ?? {
+          id: SUBPATCH_OUTPUT_DUMMY_PORT,
+          name: "+ Add Output",
+          type: "audio"
+        };
+        const newOutputs = [...withoutDummy, { id: spec.id, name: spec.name, type: "audio" }, dummyPort];
+        effectiveNode = {
+          ...node,
+          outputs: newOutputs
+        };
+        effectivePortId = spec.id;
+        effectivePortIndex = newOutputs.findIndex((port) => port.id === spec.id);
+      }
+
       const domAnchor = effectiveNode === node
         ? getDomPortAnchor(nodeId, effectivePortId, "output", screenToCanvas)
         : null;
@@ -1009,6 +1029,14 @@ export function Canvas({
           return;
         }
         const spec = addSubpatchPort(currentSubpatchId, "output");
+        if (!spec) {
+          return;
+        }
+        targetPortId = spec.id;
+      }
+
+      if (targetNode?.kind === "logic.subpatch" && portId === SUBPATCH_INPUT_DUMMY_PORT && targetNode.subpatchId) {
+        const spec = addSubpatchPort(targetNode.subpatchId, "input");
         if (!spec) {
           return;
         }

@@ -8,11 +8,11 @@ export const subpatchNode: NodeImplementation = {
     inputs: [],
     outputs: [],
     appearance: {
-      width: 260,
+      width: 300,
       height: 200,
-      icon: "folder"
-    }
-  }
+      icon: "folder",
+    },
+  },
 };
 
 export default subpatchNode;

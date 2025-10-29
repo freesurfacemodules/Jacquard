@@ -288,24 +288,28 @@ export function NodePropertiesPanel({ onClose }: NodePropertiesPanelProps): JSX.
             ) : null}
 
             {selectedNode.kind === "logic.subpatch"
-              ? (
-                  <>
-                    {renderPortEditors(
-                      currentSubpatchEntry,
-                      "input",
-                      "Inputs",
-                      "No inputs defined.",
-                      { allowAdd: true, allowRemove: true }
-                    )}
-                    {renderPortEditors(
-                      currentSubpatchEntry,
-                      "output",
-                      "Outputs",
-                      "No outputs defined.",
-                      { allowAdd: true, allowRemove: true }
-                    )}
-                  </>
-                )
+              ? currentSubpatchEntry
+                ? (
+                    <>
+                      {renderPortEditors(
+                        currentSubpatchEntry,
+                        "input",
+                        "Inputs",
+                        "No inputs defined.",
+                        { allowAdd: true, allowRemove: true }
+                      )}
+                      {renderPortEditors(
+                        currentSubpatchEntry,
+                        "output",
+                        "Outputs",
+                        "No outputs defined.",
+                        { allowAdd: true, allowRemove: true }
+                      )}
+                    </>
+                  )
+                : (
+                    <p className="dock-panel__placeholder">Subpatch metadata unavailable.</p>
+                  )
               : null}
 
             {selectedNode.kind === "logic.subpatch.input"

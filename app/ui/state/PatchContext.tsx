@@ -178,8 +178,8 @@ const updateParentSubpatchNode = (rootGraph: PatchGraph, entry: SubpatchGraph): 
   const parentNode = container.nodes[nodeIndex];
   container.nodes[nodeIndex] = {
     ...parentNode,
-    inputs: buildPortDescriptors(entry.inputs),
-    outputs: buildPortDescriptors(entry.outputs)
+    inputs: [...buildPortDescriptors(entry.inputs), { ...SUBPATCH_INPUT_DUMMY_DESCRIPTOR }],
+    outputs: [...buildPortDescriptors(entry.outputs), { ...SUBPATCH_OUTPUT_DUMMY_DESCRIPTOR }]
   };
 };
 
