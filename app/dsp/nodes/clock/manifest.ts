@@ -1,26 +1,31 @@
 import { audioPort } from "../common";
 import { NodeImplementation } from "@dsp/types";
+import schmittTriggerSource from "@dsp/snippets/schmitt-trigger.as?raw";
 
 const BPM_CONTROL = "bpm";
 const MULT_CONTROL = "mult";
 const DIV_CONTROL = "div";
+const RESET_INPUT = "reset";
+const BPM_INPUT = "bpmIn";
+const CLOCK_OUTPUT = "out";
+const BPM_OUTPUT = "bpmOut";
 
 export const clockNode: NodeImplementation = {
   manifest: {
     kind: "clock.basic",
     category: "clock",
     label: "Clock",
-    inputs: [],
-    outputs: [audioPort("out", "Out")],
+    inputs: [audioPort(RESET_INPUT, "Reset"), audioPort(BPM_INPUT, "BPM CV")],
+    outputs: [audioPort(CLOCK_OUTPUT, "Out"), audioPort(BPM_OUTPUT, "BPM CV")],
     defaultParams: {
       [BPM_CONTROL]: 120,
       [MULT_CONTROL]: 1,
-      [DIV_CONTROL]: 1
+      [DIV_CONTROL]: 1,
     },
     appearance: {
-      width: 200,
+      width: 220,
       height: 160,
-      icon: "metronome"
+      icon: "metronome",
     },
     controls: [
       {
@@ -28,7 +33,7 @@ export const clockNode: NodeImplementation = {
         label: "BPM",
         type: "slider",
         min: 30,
-        max: 300
+        max: 300,
       },
       {
         id: MULT_CONTROL,
@@ -36,7 +41,7 @@ export const clockNode: NodeImplementation = {
         type: "slider",
         min: 1,
         max: 32,
-        step: 1
+        step: 1,
       },
       {
         id: DIV_CONTROL,
@@ -44,55 +49,145 @@ export const clockNode: NodeImplementation = {
         type: "slider",
         min: 1,
         max: 32,
-        step: 1
-      }
-    ]
+        step: 1,
+      },
+    ],
   },
   assembly: {
+    declarations: schmittTriggerSource,
     emit(planNode, helpers) {
-      const output = planNode.outputs.find((entry) => entry.port.id === "out");
-      const bpmControl = planNode.controls.find((entry) => entry.controlId === BPM_CONTROL);
-      const multControl = planNode.controls.find((entry) => entry.controlId === MULT_CONTROL);
-      const divControl = planNode.controls.find((entry) => entry.controlId === DIV_CONTROL);
+      const clockOutput = planNode.outputs.find(
+        (entry) => entry.port.id === CLOCK_OUTPUT,
+      );
+      const bpmOutput = planNode.outputs.find(
+        (entry) => entry.port.id === BPM_OUTPUT,
+      );
+      const resetInput = planNode.inputs.find(
+        (entry) => entry.port.id === RESET_INPUT,
+      );
+      const bpmInput = planNode.inputs.find(
+        (entry) => entry.port.id === BPM_INPUT,
+      );
+      const bpmControl = planNode.controls.find(
+        (entry) => entry.controlId === BPM_CONTROL,
+      );
+      const multControl = planNode.controls.find(
+        (entry) => entry.controlId === MULT_CONTROL,
+      );
+      const divControl = planNode.controls.find(
+        (entry) => entry.controlId === DIV_CONTROL,
+      );
 
-      if (!output || !bpmControl || !multControl || !divControl) {
+      if (
+        !clockOutput ||
+        !bpmOutput ||
+        !bpmControl ||
+        !multControl ||
+        !divControl
+      ) {
         return `// ${planNode.node.label} (${planNode.node.id}) missing configuration.`;
       }
 
       const identifier = helpers.sanitizeIdentifier(planNode.node.id);
       const phaseVar = `clock_phase_${identifier}`;
-      const outputAssignments = output.wires
+      const resetVar = `clock_reset_${identifier}`;
+      const clockAssignments = clockOutput.wires
         .map((wire) => `${wire.varName} = clockSample;`)
         .join("\n");
-
-      return [
-        `// ${planNode.node.label} (${planNode.node.id})`,
-        "{",
-        helpers.indentLines(
-          [
-            `let bpm: f32 = ${helpers.parameterRef(bpmControl.index)};`,
-            "if (bpm < 30.0) bpm = 30.0;",
-            "if (bpm > 300.0) bpm = 300.0;",
-            `let multiplier: f32 = Mathf.round(${helpers.parameterRef(multControl.index)});`,
-            "if (multiplier < 1.0) multiplier = 1.0;",
-            "if (multiplier > 32.0) multiplier = 32.0;",
-            `let division: f32 = Mathf.round(${helpers.parameterRef(divControl.index)});`,
-            "if (division < 1.0) division = 1.0;",
-            "if (division > 32.0) division = 32.0;",
-            "const beatsPerSecond: f32 = bpm / 60.0;",
-            "const frequency: f32 = beatsPerSecond * multiplier / division;",
-            "const phaseDelta: f32 = frequency * INV_SAMPLE_RATE_OVERSAMPLED * TAU;",
-            `${phaseVar} += phaseDelta;`,
-            `if (${phaseVar} >= TAU) { ${phaseVar} -= TAU; }`,
-            `const clockSample: f32 = ${phaseVar} < (TAU * 0.5) ? 5.0 : 0.0;`
-          ].join("\n"),
-          1
-        ),
-        outputAssignments ? helpers.indentLines(outputAssignments, 1) : "",
-        "}"
-      ]
-        .filter(Boolean)
+      const bpmAssignments = bpmOutput.wires
+        .map((wire) => `${wire.varName} = bpmCv;`)
         .join("\n");
-    }
-  }
+
+      const bpmInputExpr =
+        bpmInput && bpmInput.wires.length > 0
+          ? helpers.buildInputExpression(bpmInput)
+          : null;
+      const resetExpr =
+        resetInput && resetInput.wires.length > 0
+          ? helpers.buildInputExpression(resetInput)
+          : null;
+
+      const lines: string[] = [];
+
+      lines.push(`// ${planNode.node.label} (${planNode.node.id})`);
+      lines.push("{");
+
+      const body: string[] = [];
+      body.push("const CLOCK_MIN_BPM: f32 = 0.1171875;");
+      body.push("const CLOCK_MAX_BPM: f32 = 122880.0;");
+      body.push(
+        `let bpmValue: f32 = ${helpers.parameterRef(bpmControl.index)};`,
+      );
+      body.push("if (bpmValue < CLOCK_MIN_BPM) bpmValue = CLOCK_MIN_BPM;");
+      body.push("if (bpmValue > CLOCK_MAX_BPM) bpmValue = CLOCK_MAX_BPM;");
+
+      if (bpmInputExpr) {
+        body.push(`let bpmCv: f32 = ${bpmInputExpr};`);
+        body.push("if (bpmCv < -10.0) bpmCv = -10.0;");
+        body.push("if (bpmCv > 10.0) bpmCv = 10.0;");
+        body.push("bpmValue = 120.0 * Mathf.pow(2.0, bpmCv);");
+        body.push("if (bpmValue < CLOCK_MIN_BPM) bpmValue = CLOCK_MIN_BPM;");
+        body.push("if (bpmValue > CLOCK_MAX_BPM) bpmValue = CLOCK_MAX_BPM;");
+      }
+
+      body.push(
+        `let multiplier: f32 = Mathf.round(${helpers.parameterRef(multControl.index)});`,
+      );
+      body.push("if (multiplier < 1.0) multiplier = 1.0;");
+      body.push("if (multiplier > 32.0) multiplier = 32.0;");
+      body.push(
+        `let division: f32 = Mathf.round(${helpers.parameterRef(divControl.index)});`,
+      );
+      body.push("if (division < 1.0) division = 1.0;");
+      body.push("if (division > 32.0) division = 32.0;");
+
+      if (resetExpr) {
+        body.push(`const resetSignal: f32 = ${resetExpr};`);
+        body.push(`if (${resetVar}.process(resetSignal)) {`);
+        body.push(`  ${phaseVar} = 0.0;`);
+        body.push("}");
+      }
+
+      body.push("const beatsPerSecond: f32 = bpmValue / 60.0;");
+      body.push(
+        "const frequency: f32 = beatsPerSecond * multiplier / division;",
+      );
+      body.push(
+        "const phaseDelta: f32 = frequency * INV_SAMPLE_RATE_OVERSAMPLED * TAU;",
+      );
+      body.push(`${phaseVar} += phaseDelta;`);
+      body.push(`if (${phaseVar} >= TAU) { ${phaseVar} -= TAU; }`);
+      body.push(`else if (${phaseVar} < 0.0) { ${phaseVar} += TAU; }`);
+      body.push(
+        `const clockSample: f32 = ${phaseVar} < (TAU * 0.5) ? 5.0 : 0.0;`,
+      );
+
+      body.push("let effectiveBpm: f32 = bpmValue * (multiplier / division);");
+      body.push(
+        "if (effectiveBpm < CLOCK_MIN_BPM) effectiveBpm = CLOCK_MIN_BPM;",
+      );
+      body.push(
+        "if (effectiveBpm > CLOCK_MAX_BPM) effectiveBpm = CLOCK_MAX_BPM;",
+      );
+      body.push("let bpmCv: f32 = 0.0;");
+      body.push("if (effectiveBpm > 0.0) {");
+      body.push("  bpmCv = Mathf.log2(effectiveBpm / 120.0);");
+      body.push("}");
+      body.push("if (bpmCv < -10.0) bpmCv = -10.0;");
+      body.push("if (bpmCv > 10.0) bpmCv = 10.0;");
+
+      lines.push(helpers.indentLines(body.join("\n"), 1));
+
+      if (clockAssignments) {
+        lines.push(helpers.indentLines(clockAssignments, 1));
+      }
+      if (bpmAssignments) {
+        lines.push(helpers.indentLines(bpmAssignments, 1));
+      }
+
+      lines.push("}");
+
+      return lines.join("\n");
+    },
+  },
 };
