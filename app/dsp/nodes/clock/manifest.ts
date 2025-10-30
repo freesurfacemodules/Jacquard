@@ -143,11 +143,16 @@ export const clockNode: NodeImplementation = {
       body.push("if (division < 1.0) division = 1.0;");
       body.push("if (division > 32.0) division = 32.0;");
 
+      const resetFlag = `clock_resetTriggered_${identifier}`;
       if (resetExpr) {
+        body.push(`let ${resetFlag}: bool = false;`);
         body.push(`const resetSignal: f32 = ${resetExpr};`);
         body.push(`if (${resetVar}.process(resetSignal)) {`);
         body.push(`  ${phaseVar} = 0.0;`);
+        body.push(`  ${resetFlag} = true;`);
         body.push("}");
+      } else {
+        body.push(`let ${resetFlag}: bool = false;`);
       }
 
       body.push("const beatsPerSecond: f32 = bpmValue / 60.0;");
@@ -157,12 +162,13 @@ export const clockNode: NodeImplementation = {
       body.push(
         "const phaseDelta: f32 = frequency * INV_SAMPLE_RATE_OVERSAMPLED * TAU;",
       );
-      body.push(`${phaseVar} += phaseDelta;`);
-      body.push(`if (${phaseVar} >= TAU) { ${phaseVar} -= TAU; }`);
-      body.push(`else if (${phaseVar} < 0.0) { ${phaseVar} += TAU; }`);
-      body.push(
-        `const clockSample: f32 = ${phaseVar} < (TAU * 0.5) ? 5.0 : 0.0;`,
-      );
+      body.push("let clockSample: f32 = 0.0;");
+      body.push(`if (!${resetFlag}) {`);
+      body.push(`  ${phaseVar} += phaseDelta;`);
+      body.push(`  if (${phaseVar} >= TAU) { ${phaseVar} -= TAU; }`);
+      body.push(`  else if (${phaseVar} < 0.0) { ${phaseVar} += TAU; }`);
+      body.push(`  clockSample = ${phaseVar} < (TAU * 0.5) ? 5.0 : 0.0;`);
+      body.push("}");
 
       body.push("let effectiveBpm: f32 = bpmValue * (multiplier / division);");
       body.push(
