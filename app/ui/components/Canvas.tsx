@@ -198,7 +198,6 @@ export function Canvas({
     selectNodes,
     envelopeSnapshots,
     getEnvelopeSnapshot,
-    scopeSnapshots,
     getScopeSnapshot,
     getParameterValue,
     importPatch,
@@ -1334,21 +1333,14 @@ export function Canvas({
                 controlConfigs.find((control) => control.id === "scale")?.value ?? 5;
               const timeValue =
                 controlConfigs.find((control) => control.id === "time")?.value ?? 0.05;
-              const snapshot = scopeSnapshots[node.id] ?? getScopeSnapshot(node.id);
+              const snapshot = getScopeSnapshot(node.id);
               widget = (
                 <ScopeVisualizer
-                  samples={snapshot.samples}
-                  sampleInterval={
-                    snapshot.sampleInterval || (1 / Math.max(1, viewModel.sampleRate))
-                  }
-                  scale={snapshot.scale ?? scaleValue}
-                  requestedTime={snapshot.requestedTime ?? timeValue}
-                  mode={snapshot.mode ?? 0}
-                  coverage={
-                    snapshot.coverage ??
-                    snapshot.samples.length *
-                      (snapshot.sampleInterval || (1 / Math.max(1, viewModel.sampleRate)))
-                  }
+                  nodeId={node.id}
+                  defaultScale={scaleValue}
+                  defaultTime={timeValue}
+                  initialSnapshot={snapshot}
+                  sampleRate={viewModel.sampleRate}
                 />
               );
             }
