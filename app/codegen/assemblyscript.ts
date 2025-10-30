@@ -621,6 +621,7 @@ function collectStateDeclarations(plan: ExecutionPlan): string {
       }
       case "clock.basic": {
         lines.push(`let clock_phase_${identifier}: f32 = 0.0;`);
+        lines.push(`const clock_reset_${identifier} = new SchmittTrigger(2.5, 1.0);`);
         break;
       }
       case "noise.basic": {
@@ -642,6 +643,17 @@ function collectStateDeclarations(plan: ExecutionPlan): string {
       case "utility.samplehold": {
         lines.push(`let snh_state_${identifier}: f32 = 0.0;`);
         lines.push(`const snh_trig_${identifier} = new SchmittTrigger(2.5, 1.0);`);
+        break;
+      }
+      case "random.seeded": {
+        const seedA = `0x9E3779B97F4A7C15 ^ (<u64>${index + 0x4242})`;
+        const seedB = `0xD1B54A32D192ED03 ^ (<u64>${index + 0x123456})`;
+        lines.push(`const seeded_rng_${identifier} = new Xoroshiro128Plus(${seedA}, ${seedB});`);
+        lines.push(`const seeded_trigger_${identifier} = new SchmittTrigger(2.5, 1.0);`);
+        lines.push(`const seeded_reseed_${identifier} = new SchmittTrigger(2.5, 1.0);`);
+        lines.push(`let seeded_seed_${identifier}: i32 = -1;`);
+        lines.push(`let seeded_initialized_${identifier}: bool = false;`);
+        lines.push(`let seeded_value_${identifier}: f32 = 0.0;`);
         break;
       }
       case "logic.counter": {

@@ -32,6 +32,7 @@ import { comparatorNode } from "@dsp/nodes/logic/comparator/manifest";
 import { addNode } from "@dsp/nodes/math/add/manifest";
 import { subtractNode } from "@dsp/nodes/math/subtract/manifest";
 import { multiplyNode } from "@dsp/nodes/math/multiply/manifest";
+import { seededRandomNode } from "@dsp/nodes/random/seeded/manifest";
 
 const implementations: NodeImplementation[] = [
   analogOscillatorNode,
@@ -65,6 +66,7 @@ const implementations: NodeImplementation[] = [
   addNode,
   subtractNode,
   multiplyNode,
+  seededRandomNode,
   outputNode
 ];
 

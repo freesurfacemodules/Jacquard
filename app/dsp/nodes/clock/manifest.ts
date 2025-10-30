@@ -95,7 +95,7 @@ export const clockNode: NodeImplementation = {
         .map((wire) => `${wire.varName} = clockSample;`)
         .join("\n");
       const bpmAssignments = bpmOutput.wires
-        .map((wire) => `${wire.varName} = bpmCv;`)
+        .map((wire) => `${wire.varName} = clock_bpmCv_${identifier};`)
         .join("\n");
 
       const bpmInputExpr =
@@ -113,6 +113,8 @@ export const clockNode: NodeImplementation = {
       lines.push("{");
 
       const body: string[] = [];
+      const bpmCvVar = `clock_bpmCv_${identifier}`;
+      const bpmInputVar = `clock_bpmInput_${identifier}`;
       body.push("const CLOCK_MIN_BPM: f32 = 0.1171875;");
       body.push("const CLOCK_MAX_BPM: f32 = 122880.0;");
       body.push(
@@ -122,10 +124,10 @@ export const clockNode: NodeImplementation = {
       body.push("if (bpmValue > CLOCK_MAX_BPM) bpmValue = CLOCK_MAX_BPM;");
 
       if (bpmInputExpr) {
-        body.push(`let bpmCv: f32 = ${bpmInputExpr};`);
-        body.push("if (bpmCv < -10.0) bpmCv = -10.0;");
-        body.push("if (bpmCv > 10.0) bpmCv = 10.0;");
-        body.push("bpmValue = 120.0 * Mathf.pow(2.0, bpmCv);");
+        body.push(`let ${bpmInputVar}: f32 = ${bpmInputExpr};`);
+        body.push(`if (${bpmInputVar} < -10.0) ${bpmInputVar} = -10.0;`);
+        body.push(`if (${bpmInputVar} > 10.0) ${bpmInputVar} = 10.0;`);
+        body.push(`bpmValue = 120.0 * Mathf.pow(2.0, ${bpmInputVar});`);
         body.push("if (bpmValue < CLOCK_MIN_BPM) bpmValue = CLOCK_MIN_BPM;");
         body.push("if (bpmValue > CLOCK_MAX_BPM) bpmValue = CLOCK_MAX_BPM;");
       }
@@ -169,12 +171,12 @@ export const clockNode: NodeImplementation = {
       body.push(
         "if (effectiveBpm > CLOCK_MAX_BPM) effectiveBpm = CLOCK_MAX_BPM;",
       );
-      body.push("let bpmCv: f32 = 0.0;");
+      body.push(`let ${bpmCvVar}: f32 = 0.0;`);
       body.push("if (effectiveBpm > 0.0) {");
-      body.push("  bpmCv = Mathf.log2(effectiveBpm / 120.0);");
+      body.push(`  ${bpmCvVar} = Mathf.log2(effectiveBpm / 120.0);`);
       body.push("}");
-      body.push("if (bpmCv < -10.0) bpmCv = -10.0;");
-      body.push("if (bpmCv > 10.0) bpmCv = 10.0;");
+      body.push(`if (${bpmCvVar} < -10.0) ${bpmCvVar} = -10.0;`);
+      body.push(`if (${bpmCvVar} > 10.0) ${bpmCvVar} = 10.0;`);
 
       lines.push(helpers.indentLines(body.join("\n"), 1));
 
