@@ -1468,18 +1468,6 @@ export function Canvas({
                 className="canvas-context-menu__button"
                 onClick={(event) => {
                   event.stopPropagation();
-                  createSubpatchFromSelection(contextMenu.selection);
-                  closeContextMenu();
-                }}
-              >
-                Create subpatch
-              </button>
-              <div className="canvas-context-menu__separator" />
-              <button
-                type="button"
-                className="canvas-context-menu__button"
-                onClick={(event) => {
-                  event.stopPropagation();
                   console.debug("[Canvas] context-menu copy", {
                     includeExternalConnections: false,
                     selection: contextMenu.selection

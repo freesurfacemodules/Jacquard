@@ -1243,7 +1243,7 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
 
       updateParentSubpatchNode(rootGraph, entry);
 
-      for (const [key, group] of inputGroups.entries()) {
+      for (const [_key, group] of inputGroups.entries()) {
         for (const conn of group.connections) {
           container.connections.push({
             id: nanoid(),
@@ -1253,7 +1253,7 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
         }
       }
 
-      for (const [key, group] of outputGroups.entries()) {
+      for (const [_key, group] of outputGroups.entries()) {
         for (const conn of group.connections) {
           container.connections.push({
             id: nanoid(),
