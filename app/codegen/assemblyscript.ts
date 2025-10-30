@@ -78,7 +78,10 @@ export function emitAssemblyScript(
     "const PI: f32 = 3.141592653589793;",
     "const HALF_PI: f32 = 1.5707963267948966;",
     "const TWO_PI: f32 = TAU;",
-    "const FREQ_C4: f32 = 261.6255653005986;"
+    "const FREQ_C4: f32 = 261.6255653005986;",
+    "const LN2: f32 = 0.6931471805599453;",
+    "const INV_LN2: f32 = 1.4426950408889634;",
+    "const LN10: f32 = 2.302585092994046;"
   ].join("\n");
 
   const trigSection = `
@@ -96,16 +99,47 @@ class FastTrigResult {
 }
 
 @inline
+function copysignf(a: f32, b: f32): f32 {
+  return reinterpret<f32>((reinterpret<i32>(a) & 0x7FFFFFFF) | (reinterpret<i32>(b) & 0x80000000));
+}
+
+@inline
+function infinityf(): f32 {
+  return reinterpret<f32>(0x7F800000);
+}
+
+@inline
+function scalbnf(x: f32, n: i32): f32 {
+  let ix: i32 = reinterpret<i32>(x);
+  let e: i32 = (ix >>> 23) & 0xFF;
+  if (e == 0) {
+    if ((ix & 0x7FFFFFFF) == 0) return x;
+    x *= 8388608.0;
+    ix = reinterpret<i32>(x);
+    e = ((ix >>> 23) & 0xFF) - 23;
+  }
+  e += n;
+  if (e <= 0) {
+    return copysignf(0.0, x);
+  }
+  if (e >= 0xFF) {
+    return copysignf(infinityf(), x);
+  }
+  ix = (ix & 0x807FFFFF) | (e << 23);
+  return reinterpret<f32>(ix);
+}
+
+@inline
 function fastSinPoly(x: f32): f32 {
-  const x2 = x * x;
-  const x4 = x2 * x2;
+  const x2: f32 = x * x;
+  const x4: f32 = x2 * x2;
   return x * (FAST_SIN_C1 + x2 * (FAST_SIN_C3 + FAST_SIN_C5 * x4));
 }
 
 @inline
 function fastCosPoly(x: f32): f32 {
-  const x2 = x * x;
-  const x4 = x2 * x2;
+  const x2: f32 = x * x;
+  const x4: f32 = x2 * x2;
   return FAST_COS_C0 + x2 * (FAST_COS_C2 + FAST_COS_C4 * x4);
 }
 
@@ -114,26 +148,10 @@ function resolveTrig(q: i32, sin_r: f32, cos_r: f32, out: FastTrigResult): void 
   let sinVal: f32;
   let cosVal: f32;
   switch (q & 3) {
-    case 0: {
-      sinVal = sin_r;
-      cosVal = cos_r;
-      break;
-    }
-    case 1: {
-      sinVal = cos_r;
-      cosVal = -sin_r;
-      break;
-    }
-    case 2: {
-      sinVal = -sin_r;
-      cosVal = -cos_r;
-      break;
-    }
-    default: {
-      sinVal = -cos_r;
-      cosVal = sin_r;
-      break;
-    }
+    case 0: { sinVal = sin_r; cosVal = cos_r; break; }
+    case 1: { sinVal = cos_r; cosVal = -sin_r; break; }
+    case 2: { sinVal = -sin_r; cosVal = -cos_r; break; }
+    default: { sinVal = -cos_r; cosVal = sin_r; break; }
   }
   out.sin = sinVal;
   out.cos = cosVal;
@@ -155,14 +173,10 @@ export function fastSin(x: f32): f32 {
   const sin_r: f32 = fastSinPoly(r);
   const cos_r: f32 = fastCosPoly(r);
   switch (<i32>kf & 3) {
-    case 0:
-      return sin_r;
-    case 1:
-      return cos_r;
-    case 2:
-      return -sin_r;
-    default:
-      return -cos_r;
+    case 0: return sin_r;
+    case 1: return cos_r;
+    case 2: return -sin_r;
+    default: return -cos_r;
   }
 }
 
@@ -173,17 +187,79 @@ export function fastCos(x: f32): f32 {
   const sin_r: f32 = fastSinPoly(r);
   const cos_r: f32 = fastCosPoly(r);
   switch (<i32>kf & 3) {
-    case 0:
-      return cos_r;
-    case 1:
-      return -sin_r;
-    case 2:
-      return -cos_r;
-    default:
-      return sin_r;
+    case 0: return cos_r;
+    case 1: return -sin_r;
+    case 2: return -cos_r;
+    default: return sin_r;
   }
 }
 
+@inline
+function exp2_poly5(f: f32): f32 {
+  const c1: f32 = 0.6931471;
+  const c2: f32 = 0.24022864;
+  const c3: f32 = 0.055483963;
+  const c4: f32 = 0.009696383;
+  const c5: f32 = 0.0012615042;
+  const f2: f32 = f * f;
+  const t1: f32 = c4 + c5 * f;
+  const t0: f32 = c2 + c3 * f;
+  return 1.0 + f * (c1 + f2 * t1 + f * t0);
+}
+
+@inline
+export function fastExp2(x: f32): f32 {
+  const nFloat: f32 = Mathf.floor(x);
+  const f: f32 = x - nFloat;
+  return scalbnf(exp2_poly5(f), <i32>nFloat);
+}
+
+@inline
+export function fastExp(x: f32): f32 {
+  return fastExp2(x * INV_LN2);
+}
+
+@inline
+function log2_poly_odd(t: f32): f32 {
+  const a1: f32 = 2.879534;
+  const a3: f32 = 1.0615557;
+  const a5: f32 = 0.20025732;
+  const a7: f32 = 0.03138555;
+  const t2: f32 = t * t;
+  return t * (a1 + t2 * (a3 + t2 * (a5 + t2 * a7)));
+}
+
+@inline
+export function fastLog2(x: f32): f32 {
+  if (x <= 0.0) {
+    return -infinityf();
+  }
+  let ix: i32 = reinterpret<i32>(x);
+  let e: i32 = (ix >>> 23) & 0xFF;
+  if (e == 0) {
+    x *= 8388608.0;
+    ix = reinterpret<i32>(x);
+    e = ((ix >>> 23) & 0xFF) - 23;
+  }
+  const mBits: i32 = (ix & 0x807FFFFF) | (126 << 23);
+  const m: f32 = reinterpret<f32>(mBits);
+  const exponent: f32 = <f32>(e - 126);
+  const t: f32 = (m - 1.0) / (m + 1.0);
+  return exponent + log2_poly_odd(t);
+}
+
+@inline
+export function fastLog(x: f32): f32 {
+  return fastLog2(x) * LN2;
+}
+
+@inline
+export function fastPow(base: f32, exponent: f32): f32 {
+  if (base <= 0.0) {
+    return 0.0;
+  }
+  return fastExp(exponent * fastLog(base));
+}
 `;
 
   const parameterSection = collectParameterSection(plan);
@@ -481,7 +557,7 @@ class DcBlocker {
   setCutoff(sampleRate: f32, cutoff: f32): void {
     let fc = cutoff;
     if (fc < 0.001) fc = 0.001;
-    const rValue = Mathf.exp(-2.0 * Mathf.PI * fc / sampleRate);
+    const rValue = fastExp(-2.0 * PI * fc / sampleRate);
     this.r = rValue;
     this.g = 0.5 * (1.0 + rValue);
   }

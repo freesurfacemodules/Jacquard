@@ -29,14 +29,14 @@ export class SlewLimiter {
       const constrainedDelta: f32 = delta < maxLinearDelta ? delta : maxLinearDelta;
       linearNext = current + constrainedDelta;
 
-      const alpha: f32 = 1.0 - Mathf.exp(-dt / rise);
+      const alpha: f32 = 1.0 - fastExp(-dt / rise);
       exponentialNext = current + delta * alpha;
     } else {
       const maxLinearDelta: f32 = dt / fall;
       const constrainedDelta: f32 = delta > -maxLinearDelta ? delta : -maxLinearDelta;
       linearNext = current + constrainedDelta;
 
-      const alpha: f32 = 1.0 - Mathf.exp(-dt / fall);
+      const alpha: f32 = 1.0 - fastExp(-dt / fall);
       exponentialNext = current + delta * alpha;
     }
 

@@ -127,7 +127,7 @@ export const clockNode: NodeImplementation = {
         body.push(`let ${bpmInputVar}: f32 = ${bpmInputExpr};`);
         body.push(`if (${bpmInputVar} < -10.0) ${bpmInputVar} = -10.0;`);
         body.push(`if (${bpmInputVar} > 10.0) ${bpmInputVar} = 10.0;`);
-        body.push(`bpmValue = 120.0 * Mathf.pow(2.0, ${bpmInputVar});`);
+        body.push(`bpmValue = 120.0 * fastExp2(${bpmInputVar});`);
         body.push("if (bpmValue < CLOCK_MIN_BPM) bpmValue = CLOCK_MIN_BPM;");
         body.push("if (bpmValue > CLOCK_MAX_BPM) bpmValue = CLOCK_MAX_BPM;");
       }
@@ -179,7 +179,7 @@ export const clockNode: NodeImplementation = {
       );
       body.push(`let ${bpmCvVar}: f32 = 0.0;`);
       body.push("if (effectiveBpm > 0.0) {");
-      body.push(`  ${bpmCvVar} = Mathf.log2(effectiveBpm / 120.0);`);
+      body.push(`  ${bpmCvVar} = fastLog2(effectiveBpm / 120.0);`);
       body.push("}");
       body.push(`if (${bpmCvVar} < -10.0) ${bpmCvVar} = -10.0;`);
       body.push(`if (${bpmCvVar} > 10.0) ${bpmCvVar} = 10.0;`);

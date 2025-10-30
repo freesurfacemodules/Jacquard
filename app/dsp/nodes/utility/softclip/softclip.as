@@ -7,7 +7,7 @@
 }
 
 @inline function dbToGain(db: f32): f32 {
-  return Mathf.pow(10.0, db * 0.05);
+  return fastPow(10.0, db * 0.05);
 }
 
 export function softclipSample(input: f32, inDb: f32, outDb: f32): f32 {

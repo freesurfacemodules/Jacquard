@@ -7,16 +7,16 @@ const ONE_F32: f32 = 1.0;
 function normalizeAttackCurve(progress: f32): f32 {
   if (progress <= ZERO_F32) return ZERO_F32;
   if (progress >= ONE_F32) return ONE_F32;
-  const numerator: f32 = <f32>(ONE_F32 - Mathf.exp(-CURVE_SHAPE * progress));
-  const denominator: f32 = <f32>(ONE_F32 - Mathf.exp(-CURVE_SHAPE));
+  const numerator: f32 = <f32>(ONE_F32 - fastExp(-CURVE_SHAPE * progress));
+  const denominator: f32 = <f32>(ONE_F32 - fastExp(-CURVE_SHAPE));
   return denominator != ZERO_F32 ? numerator / denominator : progress;
 }
 
 function normalizeDecayCurve(progress: f32): f32 {
   if (progress <= ZERO_F32) return ONE_F32;
   if (progress >= ONE_F32) return ZERO_F32;
-  const numerator: f32 = <f32>(Mathf.exp(-CURVE_SHAPE * progress) - Mathf.exp(-CURVE_SHAPE));
-  const denominator: f32 = <f32>(ONE_F32 - Mathf.exp(-CURVE_SHAPE));
+  const numerator: f32 = <f32>(fastExp(-CURVE_SHAPE * progress) - fastExp(-CURVE_SHAPE));
+  const denominator: f32 = <f32>(ONE_F32 - fastExp(-CURVE_SHAPE));
   const fallback: f32 = <f32>(ONE_F32 - progress);
   return denominator != ZERO_F32 ? numerator / denominator : fallback;
 }

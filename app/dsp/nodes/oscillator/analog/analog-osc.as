@@ -41,7 +41,7 @@ class AnalogOsc {
         for (let k = 1; k <= ANALOG_OSC_KMAX; k++) {
           if ((k & 1) === 1) {
             const harmonic: f32 = <f32>k;
-            const tiltGain: f32 = Mathf.pow(harmonic, -rho);
+            const tiltGain: f32 = fastPow(harmonic, -rho);
             unchecked((this.coeffB[k] = (4.0 / Mathf.PI) * (1.0 / harmonic) * tiltGain));
           }
         }
@@ -51,7 +51,7 @@ class AnalogOsc {
         for (let k = 1; k <= ANALOG_OSC_KMAX; k++) {
           if ((k & 1) === 1) {
             const harmonic: f32 = <f32>k;
-            const tiltGain: f32 = Mathf.pow(harmonic, -rho);
+            const tiltGain: f32 = fastPow(harmonic, -rho);
             const idx: i32 = ((k + 1) >> 1) & 1;
             const alt: f32 = idx === 1 ? -1.0 : 1.0;
             unchecked(
@@ -68,7 +68,7 @@ class AnalogOsc {
       default: {
         for (let k = 1; k <= ANALOG_OSC_KMAX; k++) {
           const harmonic: f32 = <f32>k;
-          const tiltGain: f32 = Mathf.pow(harmonic, -rho);
+          const tiltGain: f32 = fastPow(harmonic, -rho);
           unchecked((this.coeffB[k] = (2.0 / Mathf.PI) * (1.0 / harmonic) * tiltGain));
         }
         break;
@@ -136,7 +136,7 @@ class AnalogOsc {
     const bandwidthHz: f32 = fmDiff * invTau;
 
     const tauSteps: f32 = Mathf.max(1.0, ANALOG_OSC_BW_TAU * sampleRate);
-    const pole: f32 = Mathf.exp(-1.0 / tauSteps);
+    const pole: f32 = fastExp(-1.0 / tauSteps);
     this.bandwidth = pole * this.bandwidth + (1.0 - pole) * bandwidthHz;
 
     const beta: f32 = betaParam < 0.5 ? 0.5 : betaParam;
