@@ -69,6 +69,7 @@ export interface ExecutionPlan {
   parameterCount: number;
   envelopeMonitors: EnvelopeMonitor[];
   scopeMonitors: ScopeMonitor[];
+  sampleRate: number;
 }
 
 export function createExecutionPlan(graph: PatchGraph): ExecutionPlan {
@@ -237,7 +238,8 @@ export function createExecutionPlan(graph: PatchGraph): ExecutionPlan {
     controls,
     parameterCount: parameterCounter,
     envelopeMonitors,
-    scopeMonitors
+    scopeMonitors,
+    sampleRate: graph.sampleRate
   };
 }
 

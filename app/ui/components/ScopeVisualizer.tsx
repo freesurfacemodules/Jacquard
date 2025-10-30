@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 
 interface ScopeVisualizerProps {
   samples: Float32Array;
@@ -12,6 +12,11 @@ interface ScopeVisualizerProps {
 const VIEWBOX_WIDTH = 220;
 const VIEWBOX_HEIGHT = 120;
 const EPSILON = 1e-6;
+const MAX_POINTS = 512;
+const TARGET_REFRESH_HZ = 90;
+const REFRESH_INTERVAL_MS = 1000 / TARGET_REFRESH_HZ;
+const MAX_VERTICAL_LINES = 20;
+const MAX_HORIZONTAL_LINES = 9;
 
 interface GridLine {
   x: number;
@@ -31,6 +36,71 @@ interface PlotData {
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
 
+function buildPlotData(
+  samples: Float32Array,
+  sampleInterval: number,
+  scale: number,
+  requestedTime: number,
+  mode: number,
+  coverage: number
+): PlotData {
+  const safeScale = clamp(Math.abs(scale), 0.1, 20);
+  const triggered = mode !== 0;
+  const hold = mode === 2;
+  const available = samples.length;
+  if (available === 0) {
+    return { points: "", grid: [], triggered, hold, coverage: 0 };
+  }
+
+  const step = Math.max(1, Math.floor(available / MAX_POINTS));
+  const lastIndex = available - 1;
+  const normalized: string[] = [];
+  for (let i = 0; i < available; i += step) {
+    const sample = samples[i];
+    const clamped = clamp(sample, -safeScale, safeScale);
+    const x = lastIndex > 0 ? i / lastIndex : 0;
+    const y = 0.5 - clamped / (safeScale * 2);
+    const px = Math.round(x * VIEWBOX_WIDTH * 10) / 10;
+    const py = Math.round(clamp(y, 0, 1) * VIEWBOX_HEIGHT * 10) / 10;
+    normalized.push(`${px},${py}`);
+  }
+  if (normalized.length === 0 || !normalized[normalized.length - 1].startsWith(`${VIEWBOX_WIDTH},`)) {
+    const finalSample = samples[lastIndex];
+    const clamped = clamp(finalSample, -safeScale, safeScale);
+    const y = 0.5 - clamped / (safeScale * 2);
+    const py = Math.round(clamp(y, 0, 1) * VIEWBOX_HEIGHT * 10) / 10;
+    normalized.push(`${VIEWBOX_WIDTH},${py}`);
+  }
+
+  const grid: GridLine[] = [];
+
+  const maxVolts = Math.ceil(safeScale);
+  const horizontalStep = Math.max(1, Math.ceil(maxVolts / MAX_HORIZONTAL_LINES));
+  for (let volt = -maxVolts; volt <= maxVolts; volt += horizontalStep) {
+    const y = 0.5 - volt / (safeScale * 2);
+    const py = clamp(y, 0, 1) * VIEWBOX_HEIGHT;
+    grid.push({ x: 0, y: py, type: "horizontal", value: volt });
+  }
+
+  const timeSpan = Math.max(requestedTime, coverage, samples.length * sampleInterval, EPSILON);
+  const totalMs = timeSpan * 1000;
+  const verticalDivisions = Math.max(1, Math.min(MAX_VERTICAL_LINES, Math.round(totalMs)));
+  const stepMs = totalMs / verticalDivisions;
+  for (let i = 0; i <= verticalDivisions; i++) {
+    const ms = stepMs * i;
+    const x = clamp(ms / totalMs, 0, 1) * VIEWBOX_WIDTH;
+    grid.push({ x, y: 0, type: "vertical", value: Math.round(ms) });
+  }
+
+  return {
+    points: normalized.join(" "),
+    grid,
+    triggered,
+    hold,
+    coverage: timeSpan
+  };
+}
+
 export function ScopeVisualizer({
   samples,
   sampleInterval,
@@ -39,52 +109,23 @@ export function ScopeVisualizer({
   mode,
   coverage
 }: ScopeVisualizerProps): JSX.Element {
+  const lastFrameRef = useRef<number>(0);
+  const lastDataRef = useRef<PlotData | null>(null);
+
   const data = useMemo<PlotData>(() => {
-    const safeScale = clamp(Math.abs(scale), 0.1, 20);
-    const triggered = mode !== 0;
-    const hold = mode === 2;
-    const available = samples.length;
-    if (available === 0) {
-      return { points: "", grid: [], triggered, hold, coverage: 0 };
+    const now =
+      typeof performance !== "undefined" && typeof performance.now === "function"
+        ? performance.now()
+        : Date.now();
+    const elapsed = now - lastFrameRef.current;
+    if (lastDataRef.current && elapsed < REFRESH_INTERVAL_MS) {
+      return lastDataRef.current;
     }
 
-    const normalized: string[] = [];
-    for (let i = 0; i < samples.length; i++) {
-      const x = samples.length <= 1 ? 0 : i / (samples.length - 1);
-      const yValue = clamp(samples[i], -safeScale, safeScale);
-      const y = 0.5 - yValue / (safeScale * 2);
-      const px = x * VIEWBOX_WIDTH;
-      const py = clamp(y, 0, 1) * VIEWBOX_HEIGHT;
-      normalized[i] = `${px.toFixed(2)},${py.toFixed(2)}`;
-    }
-
-    const grid: GridLine[] = [];
-
-    // Horizontal grid lines (1V increments)
-    const maxVolts = Math.ceil(safeScale);
-    for (let volt = -maxVolts; volt <= maxVolts; volt++) {
-      const y = 0.5 - volt / (safeScale * 2);
-      const py = clamp(y, 0, 1) * VIEWBOX_HEIGHT;
-      grid.push({ x: 0, y: py, type: "horizontal", value: volt });
-    }
-
-    // Vertical grid lines (1ms increments)
-    const timeSpan = Math.max(requestedTime, coverage, samples.length * sampleInterval, EPSILON);
-    const totalMs = timeSpan * 1000;
-    const divisions = Math.min(100, Math.ceil(totalMs));
-    for (let i = 0; i <= divisions; i++) {
-      const ms = i;
-      const x = clamp(ms / totalMs, 0, 1) * VIEWBOX_WIDTH;
-      grid.push({ x, y: 0, type: "vertical", value: ms });
-    }
-
-    return {
-      points: normalized.join(" "),
-      grid,
-      triggered,
-      hold,
-      coverage: timeSpan
-    };
+    const computed = buildPlotData(samples, sampleInterval, scale, requestedTime, mode, coverage);
+    lastFrameRef.current = now;
+    lastDataRef.current = computed;
+    return computed;
   }, [samples, sampleInterval, scale, requestedTime, mode, coverage]);
 
   return (
