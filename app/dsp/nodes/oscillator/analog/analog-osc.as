@@ -1,133 +1,8 @@
 const ANALOG_OSC_KMAX: i32 = 128;
 const ANALOG_OSC_TARGET_PEAK: f32 = 0.9;
 const ANALOG_OSC_BW_TAU: f32 = 0.001;
-const ANALOG_OSC_LUT_SIZE: i32 = 1024;
-const ANALOG_OSC_HALF_PI: f32 = 0.5 * Mathf.PI;
 const ANALOG_OSC_TWO_PI: f32 = TAU;
-const ANALOG_OSC_LUT_INV_QSPAN: f32 = <f32>ANALOG_OSC_LUT_SIZE / ANALOG_OSC_HALF_PI;
 const ANALOG_OSC_DEFAULT_TILT: f32 = 1.0;
-
-class SinCosResult {
-  sin: f32 = 0.0;
-  cos: f32 = 0.0;
-}
-
-class SinCosLut {
-  private samples: StaticArray<f32> = new StaticArray<f32>(ANALOG_OSC_LUT_SIZE + 1);
-
-  init(): void {
-    for (let index = 0; index <= ANALOG_OSC_LUT_SIZE; index++) {
-      const t: f32 = <f32>index / <f32>ANALOG_OSC_LUT_SIZE;
-      const x: f32 = ANALOG_OSC_HALF_PI * t;
-      unchecked((this.samples[index] = Mathf.sin(x)));
-    }
-    unchecked((this.samples[ANALOG_OSC_LUT_SIZE] = 1.0));
-  }
-
-  @inline
-  private interpolate(index: i32, t: f32): f32 {
-    let idx = index;
-    if (idx < 0) {
-      idx = 0;
-    } else if (idx > ANALOG_OSC_LUT_SIZE - 1) {
-      idx = ANALOG_OSC_LUT_SIZE - 1;
-    }
-
-    let tt = t;
-    if (tt < 0.0) {
-      tt = 0.0;
-    } else if (tt > 1.0) {
-      tt = 1.0;
-    }
-
-    const y0: f32 = unchecked(this.samples[idx]);
-    const y1: f32 = unchecked(this.samples[idx + 1]);
-    const prevSample: f32 = idx > 0 ? unchecked(this.samples[idx - 1]) : y0;
-    let next2: f32;
-    if (idx < ANALOG_OSC_LUT_SIZE - 1) {
-      next2 = unchecked(this.samples[idx + 2]);
-    } else if (idx > 0) {
-      next2 = unchecked(this.samples[idx - 1]);
-    } else {
-      next2 = y1;
-    }
-
-    const m0: f32 = (y1 - prevSample) * 0.5;
-    const m1: f32 = (next2 - y0) * 0.5;
-
-    const tt2: f32 = tt * tt;
-    const tt3: f32 = tt2 * tt;
-
-    const h00: f32 = 2.0 * tt3 - 3.0 * tt2 + 1.0;
-    const h10: f32 = tt3 - 2.0 * tt2 + tt;
-    const h01: f32 = -2.0 * tt3 + 3.0 * tt2;
-    const h11: f32 = tt3 - tt2;
-
-    return h00 * y0 + h10 * m0 + h01 * y1 + h11 * m1;
-  }
-
-  sincos(angle: f32, out: SinCosResult): void {
-    let x: f32 = angle % ANALOG_OSC_TWO_PI;
-    if (x < 0.0) {
-      x += ANALOG_OSC_TWO_PI;
-    }
-
-    let quadrant: i32 = <i32>Mathf.floor(x / ANALOG_OSC_HALF_PI);
-    quadrant = quadrant & 3;
-
-    const base: f32 = x - <f32>quadrant * ANALOG_OSC_HALF_PI;
-    const u: f32 = base * ANALOG_OSC_LUT_INV_QSPAN;
-    let index: i32 = <i32>u;
-    if (index > ANALOG_OSC_LUT_SIZE - 1) {
-      index = ANALOG_OSC_LUT_SIZE - 1;
-    }
-    const t: f32 = u - <f32>index;
-    const sinBase: f32 = this.interpolate(index, t);
-
-    const mirrored: f32 = ANALOG_OSC_HALF_PI - base;
-    const uCos: f32 = mirrored * ANALOG_OSC_LUT_INV_QSPAN;
-    let indexCos: i32 = <i32>uCos;
-    if (indexCos > ANALOG_OSC_LUT_SIZE - 1) {
-      indexCos = ANALOG_OSC_LUT_SIZE - 1;
-    }
-    const tCos: f32 = uCos - <f32>indexCos;
-    const cosBase: f32 = this.interpolate(indexCos, tCos);
-
-    switch (quadrant & 3) {
-      case 0: {
-        out.sin = sinBase;
-        out.cos = cosBase;
-        break;
-      }
-      case 1: {
-        out.sin = cosBase;
-        out.cos = -sinBase;
-        break;
-      }
-      case 2: {
-        out.sin = -sinBase;
-        out.cos = -cosBase;
-        break;
-      }
-      default: {
-        out.sin = -cosBase;
-        out.cos = sinBase;
-        break;
-      }
-    }
-  }
-}
-
-let analogSinCosLutInitialized: bool = false;
-const analogSinCosLut = new SinCosLut();
-
-function ensureAnalogSinCosLut(): void {
-  if (!analogSinCosLutInitialized) {
-    analogSinCosLut.init();
-    analogSinCosLutInitialized = true;
-  }
-}
-
 class AnalogOsc {
   private phase: f64 = 0.0;
   private bandwidth: f32 = 0.0;
@@ -136,10 +11,9 @@ class AnalogOsc {
   private currentTilt: f32 = -1.0;
   private coeffA: StaticArray<f32> = new StaticArray<f32>(ANALOG_OSC_KMAX + 1);
   private coeffB: StaticArray<f32> = new StaticArray<f32>(ANALOG_OSC_KMAX + 1);
-  private scratch: SinCosResult = new SinCosResult();
+  private trig: FastTrigResult = new FastTrigResult();
 
   constructor() {
-    ensureAnalogSinCosLut();
     this.rebuildCoefficients(0, ANALOG_OSC_DEFAULT_TILT);
   }
 
@@ -231,8 +105,6 @@ class AnalogOsc {
     guardHz: f32,
     betaParam: f32
   ): f32 {
-    ensureAnalogSinCosLut();
-
     let wf: i32 = waveform;
     if (wf < 0) {
       wf = 0;
@@ -294,9 +166,9 @@ class AnalogOsc {
       harmonicLimit = ANALOG_OSC_KMAX;
     }
 
-    analogSinCosLut.sincos(<f32>this.phase, this.scratch);
-    const sin1: f32 = this.scratch.sin;
-    const cos1: f32 = this.scratch.cos;
+    fastSinCosInto(<f32>this.phase, this.trig);
+    const sin1: f32 = this.trig.sin;
+    const cos1: f32 = this.trig.cos;
 
     let sk: f32 = sin1;
     let ck: f32 = cos1;

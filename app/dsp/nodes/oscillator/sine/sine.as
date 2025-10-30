@@ -7,6 +7,6 @@ export class SineOsc {
     if (this.phase >= TAU) {
       this.phase -= TAU;
     }
-    return Mathf.sin(this.phase);
+    return fastSin(this.phase);
   }
 }

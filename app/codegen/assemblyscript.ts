@@ -75,8 +75,116 @@ export function emitAssemblyScript(
     "const INV_SAMPLE_RATE: f32 = 1.0 / SAMPLE_RATE;",
     "const INV_SAMPLE_RATE_OVERSAMPLED: f32 = INV_SAMPLE_RATE / (<f32>OVERSAMPLING);",
     "const TAU: f32 = 6.283185307179586;",
+    "const PI: f32 = 3.141592653589793;",
+    "const HALF_PI: f32 = 1.5707963267948966;",
+    "const TWO_PI: f32 = TAU;",
     "const FREQ_C4: f32 = 261.6255653005986;"
   ].join("\n");
+
+  const trigSection = `
+const FAST_SIN_C1: f32 = 0.9997714075153924;
+const FAST_SIN_C3: f32 = -0.16582704279148017;
+const FAST_SIN_C5: f32 = 0.007574247764355203;
+const FAST_COS_C0: f32 = FAST_SIN_C1;
+const FAST_COS_C2: f32 = 3.0 * FAST_SIN_C3;
+const FAST_COS_C4: f32 = 5.0 * FAST_SIN_C5;
+const INV_HALF_PI: f32 = 2.0 / PI;
+
+class FastTrigResult {
+  sin: f32 = 0.0;
+  cos: f32 = 0.0;
+}
+
+@inline
+function fastSinPoly(x: f32): f32 {
+  const x2 = x * x;
+  const x4 = x2 * x2;
+  return x * (FAST_SIN_C1 + x2 * (FAST_SIN_C3 + FAST_SIN_C5 * x4));
+}
+
+@inline
+function fastCosPoly(x: f32): f32 {
+  const x2 = x * x;
+  const x4 = x2 * x2;
+  return FAST_COS_C0 + x2 * (FAST_COS_C2 + FAST_COS_C4 * x4);
+}
+
+@inline
+function resolveTrig(q: i32, sin_r: f32, cos_r: f32, out: FastTrigResult): void {
+  let sinVal: f32;
+  let cosVal: f32;
+  switch (q & 3) {
+    case 0: {
+      sinVal = sin_r;
+      cosVal = cos_r;
+      break;
+    }
+    case 1: {
+      sinVal = cos_r;
+      cosVal = -sin_r;
+      break;
+    }
+    case 2: {
+      sinVal = -sin_r;
+      cosVal = -cos_r;
+      break;
+    }
+    default: {
+      sinVal = -cos_r;
+      cosVal = sin_r;
+      break;
+    }
+  }
+  out.sin = sinVal;
+  out.cos = cosVal;
+}
+
+@inline
+export function fastSinCosInto(x: f32, out: FastTrigResult): void {
+  const kf: f32 = Mathf.round(x * INV_HALF_PI);
+  const r: f32 = x - kf * HALF_PI;
+  const sin_r: f32 = fastSinPoly(r);
+  const cos_r: f32 = fastCosPoly(r);
+  resolveTrig(<i32>kf, sin_r, cos_r, out);
+}
+
+@inline
+export function fastSin(x: f32): f32 {
+  const kf: f32 = Mathf.round(x * INV_HALF_PI);
+  const r: f32 = x - kf * HALF_PI;
+  const sin_r: f32 = fastSinPoly(r);
+  const cos_r: f32 = fastCosPoly(r);
+  switch (<i32>kf & 3) {
+    case 0:
+      return sin_r;
+    case 1:
+      return cos_r;
+    case 2:
+      return -sin_r;
+    default:
+      return -cos_r;
+  }
+}
+
+@inline
+export function fastCos(x: f32): f32 {
+  const kf: f32 = Mathf.round(x * INV_HALF_PI);
+  const r: f32 = x - kf * HALF_PI;
+  const sin_r: f32 = fastSinPoly(r);
+  const cos_r: f32 = fastCosPoly(r);
+  switch (<i32>kf & 3) {
+    case 0:
+      return cos_r;
+    case 1:
+      return -sin_r;
+    case 2:
+      return -cos_r;
+    default:
+      return sin_r;
+  }
+}
+
+`;
 
   const parameterSection = collectParameterSection(plan);
   const monitorSection = collectMonitorSections(plan);
@@ -160,6 +268,7 @@ export function emitAssemblyScript(
   const source = [
     header,
     constants,
+    trigSection,
     parameterSection,
     monitorSection,
     declarations,
@@ -607,6 +716,7 @@ function collectStateDeclarations(plan: ExecutionPlan): string {
       case "filter.biquad": {
         lines.push(`const biquad_low_${identifier} = new BiquadState();`);
         lines.push(`const biquad_high_${identifier} = new BiquadState();`);
+        lines.push(`const biquad_trig_${identifier} = new FastTrigResult();`);
         break;
       }
       case "filter.ladder": {
@@ -636,6 +746,7 @@ function collectStateDeclarations(plan: ExecutionPlan): string {
         lines.push(`const noise_rng_${identifier} = new Xoroshiro128Plus(${seedA}, ${seedB});`);
         lines.push(`let noise_spare_${identifier}: f32 = 0.0;`);
         lines.push(`let noise_hasSpare_${identifier}: bool = false;`);
+        lines.push(`const noise_trig_${identifier} = new FastTrigResult();`);
         break;
       }
       case "utility.slew": {

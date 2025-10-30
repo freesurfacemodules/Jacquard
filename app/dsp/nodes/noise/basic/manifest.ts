@@ -52,8 +52,9 @@ export const noiseNode: NodeImplementation = {
             `  let u2: f32 = ${rngVar}.uniform();`,
             `  const radius: f32 = Mathf.sqrt(-2.0 * Mathf.log(u1));`,
             `  const theta: f32 = TAU * u2;`,
-            `  normalSample = radius * Mathf.cos(theta) * 5.0;`,
-            `  ${spareVar} = radius * Mathf.sin(theta) * 5.0;`,
+            `  fastSinCosInto(theta, noise_trig_${identifier});`,
+            `  normalSample = radius * noise_trig_${identifier}.cos * 5.0;`,
+            `  ${spareVar} = radius * noise_trig_${identifier}.sin * 5.0;`,
             `  ${hasSpareVar} = true;`,
             `}`
           ].join("\n"),
