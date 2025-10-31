@@ -34,10 +34,10 @@ This document captures the most impactful opportunities we’ve spotted in the g
 - **Scope push frequency**: scopes default to the same oversampled cadence as DSP.  
   _Plan_: decimate scope updates to ~60 Hz inside the Wasm (already adequate for UI) to free cycles in dense graphs.
 
-## 5. Code Generation Enhancements
+- ## 5. Code Generation Enhancements
 
-- **Execution-plan metadata**: augment `PlanNode` with “pure control” vs “audio” markers so codegen can avoid unnecessary oversampled math (e.g., Schmitt triggers, counters).  
-  _Plan_: precompute sample-rate requirements during planning and emit reduced-rate loops for control-only nodes.
+- ~~**Execution-plan metadata**: augment `PlanNode` with “pure control” vs “audio” markers so codegen can avoid unnecessary oversampled math (e.g., Schmitt triggers, counters).  
+  _Plan_: precompute sample-rate requirements during planning and emit reduced-rate loops for control-only nodes.~~ (Explicitly deprioritized.)
 - **Common subexpression hoisting**: Several nodes recompute the same coefficients inside the per-sample loop (e.g., ladder filter `cutoffHz` scaling, clock BPM conversions).  
   _Plan_: extend node emitters with `prepare` blocks executed once per audio block (or per parameter change) and reuse cached coefficients.
 
@@ -46,6 +46,11 @@ This document captures the most impactful opportunities we’ve spotted in the g
 - **SIMD enablement**: neither Binaryen nor `asc` auto-vectorize, but we can hand-author SIMD intrinsics in the generated AS once the host enables the Wasm SIMD feature during instantiation.  
   _Plan_: add a math-mode flag (`--simd`) to generate `v128` operations for FIRs, vector adds/subs, and trig polynomial evaluation.
 - **Profile-guided benchmarks**: integrate the new CLI with multiple fixtures (`sine`, `fm`, `complex`) under CI and collect JSON summaries; use the data to prioritize the roadmap above.
+
+## 7. Subnormal Handling
+
+- **Flush-to-zero / Dither**: Long feedback paths can generate denormals, tanking performance on some CPUs.  
+  _Plan_: add a configurable flush-to-zero helper to clamp |x| < ~1e-20 to 0.0 (and optionally white-noise dither). Call it inside `pushOutputSamples` and other hot accumulators so we never feed subnormals into filters/delays.
 
 ## Immediate Next Steps
 

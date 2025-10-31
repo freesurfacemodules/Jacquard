@@ -37,6 +37,7 @@ export function emitAssemblyScript(
   const mathMode: MathMode = options.mathMode ?? "fast";
   const flattenedGraph = flattenForCodegen(graph);
   const plan = createExecutionPlan(flattenedGraph);
+  const useOversampling = flattenedGraph.oversampling > 1;
 
   const delayPrefetchLines: string[] = [];
   for (const planNode of plan.nodes) {
@@ -86,7 +87,8 @@ export function emitAssemblyScript(
     "const FREQ_C4: f32 = 261.6255653005986;",
     "const LN2: f32 = 0.6931471805599453;",
     "const INV_LN2: f32 = 1.4426950408889634;",
-    "const LN10: f32 = 2.302585092994046;"
+    "const LN10: f32 = 2.302585092994046;",
+    "const SUBNORMAL_EPSILON: f32 = 1e-20;"
   ].join("\n");
 
   const mathSection = buildMathSection(mathMode);
@@ -101,33 +103,53 @@ export function emitAssemblyScript(
   processBodyLines.push("for (let n = 0; n < BLOCK_SIZE; n++) {");
 
   if (plan.parameterCount > 0) {
-    processBodyLines.push(
-      indentLines(
-        [
-          "for (let p = 0; p < PARAM_COUNT; p++) {",
-          "  const current = unchecked(parameterValues[p]);",
-          "  const target = unchecked(parameterTargets[p]);",
-          "  unchecked(parameterValues[p] = current + (target - current) * PARAM_SMOOTH);",
-          "}"
-        ].join("\n"),
-        1
-      )
-    );
+    const smoothingLines = [
+      "if (parameterActiveCount > 0) {",
+      "  for (let p = 0; p < PARAM_COUNT; p++) {",
+      "    if (unchecked(parameterActive[p]) == 0) continue;",
+      "    const current = unchecked(parameterValues[p]);",
+      "    const target = unchecked(parameterTargets[p]);",
+      "    const next = current + (target - current) * PARAM_SMOOTH;",
+      "    unchecked(parameterValues[p] = next);",
+      "    const delta = Mathf.abs(target - next);",
+      "    if (delta <= PARAM_EPSILON) {",
+      "      unchecked(parameterValues[p] = target);",
+      "      unchecked(parameterTargets[p] = target);",
+      "      if (unchecked(parameterActive[p]) != 0) {",
+      "        unchecked(parameterActive[p] = 0);",
+      "        if (parameterActiveCount > 0) {",
+      "          parameterActiveCount -= 1;",
+      "        }",
+      "      }",
+      "    }",
+      "  }",
+      "}"
+    ];
+    processBodyLines.push(indentLines(smoothingLines.join("\n"), 1));
   }
 
-  processBodyLines.push(
-    indentLines("for (let step = 0; step < OVERSAMPLING; step++) {", 1)
-  );
+  if (useOversampling) {
+    processBodyLines.push(
+      indentLines("for (let step = 0; step < OVERSAMPLING; step++) {", 1)
+    );
+  }
 
   if (plan.wires.length > 0) {
     const wireLines = plan.wires.map(
       (wire) => `let ${wire.varName}: f32 = 0.0;`
     );
-    processBodyLines.push(indentLines(wireLines.join("\n"), 2));
+    processBodyLines.push(
+      indentLines(wireLines.join("\n"), useOversampling ? 2 : 1)
+    );
   }
 
   if (delayPrefetchLines.length > 0) {
-    processBodyLines.push(indentLines(delayPrefetchLines.join("\n"), 2));
+    processBodyLines.push(
+      indentLines(
+        delayPrefetchLines.join("\n"),
+        useOversampling ? 2 : 1
+      )
+    );
   }
 
   for (const planNode of plan.nodes) {
@@ -144,11 +166,15 @@ export function emitAssemblyScript(
     );
 
     if (snippet && snippet.trim().length > 0) {
-      processBodyLines.push(indentLines(snippet, 2));
+      processBodyLines.push(
+        indentLines(snippet, useOversampling ? 2 : 1)
+      );
     }
   }
 
-  processBodyLines.push(indentLines("}", 1));
+  if (useOversampling) {
+    processBodyLines.push(indentLines("}", 1));
+  }
   processBodyLines.push(
     indentLines("const outLeft: f32 = downsampleLeft.output();", 1)
   );
@@ -235,6 +261,11 @@ export function fastLog(x: f32): f32 {
 @inline
 export function fastPow(base: f32, exponent: f32): f32 {
   return Mathf.pow(base, exponent);
+}
+
+@inline
+export function flushSubnormal(x: f32): f32 {
+  return Mathf.abs(x) < SUBNORMAL_EPSILON ? 0.0 : x;
 }
 `.trim();
   }
@@ -415,6 +446,11 @@ export function fastPow(base: f32, exponent: f32): f32 {
   }
   return fastExp(exponent * fastLog(base));
 }
+
+@inline
+export function flushSubnormal(x: f32): f32 {
+  return Mathf.abs(x) < SUBNORMAL_EPSILON ? 0.0 : x;
+}
 `.trim();
 }
 
@@ -524,11 +560,11 @@ class Downsampler {
   }
 
   push(sample: f32): void {
+    let value = flushSubnormal(sample);
     if (this.stageCount === 0) {
-      this.last = sample;
+      this.last = value;
       return;
     }
-    let value = sample;
     if (this.stageCount >= 1) {
       if (!this.stage0.push(value)) {
         return;
@@ -547,7 +583,7 @@ class Downsampler {
       }
       value = this.stage2.output();
     }
-    this.last = value;
+    this.last = flushSubnormal(value);
   }
 
   output(): f32 {
@@ -650,7 +686,8 @@ function collectParameterSection(plan: ExecutionPlan): string {
       const literal = numberLiteral(control.defaultValue);
       return [
         `unchecked(parameterValues[${control.index}] = ${literal});`,
-        `unchecked(parameterTargets[${control.index}] = ${literal});`
+        `unchecked(parameterTargets[${control.index}] = ${literal});`,
+        `unchecked(parameterActive[${control.index}] = 0);`
       ].join("\n");
     })
     .join("\n");
@@ -659,10 +696,37 @@ function collectParameterSection(plan: ExecutionPlan): string {
     `const PARAM_COUNT: i32 = ${plan.parameterCount};`,
     "const parameterValues = new StaticArray<f32>(PARAM_COUNT);",
     "const parameterTargets = new StaticArray<f32>(PARAM_COUNT);",
+    "const parameterActive = new StaticArray<u8>(PARAM_COUNT);",
+    "let parameterActiveCount: i32 = 0;",
     "const PARAM_SMOOTH: f32 = 0.05;",
+    "const PARAM_EPSILON: f32 = 1e-4;",
     "",
     "function initializeParameters(): void {",
     indentLines(initLines || "", 1),
+    "}",
+    "",
+    "@inline function activateParameter(index: i32, current: f32, target: f32): void {",
+    indentLines(
+      [
+        "const delta = Mathf.abs(target - current);",
+        "if (delta <= PARAM_EPSILON) {",
+        "  unchecked(parameterValues[index] = target);",
+        "  unchecked(parameterTargets[index] = target);",
+        "  if (unchecked(parameterActive[index] != 0)) {",
+        "    unchecked(parameterActive[index] = 0);",
+        "    if (parameterActiveCount > 0) {",
+        "      parameterActiveCount -= 1;",
+        "    }",
+        "  }",
+        "  return;",
+        "}",
+        "if (unchecked(parameterActive[index]) == 0) {",
+        "  unchecked(parameterActive[index] = 1);",
+        "  parameterActiveCount += 1;",
+        "}"
+      ].join("\n"),
+      1
+    ),
     "}",
     "",
     "@inline function getParameterValue(index: i32): f32 {",
@@ -673,7 +737,9 @@ function collectParameterSection(plan: ExecutionPlan): string {
     indentLines(
       [
         "if (index >= 0 && index < PARAM_COUNT) {",
+        "  const current = unchecked(parameterValues[index]);",
         "  unchecked(parameterTargets[index] = value);",
+        "  activateParameter(index, current, value);",
         "}"
       ].join("\n"),
       1
@@ -823,8 +889,10 @@ function collectStateDeclarations(plan: ExecutionPlan): string {
   lines.push("const downsampleRight = new Downsampler(OVERSAMPLING);");
   lines.push("");
   lines.push("@inline function pushOutputSamples(left: f32, right: f32): void {");
-  lines.push("  downsampleLeft.push(left);");
-  lines.push("  downsampleRight.push(right);");
+  lines.push("  const cleanLeft = flushSubnormal(left);");
+  lines.push("  const cleanRight = flushSubnormal(right);");
+  lines.push("  downsampleLeft.push(cleanLeft);");
+  lines.push("  downsampleRight.push(cleanRight);");
   lines.push("}");
   lines.push("");
 
