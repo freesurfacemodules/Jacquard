@@ -10,6 +10,7 @@ export interface PatchRuntime {
   sampleRate: number;
   blockSize: number;
   mathMode: MathMode;
+  optimizer: "asc" | "asc+binaryen";
   left: Float32Array;
   right: Float32Array;
   parameterCount: number;
@@ -38,6 +39,7 @@ export async function loadMetadata(path: string): Promise<RuntimeMetadata> {
   const data = JSON.parse(contents) as Partial<RuntimeMetadata>;
   return {
     mathMode: (data.mathMode as MathMode) ?? "fast",
+    optimizer: (data.optimizer as "asc" | "asc+binaryen") ?? "asc",
     moduleName: data.moduleName ?? "maxwasm_patch",
     sampleRate: data.sampleRate ?? 48000,
     blockSize: data.blockSize ?? 128,
@@ -110,6 +112,7 @@ export async function instantiatePatchRuntime(
   return {
     moduleName: metadata.moduleName,
     sampleRate,
+    optimizer: metadata.optimizer,
     mathMode: metadata.mathMode,
     blockSize,
     parameterCount: metadata.parameterCount,

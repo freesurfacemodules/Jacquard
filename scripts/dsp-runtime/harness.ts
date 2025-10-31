@@ -22,6 +22,7 @@ export interface BenchCaseInput {
   metadataPath?: string;
   moduleName?: string;
   mathMode?: MathMode | "both";
+  optimizer?: "asc" | "asc+binaryen" | "both";
 }
 
 export interface BenchCaseResolved {
@@ -40,6 +41,7 @@ export interface BenchMetrics {
   caseLabel: string;
   moduleName: string;
   mathMode: MathMode;
+  optimizer: "asc" | "asc+binaryen";
   sampleRate: number;
   blockSize: number;
   frames: number;
@@ -76,9 +78,12 @@ export async function createRuntime(
         : defaultModuleNameFromPath(patchPath);
     const mathMode: MathMode =
       input.mathMode && input.mathMode !== "both" ? input.mathMode : "fast";
+    const optimizerFlag =
+      input.optimizer && input.optimizer !== "both" ? input.optimizer : "asc";
     const artifacts = await compilePatchFromFile(patchPath, {
       moduleName,
-      mathMode
+      mathMode,
+      optimizeWithBinaryen: optimizerFlag === "asc+binaryen"
     });
     const metadata = buildRuntimeMetadata(artifacts);
     const runtime = await instantiatePatchRuntime(
@@ -93,6 +98,9 @@ export async function createRuntime(
     const metadata = await loadMetadata(input.metadataPath);
     if (input.mathMode && input.mathMode !== "both") {
       metadata.mathMode = input.mathMode;
+    }
+    if (input.optimizer && input.optimizer !== "both") {
+      metadata.optimizer = input.optimizer;
     }
     const runtime = await instantiatePatchRuntime(wasm, metadata);
     return { label: input.label, runtime, metadata };
@@ -152,6 +160,7 @@ export function measureRuntime(
     caseLabel,
     moduleName: runtime.moduleName,
     mathMode: runtime.mathMode,
+    optimizer: runtime.optimizer,
     sampleRate: runtime.sampleRate,
     blockSize: runtime.blockSize,
     frames,
@@ -176,6 +185,7 @@ export function summarizeBenchmarks(
   const headers = [
     "Case",
     "Math",
+    "Optimizer",
     "Blocks/sec",
     "Avg block (µs)",
     "Real-time ×",
@@ -189,6 +199,7 @@ export function summarizeBenchmarks(
     return [
       entry.caseLabel,
       entry.mathMode,
+      entry.optimizer,
       entry.blocksPerSecond.toFixed(2),
       entry.averageBlockMicros.toFixed(3),
       entry.realtimeRatio.toFixed(3),
@@ -220,11 +231,24 @@ export function summarizeBenchmarks(
 }
 
 function expandMathModes(input: BenchCaseInput): BenchCaseInput[] {
-  if (input.mathMode !== "both") {
-    return [input];
+  const mathVariants =
+    input.mathMode === "both"
+      ? ([
+          { ...input, mathMode: "baseline" as MathMode, label: `${input.label}/baseline` },
+          { ...input, mathMode: "fast" as MathMode, label: `${input.label}/fast` }
+        ] satisfies BenchCaseInput[])
+      : [input];
+
+  const optimizerVariants: BenchCaseInput[] = [];
+  for (const variant of mathVariants) {
+    if (variant.optimizer === "both") {
+      optimizerVariants.push(
+        { ...variant, optimizer: "asc", label: `${variant.label}/asc` },
+        { ...variant, optimizer: "asc+binaryen", label: `${variant.label}/binaryen` }
+      );
+    } else {
+      optimizerVariants.push(variant);
+    }
   }
-  return [
-    { ...input, mathMode: "baseline", label: `${input.label}/baseline` },
-    { ...input, mathMode: "fast", label: `${input.label}/fast` }
-  ];
+  return optimizerVariants;
 }

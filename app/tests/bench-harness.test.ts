@@ -16,6 +16,7 @@ describe("DSP math mode benchmarking", () => {
     });
 
     expect(baseline.mathMode).toBe("baseline");
+    expect(baseline.optimizer).toBe("asc");
     expect(baseline.source).toContain("return Mathf.sin(x);");
     expect(baseline.source).toContain("return Mathf.cos(x);");
     expect(baseline.source).toContain("return Mathf.exp(x);");
@@ -26,11 +27,24 @@ describe("DSP math mode benchmarking", () => {
   });
 
   it("runs benchmarks for both math modes on the FM patch", async () => {
+    let binaryenAvailable = true;
+    try {
+      await import("binaryen");
+    } catch {
+      binaryenAvailable = false;
+      console.warn("[bench-harness test] binaryen not installed; skipping asc+binaryen variant.");
+    }
+
     const cases = await resolveBenchCases([
-      { label: "fm", patchPath: FM_PATCH, mathMode: "both" }
+      {
+        label: "fm",
+        patchPath: FM_PATCH,
+        mathMode: "both",
+        optimizer: binaryenAvailable ? "both" : "asc"
+      }
     ]);
 
-    expect(cases).toHaveLength(2);
+    expect(cases.length).toBeGreaterThanOrEqual(binaryenAvailable ? 4 : 2);
 
     const metrics = cases.map((entry) =>
       measureRuntime(entry.label, entry.runtime, {
@@ -39,7 +53,21 @@ describe("DSP math mode benchmarking", () => {
       })
     );
 
-    const modes = metrics.map((entry) => entry.mathMode).sort();
+    const optimizers = new Set(metrics.map((entry) => entry.optimizer));
+    expect(optimizers.has("asc")).toBe(true);
+    if (binaryenAvailable) {
+      expect(optimizers.has("asc+binaryen")).toBe(true);
+    }
+
+    for (const metric of metrics) {
+      console.log(
+        `bench: ${metric.caseLabel} | math=${metric.mathMode} | optimizer=${metric.optimizer} | blocks/sec=${metric.blocksPerSecond.toFixed(
+          2
+        )} | avg_block_us=${metric.averageBlockMicros.toFixed(3)} | realtime=${metric.realtimeRatio.toFixed(3)}x`
+      );
+    }
+
+    const modes = Array.from(new Set(metrics.map((entry) => entry.mathMode))).sort();
     expect(modes).toEqual(["baseline", "fast"]);
 
     for (const metric of metrics) {
@@ -50,8 +78,11 @@ describe("DSP math mode benchmarking", () => {
     }
 
     const summary = summarizeBenchmarks(metrics);
-    expect(summary.table).toMatch(/Case\s+Math/);
-    expect(summary.table).toMatch(/baseline/);
-    expect(summary.table).toMatch(/fast/);
+    console.log("bench summary:\n" + summary.table);
+    expect(summary.table).toMatch(/Case\s+Math\s+Optimizer/);
+    if (binaryenAvailable) {
+      expect(summary.table).toMatch(/asc\W+/);
+      expect(summary.table).toMatch(/binaryen/);
+    }
   });
 });

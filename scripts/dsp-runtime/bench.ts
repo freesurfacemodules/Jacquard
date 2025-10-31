@@ -24,6 +24,7 @@ interface BenchCliOptions {
   iterations?: number;
   json?: boolean;
   mathMode?: MathMode | "both";
+  optimizer?: "asc" | "asc+binaryen" | "both";
 }
 
 interface BenchConfigFile {
@@ -37,6 +38,7 @@ interface BenchConfigFile {
     metadata?: string;
     moduleName?: string;
     math?: MathMode | "both";
+    optimizer?: "asc" | "asc+binaryen" | "both";
   }>;
 }
 
@@ -47,7 +49,7 @@ function printUsage(): void {
       `Usage: ${scriptName} [--patch <patch.json> | --config <config.json>]`,
       "       [--label <label>] [--frames <count>] [--warmup <blocks>] [--iterations <blocks>]",
       "       [--wasm <module.wasm> --metadata <metadata.json>] [--module <name>]",
-      "       [--math fast|baseline|both] [--json]",
+      "       [--math fast|baseline|both] [--optimizer asc|binaryen|both] [--json]",
       "",
       "Examples:",
       `  ${scriptName} --patch patches/fm-example.json --frames 96000 --math both`,
@@ -121,6 +123,16 @@ function parseArgs(argv: string[]): BenchCliOptions | "help" | null {
         }
         break;
       }
+      case "--optimizer": {
+        const value = (argv[++index] ?? "").toLowerCase();
+        if (value === "asc" || value === "binaryen" || value === "both") {
+          options.optimizer =
+            value === "binaryen" ? "asc+binaryen" : (value as "asc" | "asc+binaryen" | "both");
+        } else if (value) {
+          console.warn(`Unknown --optimizer value: ${value}`);
+        }
+        break;
+      }
       case "--help":
       case "-h": {
         return "help";
@@ -166,13 +178,25 @@ async function loadConfigCases(
         `Benchmark case "${entry.label}" must provide either a patch or a wasm path.`
       );
     }
+    const optimizerValue = entry.optimizer;
+    let optimizer: "asc" | "asc+binaryen" | "both" | undefined;
+    if (optimizerValue === "binaryen") {
+      optimizer = "asc+binaryen";
+    } else if (
+      optimizerValue === "asc" ||
+      optimizerValue === "asc+binaryen" ||
+      optimizerValue === "both"
+    ) {
+      optimizer = optimizerValue;
+    }
     return {
       label: entry.label,
       patchPath: entry.patch,
       wasmPath: entry.wasm,
       metadataPath: entry.metadata,
       moduleName: entry.moduleName,
-      mathMode: entry.math
+      mathMode: entry.math,
+      optimizer
     };
   });
   return {
@@ -202,7 +226,8 @@ async function resolveCliCases(
     wasmPath: options.wasmPath,
     metadataPath: options.metadataPath,
     moduleName: options.moduleName,
-    mathMode: options.mathMode
+    mathMode: options.mathMode,
+    optimizer: options.optimizer
   };
 
   if (!singleCase.patchPath && !singleCase.wasmPath) {
@@ -226,6 +251,7 @@ function formatCaseDetails(metric: BenchMetrics, baseline?: BenchMetrics): strin
     `Case: ${metric.caseLabel}`,
     `  Module: ${metric.moduleName}`,
     `  Math: ${metric.mathMode}`,
+    `  Optimizer: ${metric.optimizer}`,
     `  Sample rate: ${metric.sampleRate} Hz`,
     `  Block size: ${metric.blockSize} frames`,
     `  Frames: ${metric.frames}`,
@@ -266,6 +292,7 @@ async function main(): Promise<void> {
       label: entry.caseLabel,
       moduleName: entry.moduleName,
       mathMode: entry.mathMode,
+      optimizer: entry.optimizer,
       sampleRate: entry.sampleRate,
       blockSize: entry.blockSize,
       frames: entry.frames,

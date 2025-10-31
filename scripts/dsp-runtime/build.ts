@@ -15,19 +15,21 @@ interface BuildCliOptions {
   outDir: string;
   moduleName?: string;
   mathMode?: MathMode;
+  optimizer?: "asc" | "asc+binaryen";
 }
 
 function printUsage(): void {
   const scriptName = path.basename(process.argv[1] ?? "build.ts");
   console.log(
     [
-      `Usage: ${scriptName} --patch <patch.json> [--out <dir>] [--module <name>] [--math fast|baseline]`,
+      `Usage: ${scriptName} --patch <patch.json> [--out <dir>] [--module <name>] [--math fast|baseline] [--optimizer asc|binaryen]`,
       "",
       "Options:",
       "  --patch    Path to a patch JSON file (required)",
       "  --out      Output directory for source/wasm/metadata (default: dist/dsp-runtime)",
       "  --module   Override the generated module name",
-      "  --math     Select math mode (fast | baseline)"
+      "  --math     Select math mode (fast | baseline)",
+      "  --optimizer  Post-process Wasm with asc (default) or asc+binaryen"
     ].join("\n")
   );
 }
@@ -37,6 +39,7 @@ function parseArgs(argv: string[]): BuildCliOptions | "help" | null {
   let outDir = "dist/dsp-runtime";
   let moduleName: string | undefined;
   let mathMode: MathMode | undefined;
+  let optimizer: "asc" | "asc+binaryen" | undefined;
 
   for (let index = 0; index < argv.length; index++) {
     const arg = argv[index];
@@ -59,6 +62,17 @@ function parseArgs(argv: string[]): BuildCliOptions | "help" | null {
           mathMode = value as MathMode;
         } else if (value) {
           console.warn(`Unknown math mode: ${value}`);
+        }
+        break;
+      }
+      case "--optimizer": {
+        const value = (argv[++index] ?? "").toLowerCase();
+        if (value === "asc") {
+          optimizer = "asc";
+        } else if (value === "binaryen") {
+          optimizer = "asc+binaryen";
+        } else if (value) {
+          console.warn(`Unknown optimizer value: ${value}`);
         }
         break;
       }
@@ -85,7 +99,8 @@ function parseArgs(argv: string[]): BuildCliOptions | "help" | null {
     patchPath,
     outDir,
     moduleName,
-    mathMode
+    mathMode,
+    optimizer
   };
 }
 
@@ -107,7 +122,8 @@ async function main(): Promise<void> {
 
   const artifacts = await compilePatchFromFile(patchPath, {
     moduleName,
-    mathMode: options.mathMode
+    mathMode: options.mathMode,
+    optimizeWithBinaryen: options.optimizer === "asc+binaryen"
   });
   const outputs = await writeBuildOutputs(artifacts, options.outDir);
 
@@ -115,6 +131,7 @@ async function main(): Promise<void> {
     [
       `[bench:build] module: ${outputs.moduleName}`,
       `[bench:build] math: ${outputs.mathMode}`,
+      `[bench:build] optimizer: ${outputs.optimizer}`,
       `[bench:build] source: ${outputs.sourcePath}`,
       `[bench:build] wasm: ${outputs.wasmPath}`,
       `[bench:build] metadata: ${outputs.metadataPath}`

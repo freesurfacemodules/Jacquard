@@ -466,8 +466,8 @@ To measure DSP performance without the browser or AudioWorklet, use the new Vite
 
   ```bash
   npm run bench:build -- --patch scripts/dsp-runtime/fixtures/sine.json
-  # or force baseline math implementations
-  npm run bench:build -- --patch scripts/dsp-runtime/fixtures/sine.json --math baseline
+  # force baseline math and post-optimize with Binaryen's wasm-opt
+  npm run bench:build -- --patch scripts/dsp-runtime/fixtures/sine.json --math baseline --optimizer binaryen
   ```
 
   This writes the generated AssemblyScript source, compiled Wasm binary, and runtime metadata to `dist/dsp-runtime/`.
@@ -476,6 +476,8 @@ To measure DSP performance without the browser or AudioWorklet, use the new Vite
 
   ```bash
   npm run bench:dsp -- --patch scripts/dsp-runtime/fixtures/fm-example.json --frames 96000 --math fast
+  # compare asc vs. asc+binaryen for the same patch
+  npm run bench:dsp -- --patch scripts/dsp-runtime/fixtures/fm-example.json --math fast --optimizer both --frames 96000
   ```
 
 - **Benchmark prebuilt modules** with metadata (ideal for A/B comparisons between different Wasm builds):
@@ -502,7 +504,7 @@ To measure DSP performance without the browser or AudioWorklet, use the new Vite
 
 - **Automation hooks**: pass `--json` to get machine-readable output (per-case throughput, average block time, relative speedups) for CI dashboards.
 
-All commands run under Node, instantiate the Wasm module directly, and reuse the same AssemblyScript emitter that powers the browser build so benchmark results mirror production codegen. The harness now reports detailed per-case stats plus a summary table that highlights real-time ratios and speedups relative to the baseline math mode.
+All commands run under Node, instantiate the Wasm module directly, and reuse the same AssemblyScript emitter that powers the browser build so benchmark results mirror production codegen. The harness now reports detailed per-case stats plus a summary table that highlights real-time ratios and speedups relative to the baseline math mode. If you want to experiment with Binaryen’s aggressive pipelines, install `binaryen` (`npm install binaryen`) and pass `--optimizer binaryen` to the CLI.
 
 ---
 

@@ -10,6 +10,8 @@ import type { PatchGraph } from "@graph/types";
 export interface CompileOptions {
   moduleName?: string;
   mathMode?: MathMode;
+  optimizeWithBinaryen?: boolean;
+  binaryenOptions?: Partial<BinaryenOptimizeOptions>;
 }
 
 export interface CompileArtifacts {
@@ -19,6 +21,7 @@ export interface CompileArtifacts {
   source: string;
   wasmBinary: Uint8Array;
   mathMode: MathMode;
+  optimizer: "asc" | "asc+binaryen";
 }
 
 export interface BuildOutputs extends CompileArtifacts {
@@ -38,6 +41,7 @@ export interface RuntimeMetadata {
   envelopeMonitors: ExecutionPlan["envelopeMonitors"];
   scopeMonitors: ExecutionPlan["scopeMonitors"];
   mathMode: MathMode;
+  optimizer: "asc" | "asc+binaryen";
 }
 
 const __filename = fileURLToPath(import.meta.url);
@@ -81,14 +85,24 @@ export async function compilePatchGraph(
     options.moduleName ?? sanitizeModuleName(graph.nodes[0]?.id ?? "maxwasm_patch");
   const mathMode: MathMode = options.mathMode ?? "fast";
   const { source, plan } = emitAssemblyScript(graph, { moduleName, mathMode });
-  const wasmBinary = await compileAssemblyScriptToWasm(source);
+  let wasmBinary = await compileAssemblyScriptToWasm(source);
+  let optimizer: "asc" | "asc+binaryen" = "asc";
+  if (options.optimizeWithBinaryen) {
+    const { binary, applied } = await applyBinaryenOptimizations(
+      wasmBinary,
+      options.binaryenOptions
+    );
+    wasmBinary = binary;
+    optimizer = applied ? "asc+binaryen" : "asc";
+  }
   return {
     moduleName,
     graph,
     plan,
     source,
     wasmBinary,
-    mathMode
+    mathMode,
+    optimizer
   };
 }
 
@@ -99,7 +113,12 @@ export async function compilePatchFromFile(
   const graph = await readPatchGraph(patchPath);
   const moduleName =
     options.moduleName ?? defaultModuleNameFromPath(patchPath);
-  return compilePatchGraph(graph, { moduleName, mathMode: options.mathMode });
+  return compilePatchGraph(graph, {
+    moduleName,
+    mathMode: options.mathMode,
+    optimizeWithBinaryen: options.optimizeWithBinaryen,
+    binaryenOptions: options.binaryenOptions
+  });
 }
 
 export async function writeBuildOutputs(
@@ -144,7 +163,8 @@ export function buildRuntimeMetadata(artifacts: CompileArtifacts): RuntimeMetada
     controls: artifacts.plan.controls,
     envelopeMonitors: artifacts.plan.envelopeMonitors,
     scopeMonitors: artifacts.plan.scopeMonitors,
-    mathMode: artifacts.mathMode
+    mathMode: artifacts.mathMode,
+    optimizer: artifacts.optimizer
   };
 }
 
@@ -175,4 +195,87 @@ async function compileAssemblyScriptToWasm(source: string): Promise<Uint8Array> 
   return result.binary instanceof Uint8Array
     ? result.binary
     : new Uint8Array(result.binary);
+}
+
+interface BinaryenOptimizeOptions {
+  optimizeLevel: number;
+  shrinkLevel: number;
+  fastMath: boolean;
+  enableSimd: boolean;
+  passes: string[];
+}
+
+async function applyBinaryenOptimizations(
+  wasmBinary: Uint8Array,
+  options: Partial<BinaryenOptimizeOptions> = {}
+): Promise<{ binary: Uint8Array; applied: boolean }> {
+  let binaryen: typeof import("binaryen") | null = null;
+  try {
+    binaryen = await import("binaryen");
+  } catch {
+    console.warn(
+      "[bench] Binaryen not installed; skipping post-AssemblyScript wasm-opt optimization."
+    );
+    return { binary: wasmBinary, applied: false };
+  }
+
+  const {
+    optimizeLevel = 3,
+    shrinkLevel = 0,
+    fastMath = true,
+    enableSimd = true,
+    passes = [
+      "inlining-optimizing",
+      "flatten",
+      "precompute",
+      "precompute-propagate",
+      "reorder-locals",
+      "dce",
+      "simplify-globals",
+      "vacuum",
+      "strip-debug",
+      "strip-producers"
+    ]
+  } = options;
+
+  binaryen.setOptimizeLevel(optimizeLevel);
+  binaryen.setShrinkLevel(shrinkLevel);
+  binaryen.setFastMath(fastMath);
+  if (typeof (binaryen as any).setClosedWorld === "function") {
+    (binaryen as any).setClosedWorld(true);
+  }
+
+  const module = binaryen.readBinary(wasmBinary);
+  if (typeof module.setFeatures === "function" && (binaryen as any).Features) {
+    try {
+      const featuresEnum = (binaryen as any).Features;
+      const allFeatures =
+        featuresEnum?.All ??
+        featuresEnum?.ALL ??
+        (featuresEnum.MV || featuresEnum.Mvp || 0) |
+          (featuresEnum.SIMD ?? featuresEnum.Simd ?? 0) |
+          (featuresEnum.BulkMemory ?? featuresEnum.BULK_MEMORY ?? 0) |
+          (featuresEnum.Multivalue ?? featuresEnum.MULTIVALUE ?? 0) |
+          (featuresEnum.TailCall ?? featuresEnum.TAIL_CALLS ?? 0) |
+          0;
+      if (allFeatures) {
+        module.setFeatures(allFeatures);
+      }
+    } catch {
+      /* ignore feature configuration issues */
+    }
+  }
+
+  // Run Binaryen's standard optimizer then any extra passes.
+  module.optimize();
+  if (passes.length > 0) {
+    module.runPasses(passes);
+  }
+  module.optimize();
+
+  const optimized = module.emitBinary();
+  module.dispose();
+  const binary =
+    optimized instanceof Uint8Array ? optimized : new Uint8Array(optimized);
+  return { binary, applied: true };
 }

@@ -5,7 +5,8 @@
     {
       "label": "fm",
       "patch": "scripts/dsp-runtime/fixtures/fm-example.json",
-      "math": "both"
+      "math": "both",
+      "optimizer": "both"
     }
   ]
 }

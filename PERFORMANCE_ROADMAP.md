@@ -45,6 +45,7 @@ This document captures the most impactful opportunities we’ve spotted in the g
 
 - **SIMD enablement**: neither Binaryen nor `asc` auto-vectorize, but we can hand-author SIMD intrinsics in the generated AS once the host enables the Wasm SIMD feature during instantiation.  
   _Plan_: add a math-mode flag (`--simd`) to generate `v128` operations for FIRs, vector adds/subs, and trig polynomial evaluation.
+- **Binaryen pass experiments** *(in progress)*: optional `--optimizer binaryen` flag runs `wasm-opt` with aggressive passes after `asc` compilation, enabling head-to-head benchmarks between plain `asc` and asc+Binaryen builds.
 - **Profile-guided benchmarks**: integrate the new CLI with multiple fixtures (`sine`, `fm`, `complex`) under CI and collect JSON summaries; use the data to prioritize the roadmap above.
 
 ## 7. Subnormal Handling

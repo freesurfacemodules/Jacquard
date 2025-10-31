@@ -18,6 +18,7 @@
 - **Logic Utilities**: AND/OR/XOR/NOT gates, a comparator, and a trigger-driven counter handle boolean logic and edge sequencing with 5 V high outputs.
 - **DSP Benchmarking**: Standalone Node/Vite-node CLI compiles patches to Wasm and runs headless DSP benchmarks for A/B performance testing outside the browser.
 - **Math Mode A/B**: AssemblyScript codegen exposes fast vs baseline math toggles (sin/cos/log/exp/pow) so benchmarks can compare accuracy/perf trade-offs per patch.
+- **Binaryen Post-Opt**: Benchmark harness can invoke Binaryen’s wasm-opt pipeline (`--optimizer binaryen`) to compare asc vs. asc+Binaryen builds.
 
 ## Known Constraints / Pending Work
 1. **Cycle Recovery**
