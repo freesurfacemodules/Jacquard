@@ -8,7 +8,9 @@
     "build": "tsc --noEmit && vite build",
     "test": "vitest run --pool=threads --poolOptions.threads.singleThread",
     "test:watch": "vitest --pool=threads --poolOptions.threads.singleThread",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "bench:build": "vite-node --scripts-tag=bench scripts/dsp-runtime/build.ts",
+    "bench:dsp": "vite-node --scripts-tag=bench scripts/dsp-runtime/bench.ts"
   },
   "dependencies": {
     "@assemblyscript/loader": "^0.27.9",

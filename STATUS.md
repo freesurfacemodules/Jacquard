@@ -16,6 +16,7 @@
 - **Compilation Flow**: Compile logs surface module sizes and parameter counts. Topology changes invalidate the running artifact; parameter/position changes do not.
 - **Validation & Tests**: DAG validation, duplicate detection, control bindings, and codegen snippets are covered by Vitest; linting enforces TS/React style.
 - **Logic Utilities**: AND/OR/XOR/NOT gates, a comparator, and a trigger-driven counter handle boolean logic and edge sequencing with 5 V high outputs.
+- **DSP Benchmarking**: Standalone Node/Vite-node CLI compiles patches to Wasm and runs headless DSP benchmarks for A/B performance testing outside the browser.
 
 ## Known Constraints / Pending Work
 1. **Cycle Recovery**

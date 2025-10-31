@@ -458,7 +458,47 @@ export function process(ptrL: i32, ptrR: i32): void {
 
 ---
 
-## 16) Extensibility roadmap
+## 16) Headless DSP Benchmarking
+
+To measure DSP performance without the browser or AudioWorklet, use the new Vite-node powered CLI tooling.
+
+- **Build a Wasm artifact** from an existing patch JSON:
+
+  ```bash
+  npm run bench:build -- --patch scripts/dsp-runtime/fixtures/sine.json
+  ```
+
+  This writes the generated AssemblyScript source, compiled Wasm binary, and runtime metadata to `dist/dsp-runtime/`.
+
+- **Run a benchmark directly from a patch** (compiles in-memory, runs N blocks, reports throughput):
+
+  ```bash
+  npm run bench:dsp -- --patch scripts/dsp-runtime/fixtures/sine.json --frames 96000
+  ```
+
+- **Benchmark prebuilt modules** with metadata (ideal for A/B comparisons between different Wasm builds):
+
+  ```bash
+  npm run bench:dsp \
+    -- --wasm dist/dsp-runtime/sine.wasm \
+       --metadata dist/dsp-runtime/sine.metadata.json \
+       --label prebuilt \
+       --frames 96000
+  ```
+
+- **Batch comparisons**: supply a JSON config describing multiple cases to compare and optional warm-up/iteration settings:
+
+  ```bash
+  npm run bench:dsp -- --config scripts/dsp-runtime/fixtures/bench-example.json
+  ```
+
+- **Automation hooks**: pass `--json` to get machine-readable output (per-case throughput, average block time, relative speedups) for CI dashboards.
+
+All commands run under Node, instantiate the Wasm module directly, and reuse the same AssemblyScript emitter that powers the browser build so benchmark results mirror production codegen.
+
+---
+
+## 17) Extensibility roadmap
 
 * **v1.1**: MIDI in, host tempo/transport, beat-synced nodes; better upsampler (polyphase).
 * **v1.2**: Subpatchers, polyphony/voice allocation, parameter arrays.
@@ -467,7 +507,7 @@ export function process(ptrL: i32, ptrR: i32): void {
 
 ---
 
-## 17) Risks & mitigations
+## 18) Risks & mitigations
 
 * **Compile size/latency** (asc in browser): cache compiler script; use a Worker; incremental rebuilds for small edits; pre-bundle built-in nodes.
 * **Audio dropouts**: keep process call constant time; no dynamic allocation; parameter ingest O(1); keep downsampler efficient & SIMD.
@@ -476,7 +516,7 @@ export function process(ptrL: i32, ptrR: i32): void {
 
 ---
 
-## 18) Developer ergonomics
+## 19) Developer ergonomics
 
 * **Node author kit**: template AS snippet + manifest, local hot-reload (no audio thread restarts when safe).
 * **Graph debugger**: tap nodes to record short buffers; display spectrum/Lissajous.

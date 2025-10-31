@@ -1,0 +1,15 @@
+{
+  "frames": 96000,
+  "warmupBlocks": 64,
+  "cases": [
+    {
+      "label": "compiled",
+      "patch": "scripts/dsp-runtime/fixtures/sine.json"
+    },
+    {
+      "label": "prebuilt",
+      "wasm": "dist/dsp-runtime/sine.wasm",
+      "metadata": "dist/dsp-runtime/sine.metadata.json"
+    }
+  ]
+}
