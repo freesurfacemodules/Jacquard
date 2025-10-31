@@ -16,13 +16,17 @@ import {
 import type { NodeEmitHelpers } from "@dsp/types";
 import { flattenForCodegen } from "@graph/flatten";
 
+export type MathMode = "fast" | "baseline";
+
 export interface EmitOptions {
   moduleName?: string;
+  mathMode?: MathMode;
 }
 
 export interface EmitResult {
   source: string;
   plan: ExecutionPlan;
+  mathMode: MathMode;
 }
 
 export function emitAssemblyScript(
@@ -30,6 +34,7 @@ export function emitAssemblyScript(
   options: EmitOptions = {}
 ): EmitResult {
   const moduleName = options.moduleName ?? "maxwasm_patch";
+  const mathMode: MathMode = options.mathMode ?? "fast";
   const flattenedGraph = flattenForCodegen(graph);
   const plan = createExecutionPlan(flattenedGraph);
 
@@ -84,7 +89,157 @@ export function emitAssemblyScript(
     "const LN10: f32 = 2.302585092994046;"
   ].join("\n");
 
-  const trigSection = `
+  const mathSection = buildMathSection(mathMode);
+
+  const parameterSection = collectParameterSection(plan);
+  const monitorSection = collectMonitorSections(plan);
+  const declarations = collectAssemblyDeclarations();
+  const stateLines = collectStateDeclarations(plan);
+
+  const processBodyLines: string[] = [];
+
+  processBodyLines.push("for (let n = 0; n < BLOCK_SIZE; n++) {");
+
+  if (plan.parameterCount > 0) {
+    processBodyLines.push(
+      indentLines(
+        [
+          "for (let p = 0; p < PARAM_COUNT; p++) {",
+          "  const current = unchecked(parameterValues[p]);",
+          "  const target = unchecked(parameterTargets[p]);",
+          "  unchecked(parameterValues[p] = current + (target - current) * PARAM_SMOOTH);",
+          "}"
+        ].join("\n"),
+        1
+      )
+    );
+  }
+
+  processBodyLines.push(
+    indentLines("for (let step = 0; step < OVERSAMPLING; step++) {", 1)
+  );
+
+  if (plan.wires.length > 0) {
+    const wireLines = plan.wires.map(
+      (wire) => `let ${wire.varName}: f32 = 0.0;`
+    );
+    processBodyLines.push(indentLines(wireLines.join("\n"), 2));
+  }
+
+  if (delayPrefetchLines.length > 0) {
+    processBodyLines.push(indentLines(delayPrefetchLines.join("\n"), 2));
+  }
+
+  for (const planNode of plan.nodes) {
+    const implementation = getNodeImplementation(planNode.node.kind);
+    if (!implementation || !implementation.assembly?.emit) {
+      throw new Error(
+        `No AssemblyScript emitter registered for node kind "${planNode.node.kind}".`
+      );
+    }
+
+    const snippet = implementation.assembly.emit(
+      planNode,
+      createEmitHelpers()
+    );
+
+    if (snippet && snippet.trim().length > 0) {
+      processBodyLines.push(indentLines(snippet, 2));
+    }
+  }
+
+  processBodyLines.push(indentLines("}", 1));
+  processBodyLines.push(
+    indentLines("const outLeft: f32 = downsampleLeft.output();", 1)
+  );
+  processBodyLines.push(
+    indentLines("const outRight: f32 = downsampleRight.output();", 1)
+  );
+  processBodyLines.push(
+    indentLines("store<f32>(ptrL + (n << 2), outLeft);", 1)
+  );
+  processBodyLines.push(
+    indentLines("store<f32>(ptrR + (n << 2), outRight);", 1)
+  );
+
+  processBodyLines.push("}");
+
+  const processFunction = [
+    "export function process(ptrL: i32, ptrR: i32): void {",
+    indentLines(processBodyLines.join("\n")),
+    "}"
+  ].join("\n");
+
+  const source = [
+    header,
+    constants,
+    mathSection,
+    parameterSection,
+    monitorSection,
+    declarations,
+    stateLines,
+    processFunction
+  ]
+    .filter(Boolean)
+    .join("\n\n")
+    .trimEnd()
+    .concat("\n");
+
+  return { source, plan, mathMode };
+}
+
+function buildMathSection(mode: MathMode): string {
+  if (mode === "baseline") {
+    return `
+class FastTrigResult {
+  sin: f32 = 0.0;
+  cos: f32 = 0.0;
+}
+
+@inline
+export function fastSinCosInto(x: f32, out: FastTrigResult): void {
+  out.sin = Mathf.sin(x);
+  out.cos = Mathf.cos(x);
+}
+
+@inline
+export function fastSin(x: f32): f32 {
+  return Mathf.sin(x);
+}
+
+@inline
+export function fastCos(x: f32): f32 {
+  return Mathf.cos(x);
+}
+
+@inline
+export function fastExp2(x: f32): f32 {
+  return Mathf.pow(2.0, x);
+}
+
+@inline
+export function fastExp(x: f32): f32 {
+  return Mathf.exp(x);
+}
+
+@inline
+export function fastLog2(x: f32): f32 {
+  return Mathf.log2(x);
+}
+
+@inline
+export function fastLog(x: f32): f32 {
+  return Mathf.log(x);
+}
+
+@inline
+export function fastPow(base: f32, exponent: f32): f32 {
+  return Mathf.pow(base, exponent);
+}
+`.trim();
+  }
+
+  return `
 const FAST_SIN_C1: f32 = 0.9997714075153924;
 const FAST_SIN_C3: f32 = -0.16582704279148017;
 const FAST_SIN_C5: f32 = 0.007574247764355203;
@@ -260,103 +415,7 @@ export function fastPow(base: f32, exponent: f32): f32 {
   }
   return fastExp(exponent * fastLog(base));
 }
-`;
-
-  const parameterSection = collectParameterSection(plan);
-  const monitorSection = collectMonitorSections(plan);
-  const declarations = collectAssemblyDeclarations();
-  const stateLines = collectStateDeclarations(plan);
-
-  const processBodyLines: string[] = [];
-
-  processBodyLines.push("for (let n = 0; n < BLOCK_SIZE; n++) {");
-
-  if (plan.parameterCount > 0) {
-    processBodyLines.push(
-      indentLines(
-        [
-          "for (let p = 0; p < PARAM_COUNT; p++) {",
-          "  const current = unchecked(parameterValues[p]);",
-          "  const target = unchecked(parameterTargets[p]);",
-          "  unchecked(parameterValues[p] = current + (target - current) * PARAM_SMOOTH);",
-          "}"
-        ].join("\n"),
-        1
-      )
-    );
-  }
-
-  processBodyLines.push(
-    indentLines("for (let step = 0; step < OVERSAMPLING; step++) {", 1)
-  );
-
-  if (plan.wires.length > 0) {
-    const wireLines = plan.wires.map(
-      (wire) => `let ${wire.varName}: f32 = 0.0;`
-    );
-    processBodyLines.push(indentLines(wireLines.join("\n"), 2));
-  }
-
-  if (delayPrefetchLines.length > 0) {
-    processBodyLines.push(indentLines(delayPrefetchLines.join("\n"), 2));
-  }
-
-  for (const planNode of plan.nodes) {
-    const implementation = getNodeImplementation(planNode.node.kind);
-    if (!implementation || !implementation.assembly?.emit) {
-      throw new Error(
-        `No AssemblyScript emitter registered for node kind "${planNode.node.kind}".`
-      );
-    }
-
-    const snippet = implementation.assembly.emit(
-      planNode,
-      createEmitHelpers()
-    );
-
-    if (snippet && snippet.trim().length > 0) {
-      processBodyLines.push(indentLines(snippet, 2));
-    }
-  }
-
-  processBodyLines.push(indentLines("}", 1));
-  processBodyLines.push(
-    indentLines("const outLeft: f32 = downsampleLeft.output();", 1)
-  );
-  processBodyLines.push(
-    indentLines("const outRight: f32 = downsampleRight.output();", 1)
-  );
-  processBodyLines.push(
-    indentLines("store<f32>(ptrL + (n << 2), outLeft);", 1)
-  );
-  processBodyLines.push(
-    indentLines("store<f32>(ptrR + (n << 2), outRight);", 1)
-  );
-
-  processBodyLines.push("}");
-
-  const processFunction = [
-    "export function process(ptrL: i32, ptrR: i32): void {",
-    indentLines(processBodyLines.join("\n")),
-    "}"
-  ].join("\n");
-
-  const source = [
-    header,
-    constants,
-    trigSection,
-    parameterSection,
-    monitorSection,
-    declarations,
-    stateLines,
-    processFunction
-  ]
-    .filter(Boolean)
-    .join("\n\n")
-    .trimEnd()
-    .concat("\n");
-
-  return { source, plan };
+`.trim();
 }
 
 const DOWNSAMPLER_DECLARATION = `

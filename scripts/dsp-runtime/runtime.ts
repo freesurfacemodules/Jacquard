@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import { resolvePath } from "./utils";
 import type { RuntimeMetadata } from "./utils";
+import type { MathMode } from "@codegen/assemblyscript";
 
 const PAGE_BYTES = 64 * 1024;
 
@@ -8,6 +9,7 @@ export interface PatchRuntime {
   moduleName: string;
   sampleRate: number;
   blockSize: number;
+  mathMode: MathMode;
   left: Float32Array;
   right: Float32Array;
   parameterCount: number;
@@ -33,7 +35,18 @@ export async function loadWasmBinary(path: string): Promise<Uint8Array> {
 export async function loadMetadata(path: string): Promise<RuntimeMetadata> {
   const absolute = resolvePath(path);
   const contents = await fs.readFile(absolute, "utf8");
-  return JSON.parse(contents) as RuntimeMetadata;
+  const data = JSON.parse(contents) as Partial<RuntimeMetadata>;
+  return {
+    mathMode: (data.mathMode as MathMode) ?? "fast",
+    moduleName: data.moduleName ?? "maxwasm_patch",
+    sampleRate: data.sampleRate ?? 48000,
+    blockSize: data.blockSize ?? 128,
+    oversampling: data.oversampling ?? 1,
+    parameterCount: data.parameterCount ?? 0,
+    controls: data.controls ?? [],
+    envelopeMonitors: data.envelopeMonitors ?? [],
+    scopeMonitors: data.scopeMonitors ?? []
+  };
 }
 
 export async function instantiatePatchRuntime(
@@ -97,6 +110,7 @@ export async function instantiatePatchRuntime(
   return {
     moduleName: metadata.moduleName,
     sampleRate,
+    mathMode: metadata.mathMode,
     blockSize,
     parameterCount: metadata.parameterCount,
     left,

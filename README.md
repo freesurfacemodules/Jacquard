@@ -466,6 +466,8 @@ To measure DSP performance without the browser or AudioWorklet, use the new Vite
 
   ```bash
   npm run bench:build -- --patch scripts/dsp-runtime/fixtures/sine.json
+  # or force baseline math implementations
+  npm run bench:build -- --patch scripts/dsp-runtime/fixtures/sine.json --math baseline
   ```
 
   This writes the generated AssemblyScript source, compiled Wasm binary, and runtime metadata to `dist/dsp-runtime/`.
@@ -473,7 +475,7 @@ To measure DSP performance without the browser or AudioWorklet, use the new Vite
 - **Run a benchmark directly from a patch** (compiles in-memory, runs N blocks, reports throughput):
 
   ```bash
-  npm run bench:dsp -- --patch scripts/dsp-runtime/fixtures/sine.json --frames 96000
+  npm run bench:dsp -- --patch scripts/dsp-runtime/fixtures/fm-example.json --frames 96000 --math fast
   ```
 
 - **Benchmark prebuilt modules** with metadata (ideal for A/B comparisons between different Wasm builds):
@@ -486,6 +488,12 @@ To measure DSP performance without the browser or AudioWorklet, use the new Vite
        --frames 96000
   ```
 
+- **Compare math modes (fast vs baseline)** in one pass:
+
+  ```bash
+  npm run bench:dsp -- --patch scripts/dsp-runtime/fixtures/fm-example.json --math both --frames 96000
+  ```
+
 - **Batch comparisons**: supply a JSON config describing multiple cases to compare and optional warm-up/iteration settings:
 
   ```bash
@@ -494,7 +502,7 @@ To measure DSP performance without the browser or AudioWorklet, use the new Vite
 
 - **Automation hooks**: pass `--json` to get machine-readable output (per-case throughput, average block time, relative speedups) for CI dashboards.
 
-All commands run under Node, instantiate the Wasm module directly, and reuse the same AssemblyScript emitter that powers the browser build so benchmark results mirror production codegen.
+All commands run under Node, instantiate the Wasm module directly, and reuse the same AssemblyScript emitter that powers the browser build so benchmark results mirror production codegen. The harness now reports detailed per-case stats plus a summary table that highlights real-time ratios and speedups relative to the baseline math mode.
 
 ---
 

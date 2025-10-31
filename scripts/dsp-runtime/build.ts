@@ -8,23 +8,26 @@ import {
   sanitizeModuleName,
   writeBuildOutputs
 } from "./utils";
+import type { MathMode } from "@codegen/assemblyscript";
 
 interface BuildCliOptions {
   patchPath: string;
   outDir: string;
   moduleName?: string;
+  mathMode?: MathMode;
 }
 
 function printUsage(): void {
   const scriptName = path.basename(process.argv[1] ?? "build.ts");
   console.log(
     [
-      `Usage: ${scriptName} --patch <patch.json> [--out <dir>] [--module <name>]`,
+      `Usage: ${scriptName} --patch <patch.json> [--out <dir>] [--module <name>] [--math fast|baseline]`,
       "",
       "Options:",
       "  --patch    Path to a patch JSON file (required)",
       "  --out      Output directory for source/wasm/metadata (default: dist/dsp-runtime)",
-      "  --module   Override the generated module name"
+      "  --module   Override the generated module name",
+      "  --math     Select math mode (fast | baseline)"
     ].join("\n")
   );
 }
@@ -33,6 +36,7 @@ function parseArgs(argv: string[]): BuildCliOptions | "help" | null {
   let patchPath: string | undefined;
   let outDir = "dist/dsp-runtime";
   let moduleName: string | undefined;
+  let mathMode: MathMode | undefined;
 
   for (let index = 0; index < argv.length; index++) {
     const arg = argv[index];
@@ -47,6 +51,15 @@ function parseArgs(argv: string[]): BuildCliOptions | "help" | null {
       }
       case "--module": {
         moduleName = argv[++index];
+        break;
+      }
+      case "--math": {
+        const value = (argv[++index] ?? "").toLowerCase();
+        if (value === "fast" || value === "baseline") {
+          mathMode = value as MathMode;
+        } else if (value) {
+          console.warn(`Unknown math mode: ${value}`);
+        }
         break;
       }
       case "--help":
@@ -71,7 +84,8 @@ function parseArgs(argv: string[]): BuildCliOptions | "help" | null {
   return {
     patchPath,
     outDir,
-    moduleName
+    moduleName,
+    mathMode
   };
 }
 
@@ -91,12 +105,16 @@ async function main(): Promise<void> {
 
   console.log(`[bench:build] compiling patch ${patchPath}`);
 
-  const artifacts = await compilePatchFromFile(patchPath, { moduleName });
+  const artifacts = await compilePatchFromFile(patchPath, {
+    moduleName,
+    mathMode: options.mathMode
+  });
   const outputs = await writeBuildOutputs(artifacts, options.outDir);
 
   console.log(
     [
       `[bench:build] module: ${outputs.moduleName}`,
+      `[bench:build] math: ${outputs.mathMode}`,
       `[bench:build] source: ${outputs.sourcePath}`,
       `[bench:build] wasm: ${outputs.wasmPath}`,
       `[bench:build] metadata: ${outputs.metadataPath}`

@@ -2,13 +2,14 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { ExecutionPlan } from "@codegen/plan";
-import { emitAssemblyScript } from "@codegen/assemblyscript";
+import { emitAssemblyScript, type MathMode } from "@codegen/assemblyscript";
 import { normalizePatchDocument } from "@graph/persistence";
 import type { PatchDocument } from "@graph/persistence";
 import type { PatchGraph } from "@graph/types";
 
 export interface CompileOptions {
   moduleName?: string;
+  mathMode?: MathMode;
 }
 
 export interface CompileArtifacts {
@@ -17,6 +18,7 @@ export interface CompileArtifacts {
   plan: ExecutionPlan;
   source: string;
   wasmBinary: Uint8Array;
+  mathMode: MathMode;
 }
 
 export interface BuildOutputs extends CompileArtifacts {
@@ -35,6 +37,7 @@ export interface RuntimeMetadata {
   controls: ExecutionPlan["controls"];
   envelopeMonitors: ExecutionPlan["envelopeMonitors"];
   scopeMonitors: ExecutionPlan["scopeMonitors"];
+  mathMode: MathMode;
 }
 
 const __filename = fileURLToPath(import.meta.url);
@@ -76,14 +79,16 @@ export async function compilePatchGraph(
 ): Promise<CompileArtifacts> {
   const moduleName =
     options.moduleName ?? sanitizeModuleName(graph.nodes[0]?.id ?? "maxwasm_patch");
-  const { source, plan } = emitAssemblyScript(graph, { moduleName });
+  const mathMode: MathMode = options.mathMode ?? "fast";
+  const { source, plan } = emitAssemblyScript(graph, { moduleName, mathMode });
   const wasmBinary = await compileAssemblyScriptToWasm(source);
   return {
     moduleName,
     graph,
     plan,
     source,
-    wasmBinary
+    wasmBinary,
+    mathMode
   };
 }
 
@@ -94,7 +99,7 @@ export async function compilePatchFromFile(
   const graph = await readPatchGraph(patchPath);
   const moduleName =
     options.moduleName ?? defaultModuleNameFromPath(patchPath);
-  return compilePatchGraph(graph, { moduleName });
+  return compilePatchGraph(graph, { moduleName, mathMode: options.mathMode });
 }
 
 export async function writeBuildOutputs(
@@ -138,7 +143,8 @@ export function buildRuntimeMetadata(artifacts: CompileArtifacts): RuntimeMetada
     parameterCount: artifacts.plan.parameterCount,
     controls: artifacts.plan.controls,
     envelopeMonitors: artifacts.plan.envelopeMonitors,
-    scopeMonitors: artifacts.plan.scopeMonitors
+    scopeMonitors: artifacts.plan.scopeMonitors,
+    mathMode: artifacts.mathMode
   };
 }
 

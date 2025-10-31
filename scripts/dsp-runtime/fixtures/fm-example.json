@@ -1,0 +1,447 @@
+{
+  "version": 1,
+  "graph": {
+    "nodes": [
+      {
+        "id": "gxbqpfh1g1mi",
+        "kind": "io.output",
+        "label": "Output",
+        "inputs": [
+          {
+            "id": "left",
+            "name": "Left",
+            "type": "audio"
+          },
+          {
+            "id": "right",
+            "name": "Right",
+            "type": "audio"
+          }
+        ],
+        "outputs": [],
+        "parameters": {},
+        "metadata": {
+          "position": {
+            "x": 35.56768293651476,
+            "y": -115.69727337851054
+          }
+        }
+      },
+      {
+        "id": "zg3l23dzp0qh",
+        "kind": "delay.ddl",
+        "label": "DDL Delay",
+        "inputs": [
+          {
+            "id": "in",
+            "name": "In",
+            "type": "audio"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "out",
+            "name": "Out",
+            "type": "audio"
+          }
+        ],
+        "parameters": {
+          "delay": 59.875
+        },
+        "metadata": {
+          "position": {
+            "x": -709.3934318708025,
+            "y": -126.70303795466862
+          }
+        }
+      },
+      {
+        "id": "rqqz2b6pz0cf",
+        "kind": "utility.gain",
+        "label": "Gain",
+        "inputs": [
+          {
+            "id": "in",
+            "name": "In",
+            "type": "audio"
+          },
+          {
+            "id": "gain",
+            "name": "Gain",
+            "type": "audio"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "out",
+            "name": "Out",
+            "type": "audio"
+          }
+        ],
+        "parameters": {
+          "gain": 0.04343988987342197,
+          "offset": 0
+        },
+        "metadata": {
+          "position": {
+            "x": -238.4078996579144,
+            "y": -123.22384531013745
+          }
+        }
+      },
+      {
+        "id": "ndmgcvy8m5nb",
+        "kind": "clock.basic",
+        "label": "Clock",
+        "inputs": [
+          {
+            "id": "reset",
+            "name": "Reset",
+            "type": "audio"
+          },
+          {
+            "id": "bpmIn",
+            "name": "BPM CV",
+            "type": "audio"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "out",
+            "name": "Out",
+            "type": "audio"
+          },
+          {
+            "id": "bpmOut",
+            "name": "BPM CV",
+            "type": "audio"
+          }
+        ],
+        "parameters": {
+          "bpm": 120,
+          "mult": 2,
+          "div": 1
+        },
+        "metadata": {
+          "position": {
+            "x": -1041.2836777542036,
+            "y": 99.70238388901225
+          }
+        }
+      },
+      {
+        "id": "yw20jgps8m3v",
+        "kind": "random.seeded",
+        "label": "Seeded Random",
+        "inputs": [
+          {
+            "id": "trigger",
+            "name": "Trigger",
+            "type": "audio"
+          },
+          {
+            "id": "seedIn",
+            "name": "Seed CV",
+            "type": "audio"
+          },
+          {
+            "id": "reseed",
+            "name": "Reseed",
+            "type": "audio"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "value",
+            "name": "Value",
+            "type": "audio"
+          }
+        ],
+        "parameters": {
+          "seed": 0
+        },
+        "metadata": {
+          "position": {
+            "x": -771.7256216465994,
+            "y": 397.82086767935334
+          }
+        }
+      },
+      {
+        "id": "1kx5n1olgus4",
+        "kind": "osc.analog",
+        "label": "Analog Oscillator",
+        "inputs": [
+          {
+            "id": "pitch",
+            "name": "Pitch (oct)",
+            "type": "audio"
+          },
+          {
+            "id": "fm",
+            "name": "FM (Hz)",
+            "type": "audio"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "out",
+            "name": "Out",
+            "type": "audio"
+          }
+        ],
+        "parameters": {
+          "pitch": 0,
+          "fm": 0,
+          "waveform": 0,
+          "pitchBase": 188.38312836454708,
+          "tilt": 1,
+          "fmDepth": 86.15836042221746
+        },
+        "metadata": {
+          "position": {
+            "x": -205.38623046875,
+            "y": 383.4158172607422
+          }
+        }
+      },
+      {
+        "id": "fn46easbhrau",
+        "kind": "osc.analog",
+        "label": "Analog Oscillator",
+        "inputs": [
+          {
+            "id": "pitch",
+            "name": "Pitch (oct)",
+            "type": "audio"
+          },
+          {
+            "id": "fm",
+            "name": "FM (Hz)",
+            "type": "audio"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "out",
+            "name": "Out",
+            "type": "audio"
+          }
+        ],
+        "parameters": {
+          "pitch": 0,
+          "fm": 0,
+          "waveform": 0,
+          "pitchBase": 160.52289477773286,
+          "tilt": 1,
+          "fmDepth": 212.9939751901464
+        },
+        "metadata": {
+          "position": {
+            "x": -277.5264408762007,
+            "y": 692.638354437504
+          }
+        }
+      },
+      {
+        "id": "i3f4b9sjgm1u",
+        "kind": "random.seeded",
+        "label": "Seeded Random",
+        "inputs": [
+          {
+            "id": "trigger",
+            "name": "Trigger",
+            "type": "audio"
+          },
+          {
+            "id": "seedIn",
+            "name": "Seed CV",
+            "type": "audio"
+          },
+          {
+            "id": "reseed",
+            "name": "Reseed",
+            "type": "audio"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "value",
+            "name": "Value",
+            "type": "audio"
+          }
+        ],
+        "parameters": {
+          "seed": 761
+        },
+        "metadata": {
+          "position": {
+            "x": -621.0452831779126,
+            "y": 729.7017332891
+          }
+        }
+      },
+      {
+        "id": "jk6yd2cnlqpb",
+        "kind": "utility.gain",
+        "label": "Gain",
+        "inputs": [
+          {
+            "id": "in",
+            "name": "In",
+            "type": "audio"
+          },
+          {
+            "id": "gain",
+            "name": "Gain",
+            "type": "audio"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "out",
+            "name": "Out",
+            "type": "audio"
+          }
+        ],
+        "parameters": {
+          "gain": 0.6037333016919221,
+          "offset": -1.1645607282703136
+        },
+        "metadata": {
+          "position": {
+            "x": -458.1285070941374,
+            "y": 410.1752038098539
+          }
+        }
+      }
+    ],
+    "connections": [
+      {
+        "id": "osqweqc8tv45",
+        "from": {
+          "node": "zg3l23dzp0qh",
+          "port": "out"
+        },
+        "to": {
+          "node": "rqqz2b6pz0cf",
+          "port": "in"
+        }
+      },
+      {
+        "id": "n1a28tlvehzx",
+        "from": {
+          "node": "rqqz2b6pz0cf",
+          "port": "out"
+        },
+        "to": {
+          "node": "gxbqpfh1g1mi",
+          "port": "left"
+        }
+      },
+      {
+        "id": "tn1qjgczqak2",
+        "from": {
+          "node": "ndmgcvy8m5nb",
+          "port": "out"
+        },
+        "to": {
+          "node": "yw20jgps8m3v",
+          "port": "trigger"
+        }
+      },
+      {
+        "id": "1zcz3knu20ms",
+        "from": {
+          "node": "1kx5n1olgus4",
+          "port": "out"
+        },
+        "to": {
+          "node": "zg3l23dzp0qh",
+          "port": "in"
+        }
+      },
+      {
+        "id": "1otkln52zl8t",
+        "from": {
+          "node": "ndmgcvy8m5nb",
+          "port": "out"
+        },
+        "to": {
+          "node": "i3f4b9sjgm1u",
+          "port": "trigger"
+        }
+      },
+      {
+        "id": "i86ml52ducin",
+        "from": {
+          "node": "i3f4b9sjgm1u",
+          "port": "value"
+        },
+        "to": {
+          "node": "fn46easbhrau",
+          "port": "fm"
+        }
+      },
+      {
+        "id": "4939fwfimjut",
+        "from": {
+          "node": "fn46easbhrau",
+          "port": "out"
+        },
+        "to": {
+          "node": "1kx5n1olgus4",
+          "port": "fm"
+        }
+      },
+      {
+        "id": "sh5b4024xk5d",
+        "from": {
+          "node": "rqqz2b6pz0cf",
+          "port": "out"
+        },
+        "to": {
+          "node": "gxbqpfh1g1mi",
+          "port": "right"
+        }
+      },
+      {
+        "id": "y6mri3ty7zxk",
+        "from": {
+          "node": "yw20jgps8m3v",
+          "port": "value"
+        },
+        "to": {
+          "node": "jk6yd2cnlqpb",
+          "port": "in"
+        }
+      },
+      {
+        "id": "82galau7kjrx",
+        "from": {
+          "node": "jk6yd2cnlqpb",
+          "port": "out"
+        },
+        "to": {
+          "node": "1kx5n1olgus4",
+          "port": "pitch"
+        }
+      },
+      {
+        "id": "mzwi05kq0hyn",
+        "from": {
+          "node": "zg3l23dzp0qh",
+          "port": "out"
+        },
+        "to": {
+          "node": "jk6yd2cnlqpb",
+          "port": "in"
+        }
+      }
+    ],
+    "sampleRate": 48000,
+    "blockSize": 128,
+    "oversampling": 8,
+    "subpatches": {}
+  }
+}

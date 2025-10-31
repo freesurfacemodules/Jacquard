@@ -3,18 +3,14 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import {
-  buildRuntimeMetadata,
-  compilePatchFromFile,
-  defaultModuleNameFromPath,
-  resolvePath,
-  sanitizeModuleName
-} from "./utils";
-import {
-  instantiatePatchRuntime,
-  loadMetadata,
-  loadWasmBinary,
-  type PatchRuntime
-} from "./runtime";
+  resolveBenchCases,
+  measureRuntime,
+  summarizeBenchmarks,
+  type BenchCaseInput,
+  type BenchMetrics
+} from "./harness";
+import { resolvePath } from "./utils";
+import type { MathMode } from "@codegen/assemblyscript";
 
 interface BenchCliOptions {
   configPath?: string;
@@ -27,6 +23,7 @@ interface BenchCliOptions {
   warmupBlocks?: number;
   iterations?: number;
   json?: boolean;
+  mathMode?: MathMode | "both";
 }
 
 interface BenchConfigFile {
@@ -39,33 +36,8 @@ interface BenchConfigFile {
     wasm?: string;
     metadata?: string;
     moduleName?: string;
+    math?: MathMode | "both";
   }>;
-}
-
-interface BenchCaseInput {
-  label: string;
-  patchPath?: string;
-  wasmPath?: string;
-  metadataPath?: string;
-  moduleName?: string;
-}
-
-interface BenchCaseResolved {
-  label: string;
-  runtime: PatchRuntime;
-  metadata: RuntimeMetadata;
-}
-
-interface BenchMetrics {
-  caseLabel: string;
-  moduleName: string;
-  frames: number;
-  blocks: number;
-  seconds: number;
-  framesPerSecond: number;
-  blocksPerSecond: number;
-  averageBlockMicros: number;
-  checksum: number;
 }
 
 function printUsage(): void {
@@ -74,10 +46,11 @@ function printUsage(): void {
     [
       `Usage: ${scriptName} [--patch <patch.json> | --config <config.json>]`,
       "       [--label <label>] [--frames <count>] [--warmup <blocks>] [--iterations <blocks>]",
-      "       [--wasm <module.wasm> --metadata <metadata.json>] [--module <name>] [--json]",
+      "       [--wasm <module.wasm> --metadata <metadata.json>] [--module <name>]",
+      "       [--math fast|baseline|both] [--json]",
       "",
       "Examples:",
-      `  ${scriptName} --patch patches/scope.json --frames 96000`,
+      `  ${scriptName} --patch patches/fm-example.json --frames 96000 --math both`,
       `  ${scriptName} --config bench.config.json --json`,
       "",
       "Config file schema:",
@@ -85,7 +58,7 @@ function printUsage(): void {
       "    \"frames\": 96000,",
       "    \"warmupBlocks\": 32,",
       "    \"cases\": [",
-      "      { \"label\": \"optimized\", \"patch\": \"patches/optimized.json\" },",
+      "      { \"label\": \"optimized\", \"patch\": \"patches/optimized.json\", \"math\": \"fast\" },",
       "      { \"label\": \"baseline\", \"wasm\": \"dist/baseline.wasm\", \"metadata\": \"dist/baseline.metadata.json\" }",
       "    ]",
       "  }"
@@ -139,6 +112,15 @@ function parseArgs(argv: string[]): BenchCliOptions | "help" | null {
         options.json = true;
         break;
       }
+      case "--math": {
+        const value = (argv[++index] ?? "").toLowerCase();
+        if (value === "fast" || value === "baseline" || value === "both") {
+          options.mathMode = value as MathMode | "both";
+        } else if (value) {
+          console.warn(`Unknown --math value: ${value}`);
+        }
+        break;
+      }
       case "--help":
       case "-h": {
         return "help";
@@ -161,7 +143,9 @@ function parseArgs(argv: string[]): BenchCliOptions | "help" | null {
   return options;
 }
 
-async function loadConfigCases(configPath: string): Promise<{
+async function loadConfigCases(
+  configPath: string
+): Promise<{
   cases: BenchCaseInput[];
   frames?: number;
   warmupBlocks?: number;
@@ -187,7 +171,8 @@ async function loadConfigCases(configPath: string): Promise<{
       patchPath: entry.patch,
       wasmPath: entry.wasm,
       metadataPath: entry.metadata,
-      moduleName: entry.moduleName
+      moduleName: entry.moduleName,
+      mathMode: entry.math
     };
   });
   return {
@@ -198,9 +183,14 @@ async function loadConfigCases(configPath: string): Promise<{
   };
 }
 
-async function resolveCases(
+async function resolveCliCases(
   options: BenchCliOptions
-): Promise<{ cases: BenchCaseInput[]; frames?: number; warmupBlocks?: number; iterations?: number }> {
+): Promise<{
+  cases: BenchCaseInput[];
+  frames?: number;
+  warmupBlocks?: number;
+  iterations?: number;
+}> {
   if (options.configPath) {
     return loadConfigCases(options.configPath);
   }
@@ -211,7 +201,8 @@ async function resolveCases(
     patchPath: options.patchPath,
     wasmPath: options.wasmPath,
     metadataPath: options.metadataPath,
-    moduleName: options.moduleName
+    moduleName: options.moduleName,
+    mathMode: options.mathMode
   };
 
   if (!singleCase.patchPath && !singleCase.wasmPath) {
@@ -230,94 +221,24 @@ async function resolveCases(
   };
 }
 
-async function createRuntime(caseInput: BenchCaseInput): Promise<BenchCaseResolved> {
-  if (caseInput.patchPath) {
-    const patchPath = resolvePath(caseInput.patchPath);
-    const moduleName =
-      caseInput.moduleName && caseInput.moduleName.length > 0
-        ? sanitizeModuleName(caseInput.moduleName)
-        : defaultModuleNameFromPath(patchPath);
-    console.log(`[bench:dsp] compiling patch "${caseInput.label}" (${patchPath})`);
-    const artifacts = await compilePatchFromFile(patchPath, { moduleName });
-    const metadata = buildRuntimeMetadata(artifacts);
-    const runtime = await instantiatePatchRuntime(artifacts.wasmBinary, metadata);
-    return { label: caseInput.label, runtime, metadata };
-  }
-
-  if (caseInput.wasmPath && caseInput.metadataPath) {
-    const wasm = await loadWasmBinary(caseInput.wasmPath);
-    const metadata = await loadMetadata(caseInput.metadataPath);
-    console.log(`[bench:dsp] loading wasm for "${caseInput.label}" (${caseInput.wasmPath})`);
-    const runtime = await instantiatePatchRuntime(wasm, metadata);
-    return { label: caseInput.label, runtime, metadata };
-  }
-
-  throw new Error(`Benchmark case "${caseInput.label}" is missing required inputs.`);
-}
-
-function measureRuntime(
-  caseLabel: string,
-  runtime: PatchRuntime,
-  options: { frames?: number; warmupBlocks?: number; iterations?: number }
-): BenchMetrics {
-  const warmupBlocks = Math.max(0, options.warmupBlocks ?? 32);
-  const iterations =
-    options.iterations ??
-    Math.max(1, Math.ceil((options.frames ?? runtime.blockSize * 128) / runtime.blockSize));
-
-  for (let i = 0; i < warmupBlocks; i += 1) {
-    runtime.processBlock();
-  }
-
-  const start = process.hrtime.bigint();
-  for (let i = 0; i < iterations; i += 1) {
-    runtime.processBlock();
-  }
-  const end = process.hrtime.bigint();
-
-  const elapsedNs = Number(end - start);
-  const seconds = elapsedNs / 1e9;
-  const safeSeconds = seconds > 0 ? seconds : Number.EPSILON;
-  const blocks = iterations;
-  const frames = iterations * runtime.blockSize;
-  const blocksPerSecond = blocks / safeSeconds;
-  const framesPerSecond = frames / safeSeconds;
-  const averageBlockMicros = (safeSeconds * 1e6) / blocks;
-
-  const left = runtime.left;
-  let checksum = 0;
-  const sampleCount = Math.min(16, left.length);
-  for (let i = 0; i < sampleCount; i += 1) {
-    checksum += left[i];
-  }
-
-  return {
-    caseLabel,
-    moduleName: runtime.moduleName,
-    frames,
-    blocks,
-    seconds: safeSeconds,
-    framesPerSecond,
-    blocksPerSecond,
-    averageBlockMicros,
-    checksum
-  };
-}
-
-function formatMetrics(metrics: BenchMetrics, baseline?: BenchMetrics): string {
+function formatCaseDetails(metric: BenchMetrics, baseline?: BenchMetrics): string {
   const lines = [
-    `Case: ${metrics.caseLabel}`,
-    `  Module: ${metrics.moduleName}`,
-    `  Frames: ${metrics.frames}`,
-    `  Blocks: ${metrics.blocks}`,
-    `  Duration: ${(metrics.seconds * 1000).toFixed(3)} ms`,
-    `  Frames/sec: ${metrics.framesPerSecond.toFixed(2)}`,
-    `  Blocks/sec: ${metrics.blocksPerSecond.toFixed(2)}`,
-    `  Avg block: ${metrics.averageBlockMicros.toFixed(3)} µs`,
-    `  Checksum: ${metrics.checksum.toFixed(6)}`
+    `Case: ${metric.caseLabel}`,
+    `  Module: ${metric.moduleName}`,
+    `  Math: ${metric.mathMode}`,
+    `  Sample rate: ${metric.sampleRate} Hz`,
+    `  Block size: ${metric.blockSize} frames`,
+    `  Frames: ${metric.frames}`,
+    `  Blocks: ${metric.blocks}`,
+    `  Duration: ${(metric.seconds * 1000).toFixed(3)} ms`,
+    `  Frames/sec: ${metric.framesPerSecond.toFixed(2)}`,
+    `  Blocks/sec: ${metric.blocksPerSecond.toFixed(2)}`,
+    `  Avg block: ${metric.averageBlockMicros.toFixed(3)} µs`,
+    `  Real-time ratio: ${metric.realtimeRatio.toFixed(3)}x`,
+    `  Checksum: ${metric.checksum.toFixed(6)}`
   ];
-  if (baseline && baseline !== metrics) {
-    const speedup = baseline.averageBlockMicros / metrics.averageBlockMicros;
+  if (baseline && baseline !== metric) {
+    const speedup = baseline.averageBlockMicros / metric.averageBlockMicros;
     lines.push(`  Speedup vs ${baseline.caseLabel}: ${speedup.toFixed(3)}x`);
   }
   return lines.join("\n");
@@ -331,41 +252,46 @@ async function main(): Promise<void> {
     return;
   }
 
-  const { cases, frames, warmupBlocks, iterations } = await resolveCases(options);
+  const { cases, frames, warmupBlocks, iterations } = await resolveCliCases(options);
 
-  const resolvedCases: BenchCaseResolved[] = [];
-  for (const entry of cases) {
-    resolvedCases.push(await createRuntime(entry));
-  }
-
+  const resolvedCases = await resolveBenchCases(cases);
   const metrics = resolvedCases.map((entry) =>
     measureRuntime(entry.label, entry.runtime, { frames, warmupBlocks, iterations })
   );
 
+  const { baseline, table } = summarizeBenchmarks(metrics);
+
   if (options.json) {
-    const baseline = metrics[0];
     const payload = metrics.map((entry) => ({
       label: entry.caseLabel,
       moduleName: entry.moduleName,
+      mathMode: entry.mathMode,
+      sampleRate: entry.sampleRate,
+      blockSize: entry.blockSize,
       frames: entry.frames,
       blocks: entry.blocks,
       seconds: entry.seconds,
       framesPerSecond: entry.framesPerSecond,
       blocksPerSecond: entry.blocksPerSecond,
       averageBlockMicros: entry.averageBlockMicros,
+      realtimeRatio: entry.realtimeRatio,
       checksum: entry.checksum,
-      baselineLabel: baseline.caseLabel,
-      speedup: baseline === entry
-        ? 1
-        : baseline.averageBlockMicros / entry.averageBlockMicros
+      baselineLabel: baseline?.caseLabel ?? null,
+      speedup: baseline && baseline !== entry
+        ? baseline.averageBlockMicros / entry.averageBlockMicros
+        : 1
     }));
-    console.log(JSON.stringify(payload, null, 2));
+    console.log(JSON.stringify({ metrics: payload, summaryTable: table }, null, 2));
     return;
   }
 
-  const baselineMetrics = metrics[0];
-  for (const entry of metrics) {
-    console.log(formatMetrics(entry, baselineMetrics));
+  for (const metric of metrics) {
+    console.log(formatCaseDetails(metric, baseline ?? undefined));
+  }
+
+  if (table) {
+    console.log("\nSummary:");
+    console.log(table);
   }
 }
 
