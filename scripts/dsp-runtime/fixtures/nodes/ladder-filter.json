@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "graph": {
+    "nodes": [
+      {
+        "id": "osc1",
+        "kind": "osc.analog",
+        "label": "Analog Oscillator",
+        "inputs": [
+          { "id": "pitch", "name": "Pitch (oct)", "type": "audio" },
+          { "id": "fm", "name": "FM (Hz)", "type": "audio" }
+        ],
+        "outputs": [
+          { "id": "out", "name": "Out", "type": "audio" }
+        ],
+        "parameters": {
+          "pitch": 0,
+          "fm": 0,
+          "waveform": 0,
+          "pitchBase": 220,
+          "tilt": 1.2,
+          "fmDepth": 0
+        },
+        "metadata": {}
+      },
+      {
+        "id": "lad1",
+        "kind": "filter.ladder",
+        "label": "Ladder Filter",
+        "inputs": [
+          { "id": "in", "name": "In", "type": "audio" },
+          { "id": "frequency", "name": "Frequency", "type": "audio" },
+          { "id": "resonance", "name": "Resonance", "type": "audio" },
+          { "id": "drive", "name": "Drive", "type": "audio" }
+        ],
+        "outputs": [
+          { "id": "lowpass", "name": "Lowpass", "type": "audio" },
+          { "id": "highpass", "name": "Highpass", "type": "audio" }
+        ],
+        "parameters": {
+          "frequency": 800,
+          "resonance": 0.35,
+          "drive": 0.2
+        },
+        "metadata": {}
+      },
+      {
+        "id": "out1",
+        "kind": "io.output",
+        "label": "Output",
+        "inputs": [
+          { "id": "left", "name": "Left", "type": "audio" },
+          { "id": "right", "name": "Right", "type": "audio" }
+        ],
+        "outputs": [],
+        "parameters": {},
+        "metadata": {}
+      }
+    ],
+    "connections": [
+      {
+        "id": "c1",
+        "from": { "node": "osc1", "port": "out" },
+        "to": { "node": "lad1", "port": "in" }
+      },
+      {
+        "id": "c2",
+        "from": { "node": "lad1", "port": "lowpass" },
+        "to": { "node": "out1", "port": "left" }
+      },
+      {
+        "id": "c3",
+        "from": { "node": "lad1", "port": "highpass" },
+        "to": { "node": "out1", "port": "right" }
+      }
+    ],
+    "oversampling": 4,
+    "blockSize": 128,
+    "sampleRate": 48000
+  }
+}

@@ -25,6 +25,7 @@ interface BenchCliOptions {
   json?: boolean;
   mathMode?: MathMode | "both";
   optimizer?: "asc" | "asc+binaryen" | "both";
+  suiteName?: string;
 }
 
 interface BenchConfigFile {
@@ -46,7 +47,7 @@ function printUsage(): void {
   const scriptName = path.basename(process.argv[1] ?? "bench.ts");
   console.log(
     [
-      `Usage: ${scriptName} [--patch <patch.json> | --config <config.json>]`,
+      `Usage: ${scriptName} [--patch <patch.json> | --config <config.json> | --suite <name>]`,
       "       [--label <label>] [--frames <count>] [--warmup <blocks>] [--iterations <blocks>]",
       "       [--wasm <module.wasm> --metadata <metadata.json>] [--module <name>]",
       "       [--math fast|baseline|both] [--optimizer asc|binaryen|both] [--json]",
@@ -76,6 +77,10 @@ function parseArgs(argv: string[]): BenchCliOptions | "help" | null {
     switch (arg) {
       case "--config": {
         options.configPath = argv[++index];
+        break;
+      }
+      case "--suite": {
+        options.suiteName = argv[++index];
         break;
       }
       case "--patch": {
@@ -148,12 +153,77 @@ function parseArgs(argv: string[]): BenchCliOptions | "help" | null {
     }
   }
 
-  if (!options.configPath && !options.patchPath && !options.wasmPath) {
+  if (!options.configPath && !options.patchPath && !options.wasmPath && !options.suiteName) {
     return null;
   }
 
   return options;
 }
+
+const PRESET_SUITES: Record<string, BenchCaseInput[]> = {
+  nodes: [
+    {
+      label: "node-analog",
+      patchPath: "scripts/dsp-runtime/fixtures/nodes/analog-osc.json",
+      mathMode: "fast"
+    },
+    {
+      label: "node-sine",
+      patchPath: "scripts/dsp-runtime/fixtures/sine.json",
+      mathMode: "fast"
+    },
+    {
+      label: "node-biquad",
+      patchPath: "scripts/dsp-runtime/fixtures/nodes/biquad-filter.json",
+      mathMode: "fast"
+    },
+    {
+      label: "node-ladder",
+      patchPath: "scripts/dsp-runtime/fixtures/nodes/ladder-filter.json",
+      mathMode: "fast"
+    },
+    {
+      label: "node-ddl",
+      patchPath: "scripts/dsp-runtime/fixtures/nodes/ddl-delay.json",
+      mathMode: "fast"
+    },
+    {
+      label: "node-waveguide",
+      patchPath: "scripts/dsp-runtime/fixtures/nodes/waveguide-delay.json",
+      mathMode: "fast"
+    },
+    {
+      label: "node-noise",
+      patchPath: "scripts/dsp-runtime/fixtures/nodes/noise-basic.json",
+      mathMode: "fast"
+    },
+    {
+      label: "node-softclip",
+      patchPath: "scripts/dsp-runtime/fixtures/nodes/softclip.json",
+      mathMode: "fast"
+    },
+    {
+      label: "node-slew",
+      patchPath: "scripts/dsp-runtime/fixtures/nodes/slew.json",
+      mathMode: "fast"
+    },
+    {
+      label: "node-clock",
+      patchPath: "scripts/dsp-runtime/fixtures/nodes/clock.json",
+      mathMode: "fast"
+    },
+    {
+      label: "node-seeded",
+      patchPath: "scripts/dsp-runtime/fixtures/nodes/seeded-random.json",
+      mathMode: "fast"
+    },
+    {
+      label: "node-envelope",
+      patchPath: "scripts/dsp-runtime/fixtures/nodes/envelope-ad.json",
+      mathMode: "fast"
+    }
+  ]
+};
 
 async function loadConfigCases(
   configPath: string
@@ -217,6 +287,32 @@ async function resolveCliCases(
 }> {
   if (options.configPath) {
     return loadConfigCases(options.configPath);
+  }
+
+  if (options.suiteName) {
+    const preset = PRESET_SUITES[options.suiteName];
+    if (!preset) {
+      throw new Error(`Unknown benchmark suite: ${options.suiteName}`);
+    }
+
+    const suiteCases = preset.map((entry) => ({ ...entry }));
+    if (options.mathMode) {
+      for (const entry of suiteCases) {
+        entry.mathMode = options.mathMode;
+      }
+    }
+    if (options.optimizer) {
+      for (const entry of suiteCases) {
+        entry.optimizer = options.optimizer;
+      }
+    }
+
+    return {
+      cases: suiteCases,
+      frames: options.frames,
+      warmupBlocks: options.warmupBlocks,
+      iterations: options.iterations
+    };
   }
 
   const label = options.label ?? "case";

@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "graph": {
+    "nodes": [
+      {
+        "id": "clock1",
+        "kind": "clock.basic",
+        "label": "Clock",
+        "inputs": [
+          { "id": "reset", "name": "Reset", "type": "audio" },
+          { "id": "bpmIn", "name": "BPM CV", "type": "audio" }
+        ],
+        "outputs": [
+          { "id": "out", "name": "Out", "type": "audio" },
+          { "id": "bpmOut", "name": "BPM CV", "type": "audio" }
+        ],
+        "parameters": {
+          "bpm": 120,
+          "mult": 2,
+          "div": 1
+        },
+        "metadata": {}
+      },
+      {
+        "id": "out1",
+        "kind": "io.output",
+        "label": "Output",
+        "inputs": [
+          { "id": "left", "name": "Left", "type": "audio" },
+          { "id": "right", "name": "Right", "type": "audio" }
+        ],
+        "outputs": [],
+        "parameters": {},
+        "metadata": {}
+      }
+    ],
+    "connections": [
+      {
+        "id": "c1",
+        "from": { "node": "clock1", "port": "out" },
+        "to": { "node": "out1", "port": "left" }
+      },
+      {
+        "id": "c2",
+        "from": { "node": "clock1", "port": "out" },
+        "to": { "node": "out1", "port": "right" }
+      }
+    ],
+    "oversampling": 1,
+    "blockSize": 128,
+    "sampleRate": 48000
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "graph": {
+    "nodes": [
+      {
+        "id": "osc1",
+        "kind": "osc.sine",
+        "label": "Sine Oscillator",
+        "inputs": [
+          { "id": "pitch", "name": "Pitch (oct)", "type": "audio" }
+        ],
+        "outputs": [
+          { "id": "out", "name": "Out", "type": "audio" }
+        ],
+        "parameters": { "pitch": 0 },
+        "metadata": {}
+      },
+      {
+        "id": "clip1",
+        "kind": "distortion.softclip",
+        "label": "Soft Clip",
+        "inputs": [
+          { "id": "in", "name": "In", "type": "audio" }
+        ],
+        "outputs": [
+          { "id": "out", "name": "Out", "type": "audio" }
+        ],
+        "parameters": { "inputGain": 6, "outputGain": -3 },
+        "metadata": {}
+      },
+      {
+        "id": "out1",
+        "kind": "io.output",
+        "label": "Output",
+        "inputs": [
+          { "id": "left", "name": "Left", "type": "audio" },
+          { "id": "right", "name": "Right", "type": "audio" }
+        ],
+        "outputs": [],
+        "parameters": {},
+        "metadata": {}
+      }
+    ],
+    "connections": [
+      {
+        "id": "c1",
+        "from": { "node": "osc1", "port": "out" },
+        "to": { "node": "clip1", "port": "in" }
+      },
+      {
+        "id": "c2",
+        "from": { "node": "clip1", "port": "out" },
+        "to": { "node": "out1", "port": "left" }
+      },
+      {
+        "id": "c3",
+        "from": { "node": "clip1", "port": "out" },
+        "to": { "node": "out1", "port": "right" }
+      }
+    ],
+    "oversampling": 1,
+    "blockSize": 128,
+    "sampleRate": 48000
+  }
+}

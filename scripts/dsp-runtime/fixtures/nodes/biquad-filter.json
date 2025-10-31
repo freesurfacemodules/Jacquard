@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "graph": {
+    "nodes": [
+      {
+        "id": "osc1",
+        "kind": "osc.sine",
+        "label": "Sine Oscillator",
+        "inputs": [
+          { "id": "pitch", "name": "Pitch (oct)", "type": "audio" }
+        ],
+        "outputs": [
+          { "id": "out", "name": "Out", "type": "audio" }
+        ],
+        "parameters": { "pitch": 0 },
+        "metadata": {}
+      },
+      {
+        "id": "biq1",
+        "kind": "filter.biquad",
+        "label": "Biquad",
+        "inputs": [
+          { "id": "in", "name": "In", "type": "audio" },
+          { "id": "cutoff", "name": "Cutoff", "type": "audio" },
+          { "id": "resonance", "name": "Resonance", "type": "audio" }
+        ],
+        "outputs": [
+          { "id": "low", "name": "Low", "type": "audio" },
+          { "id": "high", "name": "High", "type": "audio" }
+        ],
+        "parameters": { "cutoff": 1200, "resonance": 0.9 },
+        "metadata": {}
+      },
+      {
+        "id": "out1",
+        "kind": "io.output",
+        "label": "Output",
+        "inputs": [
+          { "id": "left", "name": "Left", "type": "audio" },
+          { "id": "right", "name": "Right", "type": "audio" }
+        ],
+        "outputs": [],
+        "parameters": {},
+        "metadata": {}
+      }
+    ],
+    "connections": [
+      {
+        "id": "c1",
+        "from": { "node": "osc1", "port": "out" },
+        "to": { "node": "biq1", "port": "in" }
+      },
+      {
+        "id": "c2",
+        "from": { "node": "biq1", "port": "low" },
+        "to": { "node": "out1", "port": "left" }
+      },
+      {
+        "id": "c3",
+        "from": { "node": "biq1", "port": "high" },
+        "to": { "node": "out1", "port": "right" }
+      }
+    ],
+    "oversampling": 4,
+    "blockSize": 128,
+    "sampleRate": 48000
+  }
+}

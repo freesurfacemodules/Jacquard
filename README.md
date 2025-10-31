@@ -502,6 +502,12 @@ To measure DSP performance without the browser or AudioWorklet, use the new Vite
   npm run bench:dsp -- --config scripts/dsp-runtime/fixtures/bench-example.json
   ```
 
+- **Node performance sweep**: run the built-in suite of stress patches for key DSP nodes:
+
+  ```bash
+  npm run bench:dsp -- --suite nodes --frames 96000 --optimizer both --json
+  ```
+
 - **Automation hooks**: pass `--json` to get machine-readable output (per-case throughput, average block time, relative speedups) for CI dashboards.
 
 All commands run under Node, instantiate the Wasm module directly, and reuse the same AssemblyScript emitter that powers the browser build so benchmark results mirror production codegen. The harness now reports detailed per-case stats plus a summary table that highlights real-time ratios and speedups relative to the baseline math mode. If you want to experiment with Binaryen’s aggressive pipelines, install `binaryen` (`npm install binaryen`) and pass `--optimizer binaryen` to the CLI.
