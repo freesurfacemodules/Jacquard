@@ -181,7 +181,8 @@ async function compileAssemblyScriptToWasm(source: string): Promise<Uint8Array> 
   const result = await compileString(source, {
     optimizeLevel: 3,
     shrinkLevel: 1,
-    noAssert: true
+    noAssert: true,
+    enable: ["simd"]
   });
 
   if (!result.binary) {
