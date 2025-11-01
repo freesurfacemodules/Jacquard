@@ -34,6 +34,7 @@ import { addNode } from "@dsp/nodes/math/add/manifest";
 import { subtractNode } from "@dsp/nodes/math/subtract/manifest";
 import { multiplyNode } from "@dsp/nodes/math/multiply/manifest";
 import { seededRandomNode } from "@dsp/nodes/random/seeded/manifest";
+import { complexResonatorNode } from "@dsp/nodes/resonator/complex/manifest";
 
 const implementations: NodeImplementation[] = [
   analogOscillatorNode,
@@ -69,6 +70,7 @@ const implementations: NodeImplementation[] = [
   subtractNode,
   multiplyNode,
   seededRandomNode,
+  complexResonatorNode,
   outputNode
 ];
 

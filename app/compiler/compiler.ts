@@ -35,7 +35,8 @@ export async function compilePatch(graph: PatchGraph): Promise<CompileResult> {
   const { binary, stderr, stdout } = await compileString(moduleSource, {
     optimizeLevel: 3,
     shrinkLevel: 1,
-    noAssert: true
+    noAssert: true,
+    enable: ["simd"]
   });
   console.info("[MaxWasm] asc compileString finished", {
     hasBinary: !!binary,

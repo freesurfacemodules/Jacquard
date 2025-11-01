@@ -980,6 +980,10 @@ function collectStateDeclarations(plan: ExecutionPlan): string {
         lines.push(`let seeded_value_${identifier}: f32 = 0.0;`);
         break;
       }
+      case "resonator.complex": {
+        lines.push(`const complexRes_${identifier} = new ComplexResonator();`);
+        break;
+      }
       case "logic.counter": {
         lines.push(`const counter_${identifier} = new CounterState();`);
         break;

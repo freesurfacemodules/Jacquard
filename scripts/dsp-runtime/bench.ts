@@ -173,6 +173,11 @@ const PRESET_SUITES: Record<string, BenchCaseInput[]> = {
       mathMode: "fast"
     },
     {
+      label: "node-complex-res",
+      patchPath: "scripts/dsp-runtime/fixtures/nodes/complex-resonator.json",
+      mathMode: "fast"
+    },
+    {
       label: "node-sine",
       patchPath: "scripts/dsp-runtime/fixtures/sine.json",
       mathMode: "fast"

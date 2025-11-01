@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "graph": {
+    "nodes": [
+      {
+        "id": "osc1",
+        "kind": "osc.sine",
+        "label": "Sine Oscillator",
+        "inputs": [
+          { "id": "pitch", "name": "Pitch (oct)", "type": "audio" }
+        ],
+        "outputs": [
+          { "id": "out", "name": "Out", "type": "audio" }
+        ],
+        "parameters": { "pitch": 0 },
+        "metadata": {}
+      },
+      {
+        "id": "res1",
+        "kind": "resonator.complex",
+        "label": "Complex Resonator",
+        "inputs": [
+          { "id": "real", "name": "Real", "type": "audio" },
+          { "id": "imag", "name": "Imag", "type": "audio" },
+          { "id": "frequency", "name": "Frequency", "type": "audio" },
+          { "id": "decay", "name": "Decay", "type": "audio" }
+        ],
+        "outputs": [
+          { "id": "real", "name": "Real", "type": "audio" },
+          { "id": "imag", "name": "Imag", "type": "audio" },
+          { "id": "magnitude", "name": "Magnitude", "type": "audio" },
+          { "id": "phase", "name": "Phase", "type": "audio" }
+        ],
+        "parameters": {
+          "frequency": 0,
+          "decay": 5
+        },
+        "metadata": {}
+      },
+      {
+        "id": "out1",
+        "kind": "io.output",
+        "label": "Output",
+        "inputs": [
+          { "id": "left", "name": "Left", "type": "audio" },
+          { "id": "right", "name": "Right", "type": "audio" }
+        ],
+        "outputs": [],
+        "parameters": {},
+        "metadata": {}
+      }
+    ],
+    "connections": [
+      {
+        "id": "c1",
+        "from": { "node": "osc1", "port": "out" },
+        "to": { "node": "res1", "port": "real" }
+      },
+      {
+        "id": "c2",
+        "from": { "node": "res1", "port": "real" },
+        "to": { "node": "out1", "port": "left" }
+      },
+      {
+        "id": "c3",
+        "from": { "node": "res1", "port": "imag" },
+        "to": { "node": "out1", "port": "right" }
+      }
+    ],
+    "oversampling": 2,
+    "blockSize": 128,
+    "sampleRate": 48000
+  }
+}
