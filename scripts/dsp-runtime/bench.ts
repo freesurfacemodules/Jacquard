@@ -168,6 +168,11 @@ const PRESET_SUITES: Record<string, BenchCaseInput[]> = {
       mathMode: "fast"
     },
     {
+      label: "node-allpass",
+      patchPath: "scripts/dsp-runtime/fixtures/nodes/allpass.json",
+      mathMode: "fast"
+    },
+    {
       label: "node-sine",
       patchPath: "scripts/dsp-runtime/fixtures/sine.json",
       mathMode: "fast"

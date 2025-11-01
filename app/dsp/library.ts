@@ -10,6 +10,7 @@ import { waveguideDelayNode } from "@dsp/nodes/delay/waveguide/manifest";
 import { clockNode } from "@dsp/nodes/clock/manifest";
 import { biquadNode } from "@dsp/nodes/filter/biquad/manifest";
 import { ladderFilterNode } from "@dsp/nodes/filter/ladder/manifest";
+import { allpassFilterNode } from "@dsp/nodes/filter/allpass/manifest";
 import { noiseNode } from "@dsp/nodes/noise/basic/manifest";
 import { adEnvelopeNode } from "@dsp/nodes/envelope/ad/manifest";
 import { slewLimiterNode } from "@dsp/nodes/utility/slew/manifest";
@@ -44,6 +45,7 @@ const implementations: NodeImplementation[] = [
   waveguideDelayNode,
   biquadNode,
   ladderFilterNode,
+  allpassFilterNode,
   adEnvelopeNode,
   noiseNode,
   slewLimiterNode,

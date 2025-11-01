@@ -5,6 +5,7 @@
 - **Realtime Audio**: AssemblyScript codegen → Wasm compile in-browser → AudioWorklet playback. Parameter updates stream to the worklet with smoothing so audio keeps running while knobs move.
 - **Voltage Scaling**: Core nodes follow Eurorack conventions (audio ±5 V, pitches 1 V/oct around user-set offsets, envelopes 0–10 V, triggers 0–5 V) so modulation behaves predictably across the patch.
 - **Analog Oscillator**: Multi-wave oscillator with adaptive harmonic capping, FM-friendly partial limiting, and selectable analog-style spectra.
+- **Allpass Filter**: SVF-based allpass stage with cutoff control for phase shaping and cross-over duties.
 - **Clock Generator**: CV addressable BPM with reset input, multiplier/divider ratios, and a BPM CV output for syncing downstream patches.
 - **Copy/Paste Workflow**: Context menu and keyboard shortcuts duplicate nodes (optionally retaining external connections) with parameter/state preservation.
 - **Envelopes**: AD envelope generator with Schmitt-triggered gating feeds a live SVG visualizer so users can watch attack/decay progress in real time.

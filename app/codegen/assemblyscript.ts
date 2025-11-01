@@ -929,6 +929,10 @@ function collectStateDeclarations(plan: ExecutionPlan): string {
         lines.push(`const ladder_rng_${identifier} = new Xoroshiro128Plus(${seedA}, ${seedB});`);
         break;
       }
+      case "filter.allpass": {
+        lines.push(`const allpass_${identifier} = new AllpassFilter();`);
+        break;
+      }
       case "utility.scope": {
         lines.push(`const scope_trig_${identifier} = new SchmittTrigger(2.5, 1.0);`);
         break;
