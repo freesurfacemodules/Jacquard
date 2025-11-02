@@ -18,6 +18,7 @@ export function NodePropertiesPanel({ onClose }: NodePropertiesPanelProps): JSX.
     disconnectConnection,
     removeNode,
     renameNode,
+    renameNodeOutput,
     openSubpatch,
     rootGraph,
     activeSubpatchPath,
@@ -189,6 +190,9 @@ export function NodePropertiesPanel({ onClose }: NodePropertiesPanelProps): JSX.
     );
   };
 
+  const controlNames =
+    (selectedNode?.metadata?.controlNames as Record<string, string> | undefined) ?? {};
+
   return (
     <aside className="dock-panel" aria-label="Node properties">
       <header className="dock-panel__header">
@@ -235,6 +239,7 @@ export function NodePropertiesPanel({ onClose }: NodePropertiesPanelProps): JSX.
                 <div className="properties-controls">
                   {implementation.manifest.controls.map((control) => {
                     const value = getParameterValue(selectedNode.id, control.id);
+                    const controlLabel = controlNames[control.id] ?? control.label;
                     if (control.type === "slider") {
                       const context = { oversampling: viewModel.oversampling };
                       const minValue = resolveControlMin(control, context);
@@ -248,7 +253,7 @@ export function NodePropertiesPanel({ onClose }: NodePropertiesPanelProps): JSX.
                       return (
                         <label key={control.id} className="properties-control">
                           <span className="properties-control__label">
-                            {control.label}
+                            {controlLabel}
                             <small>{value.toFixed(2)}</small>
                           </span>
                           <input
@@ -267,7 +272,7 @@ export function NodePropertiesPanel({ onClose }: NodePropertiesPanelProps): JSX.
                     return (
                       <label key={control.id} className="properties-control">
                         <span className="properties-control__label">
-                          {control.label}
+                          {controlNames[control.id] ?? control.label}
                           <small>{selectedOption ? selectedOption.label : value.toFixed(2)}</small>
                         </span>
                         <select
@@ -284,6 +289,31 @@ export function NodePropertiesPanel({ onClose }: NodePropertiesPanelProps): JSX.
                     );
                   })}
                 </div>
+              </section>
+            ) : null}
+
+            {implementation?.manifest.renameableOutputs ?? false ? (
+              <section className="properties-section">
+                <h4>Outputs</h4>
+                {selectedNode.outputs.map((port) => (
+                  <label key={port.id} className="properties-field">
+                    <span>{port.id}</span>
+                    <div className="properties-field__control">
+                      <input
+                        type="text"
+                        defaultValue={port.name}
+                        onBlur={(event) =>
+                          selectedNode && renameNodeOutput(selectedNode.id, port.id, event.target.value)
+                        }
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            (event.currentTarget as HTMLInputElement).blur();
+                          }
+                        }}
+                      />
+                    </div>
+                  </label>
+                ))}
               </section>
             ) : null}
 

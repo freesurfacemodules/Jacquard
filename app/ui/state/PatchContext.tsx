@@ -31,6 +31,7 @@ import {
   NodeDescriptor,
   NodePosition,
   PatchGraph,
+  NodeMetadata,
   PortDescriptor,
   SubpatchGraph,
   SubpatchId,
@@ -356,6 +357,7 @@ export interface PatchController {
   openSubpatch(subpatchId: SubpatchId): void;
   exitSubpatch(levels?: number): void;
   renameNode(nodeId: string, label: string): void;
+  renameNodeOutput(nodeId: string, portId: string, label: string): void;
   addSubpatchPort(
     subpatchId: SubpatchId,
     direction: "input" | "output",
@@ -861,6 +863,110 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
         changeType: "metadata",
         recordHistory: false
       });
+    },
+    [applyGraphChange, produceGraphForActivePath]
+  );
+
+  const renameNodeOutput = useCallback(
+    (nodeId: string, portId: string, rawLabel: string) => {
+      const trimmed = rawLabel.trim();
+      if (!trimmed) {
+        return;
+      }
+
+      const result = produceGraphForActivePath((current) => {
+        let changed = false;
+        const nodes = current.nodes.map((node) => {
+          if (node.id !== nodeId) {
+            return node;
+          }
+          const outputIndex = node.outputs.findIndex((port) => port.id === portId);
+          if (outputIndex < 0) {
+            return node;
+          }
+          if (node.outputs[outputIndex].name === trimmed) {
+            return node;
+          }
+
+          changed = true;
+          const updatedOutputs = node.outputs.map((port) =>
+            port.id === portId ? { ...port, name: trimmed } : port
+          );
+
+          const implementation = getNodeImplementation(node.kind);
+          const controlId = implementation?.manifest.controls?.[outputIndex]?.id;
+
+          const existingMetadata = node.metadata ?? {};
+          const outputDefaults = implementation?.manifest.outputs ?? [];
+          const defaultOutputName = outputDefaults[outputIndex]?.name ?? node.outputs[outputIndex].name;
+          const existingOutputNames = (existingMetadata.outputNames as Record<string, string> | undefined) ?? {};
+          let nextOutputNames: Record<string, string> | undefined;
+          if (trimmed !== defaultOutputName) {
+            nextOutputNames = {
+              ...existingOutputNames,
+              [portId]: trimmed
+            };
+          } else if (existingOutputNames[portId]) {
+            const { [portId]: _, ...rest } = existingOutputNames;
+            nextOutputNames = Object.keys(rest).length ? rest : undefined;
+          } else if (Object.keys(existingOutputNames).length > 0) {
+            nextOutputNames = existingOutputNames;
+          }
+
+          const existingControlNames = (existingMetadata.controlNames as Record<string, string> | undefined) ?? {};
+          let nextControlNames: Record<string, string> | undefined = existingControlNames;
+          const controlDefaults = implementation?.manifest.controls ?? [];
+          const defaultControlLabel = controlId ? controlDefaults[outputIndex]?.label ?? controlId : undefined;
+          if (controlId) {
+            if (trimmed !== defaultControlLabel) {
+              nextControlNames = {
+                ...existingControlNames,
+                [controlId]: trimmed
+              };
+            } else if (existingControlNames[controlId]) {
+              const { [controlId]: _, ...rest } = existingControlNames;
+              nextControlNames = Object.keys(rest).length ? rest : undefined;
+            }
+          }
+
+          let nextMetadata: NodeMetadata | undefined = { ...existingMetadata };
+          if (nextOutputNames) {
+            nextMetadata.outputNames = nextOutputNames;
+          } else {
+            delete nextMetadata.outputNames;
+          }
+          if (nextControlNames) {
+            nextMetadata.controlNames = nextControlNames;
+          } else {
+            delete nextMetadata.controlNames;
+          }
+
+          if (nextMetadata && Object.keys(nextMetadata).length === 0) {
+            nextMetadata = undefined;
+          }
+
+          return {
+            ...node,
+            outputs: updatedOutputs,
+            metadata: nextMetadata
+          };
+        });
+
+        if (!changed) {
+          return current;
+        }
+
+        return {
+          ...current,
+          nodes
+        };
+      });
+
+      if (result === graphRef.current) {
+        return;
+      }
+
+      applyGraphChange(result, { changeType: "metadata", recordHistory: false });
     },
     [applyGraphChange, produceGraphForActivePath]
   );
@@ -2179,6 +2285,7 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       openSubpatch,
       exitSubpatch,
       renameNode,
+      renameNodeOutput,
       addSubpatchPort,
       renameSubpatchPort,
       removeSubpatchPort,
@@ -2226,6 +2333,7 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       openSubpatch,
       exitSubpatch,
       renameNode,
+      renameNodeOutput,
       addSubpatchPort,
       renameSubpatchPort,
       removeSubpatchPort,

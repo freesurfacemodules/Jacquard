@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "graph": {
+    "nodes": [
+      {
+        "id": "knobs1",
+        "kind": "utility.knobs",
+        "label": "Knobs",
+        "inputs": [],
+        "outputs": [
+          { "id": "out1", "name": "Knob 1", "type": "audio" },
+          { "id": "out2", "name": "Knob 2", "type": "audio" },
+          { "id": "out3", "name": "Knob 3", "type": "audio" },
+          { "id": "out4", "name": "Knob 4", "type": "audio" }
+        ],
+        "parameters": {
+          "knob1": 1,
+          "knob2": -2,
+          "knob3": 3.5,
+          "knob4": 0
+        },
+        "metadata": {}
+      },
+      {
+        "id": "out1",
+        "kind": "io.output",
+        "label": "Output",
+        "inputs": [
+          { "id": "left", "name": "Left", "type": "audio" },
+          { "id": "right", "name": "Right", "type": "audio" }
+        ],
+        "outputs": [],
+        "parameters": {},
+        "metadata": {}
+      }
+    ],
+    "connections": [
+      {
+        "id": "wire1",
+        "from": { "node": "knobs1", "port": "out1" },
+        "to": { "node": "out1", "port": "left" }
+      },
+      {
+        "id": "wire2",
+        "from": { "node": "knobs1", "port": "out2" },
+        "to": { "node": "out1", "port": "right" }
+      }
+    ],
+    "oversampling": 1,
+    "blockSize": 128,
+    "sampleRate": 48000
+  }
+}

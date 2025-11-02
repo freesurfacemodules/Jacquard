@@ -1271,6 +1271,7 @@ export function Canvas({
             const { width } = getNodeDimensions(node);
             const implementation = getNodeImplementation(node.kind);
             const controls = implementation?.manifest.controls ?? [];
+            const controlNames = (node.metadata?.controlNames as Record<string, string> | undefined) ?? {};
             const controlConfigs = controls
               .filter((control) => control.type === "slider")
               .map((control) => {
@@ -1302,7 +1303,7 @@ export function Canvas({
                 const quantized = shouldSnap ? Math.round(clampedValue / step) * step : clampedValue;
                 return {
                   id: control.id,
-                  label: control.label,
+                  label: controlNames[control.id] ?? control.label,
                   value: quantized,
                   min,
                   max,

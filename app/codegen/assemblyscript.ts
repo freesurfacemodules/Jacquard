@@ -984,6 +984,9 @@ function collectStateDeclarations(plan: ExecutionPlan): string {
         lines.push(`const complexRes_${identifier} = new ComplexResonator();`);
         break;
       }
+      case "utility.knobs": {
+        break;
+      }
       case "logic.counter": {
         lines.push(`const counter_${identifier} = new CounterState();`);
         break;
