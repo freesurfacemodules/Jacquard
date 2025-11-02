@@ -12,6 +12,7 @@ import type { WindowKey, WindowVisibility } from "./Workspace";
 interface ToolbarProps {
   windows: WindowVisibility;
   onToggleWindow(key: WindowKey): void;
+  onOpenHelp(): void;
 }
 
 const WINDOW_MENU_ITEMS: Array<{ key: WindowKey; label: string }> = [
@@ -21,7 +22,7 @@ const WINDOW_MENU_ITEMS: Array<{ key: WindowKey; label: string }> = [
   { key: "audioSettings", label: "Audio Properties" }
 ];
 
-export function Toolbar({ windows, onToggleWindow }: ToolbarProps): JSX.Element {
+export function Toolbar({ windows, onToggleWindow, onOpenHelp }: ToolbarProps): JSX.Element {
   const {
     validation,
     compile,
@@ -345,6 +346,16 @@ export function Toolbar({ windows, onToggleWindow }: ToolbarProps): JSX.Element 
             </div>
           ) : null}
         </div>
+        <button
+          type="button"
+          className="toolbar-button toolbar-button--ghost"
+          onClick={() => {
+            closeMenu();
+            onOpenHelp();
+          }}
+        >
+          Help
+        </button>
       </div>
       <div className="toolbar-section toolbar-section--actions">
         <button

@@ -112,6 +112,19 @@ option {
     border-color: var(--accent-strong);
 }
 
+.toolbar-button--ghost {
+    background: transparent;
+    border-color: transparent;
+    color: var(--text-muted);
+    padding-inline: 0.5rem;
+}
+
+.toolbar-button--ghost:hover {
+    color: var(--accent-strong);
+    background: var(--accent-soft);
+    border-color: var(--accent);
+}
+
 .toolbar-menubar {
     position: relative;
 }
@@ -896,6 +909,96 @@ option {
     margin: 0;
     padding: 0.5rem 0.6rem;
     color: var(--text-subtle);
+}
+
+.help-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.help-modal__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+}
+
+.help-modal__panel {
+    position: relative;
+    width: min(640px, 92vw);
+    max-height: min(80vh, 720px);
+    background: var(--bg-2);
+    border: 1px solid var(--surface-border);
+    border-radius: 10px;
+    box-shadow: 0 18px 36px var(--surface-shadow);
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.help-modal__panel h1 {
+    margin: 0;
+    font-size: 1.35rem;
+}
+
+.help-modal__panel h2 {
+    margin: 1.2rem 0 0.6rem;
+    font-size: 1.05rem;
+}
+
+.help-modal__panel section:first-of-type h2 {
+    margin-top: 0.6rem;
+}
+
+.help-modal__scroll {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding-right: 0.5rem;
+}
+
+.help-modal__scroll p {
+    margin: 0 0 0.75rem;
+    line-height: 1.6;
+}
+
+.help-modal__scroll ul {
+    margin: 0 0 1rem 1.25rem;
+    padding: 0;
+    list-style: disc;
+    line-height: 1.6;
+}
+
+.help-modal__close {
+    position: absolute;
+    top: 0.6rem;
+    right: 0.6rem;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.help-modal__close:hover {
+    color: var(--accent-strong);
+}
+
+.help-modal__startup {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.help-modal__startup input {
+    width: 1rem;
+    height: 1rem;
 }
 
 .patch-node {
