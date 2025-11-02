@@ -16,7 +16,7 @@ const DECAY_RANGE: f32 = MAX_DECAY_SECONDS / MIN_DECAY_SECONDS;
 
 @inline function pitchFromHz(freqHz: f32): f32 {
   const normalized = freqHz / FREQ_C4;
-  return fastLog(normalized) * INV_LN2;
+  return fastLog2(normalized);
 }
 
 @inline function secondsFromDecay(decayNormalized: f32): f32 {
