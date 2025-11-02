@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import type { ExecutionPlan } from "@codegen/plan";
 import { emitAssemblyScript, type MathMode } from "@codegen/assemblyscript";
 import { normalizePatchDocument } from "@graph/persistence";
@@ -198,22 +198,38 @@ async function compileAssemblyScriptToWasm(source: string): Promise<Uint8Array> 
     : new Uint8Array(result.binary);
 }
 
+type BinaryenModule = typeof import("binaryen") & {
+  ready?: Promise<unknown>;
+  setClosedWorld?: (enabled: boolean) => void;
+};
+
 interface BinaryenOptimizeOptions {
   optimizeLevel: number;
   shrinkLevel: number;
   fastMath: boolean;
-  enableSimd: boolean;
   passes: string[];
+  enableSimd: boolean;
+}
+
+async function importBinaryen(): Promise<BinaryenModule | null> {
+  try {
+    const mod = (await import("binaryen")) as BinaryenModule | { default: BinaryenModule };
+    const instance = "default" in mod ? mod.default : mod;
+    if (instance.ready) {
+      await instance.ready;
+    }
+    return instance;
+  } catch {
+    return null;
+  }
 }
 
 async function applyBinaryenOptimizations(
   wasmBinary: Uint8Array,
   options: Partial<BinaryenOptimizeOptions> = {}
 ): Promise<{ binary: Uint8Array; applied: boolean }> {
-  let binaryen: typeof import("binaryen") | null = null;
-  try {
-    binaryen = await import("binaryen");
-  } catch {
+  const binaryen = await importBinaryen();
+  if (!binaryen) {
     console.warn(
       "[bench] Binaryen not installed; skipping post-AssemblyScript wasm-opt optimization."
     );
@@ -224,7 +240,6 @@ async function applyBinaryenOptimizations(
     optimizeLevel = 3,
     shrinkLevel = 0,
     fastMath = true,
-    enableSimd = true,
     passes = [
       "inlining-optimizing",
       "flatten",
@@ -232,38 +247,30 @@ async function applyBinaryenOptimizations(
       "precompute-propagate",
       "reorder-locals",
       "dce",
-      "simplify-globals",
-      "vacuum",
-      "strip-debug",
-      "strip-producers"
-    ]
+    "simplify-globals",
+    "vacuum",
+    "strip-debug",
+    "strip-producers"
+    ],
+    enableSimd = true
   } = options;
 
   binaryen.setOptimizeLevel(optimizeLevel);
   binaryen.setShrinkLevel(shrinkLevel);
   binaryen.setFastMath(fastMath);
-  if (typeof (binaryen as any).setClosedWorld === "function") {
-    (binaryen as any).setClosedWorld(true);
+  if (typeof binaryen.setClosedWorld === "function") {
+    binaryen.setClosedWorld(true);
   }
 
   const module = binaryen.readBinary(wasmBinary);
-  if (typeof module.setFeatures === "function" && (binaryen as any).Features) {
-    try {
-      const featuresEnum = (binaryen as any).Features;
-      const allFeatures =
-        featuresEnum?.All ??
-        featuresEnum?.ALL ??
-        (featuresEnum.MV || featuresEnum.Mvp || 0) |
-          (featuresEnum.SIMD ?? featuresEnum.Simd ?? 0) |
-          (featuresEnum.BulkMemory ?? featuresEnum.BULK_MEMORY ?? 0) |
-          (featuresEnum.Multivalue ?? featuresEnum.MULTIVALUE ?? 0) |
-          (featuresEnum.TailCall ?? featuresEnum.TAIL_CALLS ?? 0) |
-          0;
-      if (allFeatures) {
-        module.setFeatures(allFeatures);
-      }
-    } catch {
-      /* ignore feature configuration issues */
+  if (typeof module.setFeatures === "function" && binaryen.Features) {
+    const { Features } = binaryen;
+    if (enableSimd && typeof Features.All === "number") {
+      module.setFeatures(Features.All);
+    } else if (!enableSimd && typeof Features.MVP === "number") {
+      module.setFeatures(Features.MVP);
+    } else if (typeof Features.All === "number") {
+      module.setFeatures(Features.All);
     }
   }
 
