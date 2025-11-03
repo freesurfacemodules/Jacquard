@@ -72,7 +72,11 @@ export const oscilloscopeNode: NodeImplementation = {
 
       const monitorIndexLiteral = scopeMonitorIndex.toString();
       const bodyLines: string[] = [];
-      bodyLines.push("if (step == OVERSAMPLING - 1) {");
+      if (helpers.usesOversampling) {
+        bodyLines.push("if (step == OVERSAMPLING - 1) {");
+      } else {
+        bodyLines.push("{");
+      }
       bodyLines.push("  const monitorIndex: i32 = " + monitorIndexLiteral + ";");
       bodyLines.push("  let signalSample: f32 = " + signalExpr + ";");
       bodyLines.push("  let scopeScale: f32 = unchecked(scopeMonitorScale[monitorIndex]);");

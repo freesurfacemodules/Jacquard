@@ -13,9 +13,12 @@ export interface DspNodeManifest {
     | "clock"
     | "envelope"
     | "logic"
-    | "mixer"
-    | "noise"
-    | "distortion";
+    | "mixing"
+    | "random"
+    | "distortion"
+    | "circuit"
+    | "control"
+    | "meta";
   label: string;
   inputs: PortDescriptor[];
   outputs: PortDescriptor[];
@@ -35,6 +38,7 @@ export interface NodeEmitHelpers {
   sanitizeIdentifier(identifier: string): string;
   buildInputExpression(input: PlanInput): string;
   parameterRef(index: number): string;
+  usesOversampling: boolean;
 }
 
 export interface NodeAssembly {

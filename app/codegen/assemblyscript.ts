@@ -162,7 +162,7 @@ export function emitAssemblyScript(
 
     const snippet = implementation.assembly.emit(
       planNode,
-      createEmitHelpers()
+      createEmitHelpers(useOversampling)
     );
 
     if (snippet && snippet.trim().length > 0) {
@@ -666,13 +666,14 @@ class DcBlocker {
 }
 `;
 
-function createEmitHelpers(): NodeEmitHelpers {
+function createEmitHelpers(usesOversampling: boolean): NodeEmitHelpers {
   return {
     indentLines,
     numberLiteral,
     sanitizeIdentifier,
     buildInputExpression: (input: PlanInput) => buildInputExpression(input),
-    parameterRef: (index: number) => `getParameterValue(${index})`
+    parameterRef: (index: number) => `getParameterValue(${index})`,
+    usesOversampling
   };
 }
 
