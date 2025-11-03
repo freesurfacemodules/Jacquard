@@ -985,6 +985,46 @@ describe("code generation", () => {
     expect(source).toContain("gateOutput = 10;");
   });
 
+  it("emits gain node with db scaling", () => {
+    let graph = createGraph();
+    const osc = instantiateNode("osc.sine", "osc1");
+    const gainCv = instantiateNode("utility.scale", "cv1");
+    gainCv.parameters.scale = 0.5;
+    const gain = instantiateNode("utility.gain", "gain1");
+    gain.parameters.level = -6;
+    const out = instantiateNode("io.output", "out1");
+
+    graph = addNode(graph, osc);
+    graph = addNode(graph, gainCv);
+    graph = addNode(graph, gain);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: osc.id,
+      fromPortId: "out",
+      toNodeId: gain.id,
+      toPortId: "in"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: gainCv.id,
+      fromPortId: "out",
+      toNodeId: gain.id,
+      toPortId: "gain"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: gain.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    const { source } = emitAssemblyScript(graph);
+    expect(source).toContain("let gainDb_gain1: f32");
+    expect(source).toContain("fastExp(gainDb_gain1 * (LN10 * 0.05))");
+  });
+
   it("emits sample and hold wiring", () => {
     let graph = createGraph();
     const osc = instantiateNode("osc.sine", "sig1");
