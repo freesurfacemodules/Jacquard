@@ -1,9 +1,22 @@
-import { memo } from "react";
+import { memo, useMemo } from "react";
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import type { NodeDescriptor } from "@graph/types";
 import { Knob } from "./Knob";
+import { Fader } from "./Fader";
 
 export type PortKind = "input" | "output";
+
+interface ControlConfig {
+  id: string;
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step?: number;
+  defaultValue: number;
+  type: "slider" | "fader";
+  displayValue: string;
+}
 
 interface PatchNodeProps {
   node: NodeDescriptor;
@@ -27,15 +40,8 @@ interface PatchNodeProps {
     portIndex: number,
     event: React.PointerEvent<HTMLButtonElement>
   ): void;
-  controls: Array<{
-    id: string;
-    label: string;
-    value: number;
-    min: number;
-    max: number;
-    step?: number;
-    defaultValue: number;
-  }>;
+  controls: ControlConfig[];
+  controlLayout?: string[][];
   inputConnections: Record<string, number>;
   outputConnections: Record<string, number>;
   activeOutputPortId: string | null;
@@ -68,6 +74,7 @@ export const PatchNode = memo(function PatchNode({
   onOutputPointerDown,
   onInputPointerUp,
   controls,
+  controlLayout,
   inputConnections,
   outputConnections,
   activeOutputPortId,
@@ -112,6 +119,65 @@ export const PatchNode = memo(function PatchNode({
       onPointerUp(node.id, event, "header");
     }
   };
+
+  const controlMap = useMemo(() => {
+    const map = new Map<string, ControlConfig>();
+    for (const control of controls) {
+      map.set(control.id, control);
+    }
+    return map;
+  }, [controls]);
+
+  const layoutColumns = useMemo(() => {
+    if (!controlLayout || controlLayout.length === 0) {
+      return null;
+    }
+    const rendered = new Set<string>();
+    const columns: ControlConfig[][] = [];
+    for (const columnIds of controlLayout) {
+      const columnControls = columnIds
+        .map((id) => controlMap.get(id))
+        .filter((entry): entry is ControlConfig => Boolean(entry));
+      if (columnControls.length > 0) {
+        columns.push(columnControls);
+        columnControls.forEach((control) => rendered.add(control.id));
+      }
+    }
+    const leftovers = controls.filter((control) => !rendered.has(control.id));
+    for (const leftover of leftovers) {
+      columns.push([leftover]);
+    }
+    return columns.length > 0 ? columns : null;
+  }, [controlLayout, controlMap, controls]);
+
+  const renderControl = (config: ControlConfig): JSX.Element => (
+    <div
+      key={config.id}
+      className={`patch-node__control patch-node__control--${config.type}`}
+    >
+      {config.type === "fader" ? (
+        <Fader
+          min={config.min}
+          max={config.max}
+          step={config.step}
+          value={config.value}
+          defaultValue={config.defaultValue}
+          onChange={(next) => onControlChange(node.id, config.id, next)}
+        />
+      ) : (
+        <Knob
+          min={config.min}
+          max={config.max}
+          step={config.step}
+          value={config.value}
+          defaultValue={config.defaultValue}
+          onChange={(next) => onControlChange(node.id, config.id, next)}
+        />
+      )}
+      <span className="patch-node__control-label">{config.label}</span>
+      <span className="patch-node__control-value">{config.displayValue}</span>
+    </div>
+  );
 
   return (
     <div
@@ -207,21 +273,21 @@ export const PatchNode = memo(function PatchNode({
         </div>
       </div>
       {controls.length > 0 ? (
-        <div className="patch-node__controls">
-          {controls.map((control) => (
-            <div key={control.id} className="patch-node__control">
-              <Knob
-                min={control.min}
-                max={control.max}
-                step={control.step}
-                value={control.value}
-                defaultValue={control.defaultValue}
-                onChange={(next) => onControlChange(node.id, control.id, next)}
-              />
-              <span>{control.label}</span>
-              <span className="patch-node__control-value">{control.value.toFixed(3)}</span>
-            </div>
-          ))}
+        <div
+          className={`patch-node__controls${layoutColumns ? " patch-node__controls--grid" : ""}`}
+          style={
+            layoutColumns
+              ? { gridTemplateColumns: `repeat(${layoutColumns.length}, minmax(0, 1fr))` }
+              : undefined
+          }
+        >
+          {layoutColumns
+            ? layoutColumns.map((column, index) => (
+                <div key={`control-column-${index}`} className="patch-node__control-column">
+                  {column.map((control) => renderControl(control))}
+                </div>
+              ))
+            : controls.map((control) => renderControl(control))}
         </div>
       ) : null}
       {widget ? <div className="patch-node__widget">{widget}</div> : null}

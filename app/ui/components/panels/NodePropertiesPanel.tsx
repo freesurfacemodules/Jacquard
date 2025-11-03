@@ -240,7 +240,7 @@ export function NodePropertiesPanel({ onClose }: NodePropertiesPanelProps): JSX.
                   {implementation.manifest.controls.map((control) => {
                     const value = getParameterValue(selectedNode.id, control.id);
                     const controlLabel = controlNames[control.id] ?? control.label;
-                    if (control.type === "slider") {
+                    if (control.type === "slider" || control.type === "fader") {
                       const context = { oversampling: viewModel.oversampling };
                       const minValue = resolveControlMin(control, context);
                       const maxValue = resolveControlMax(control, context);

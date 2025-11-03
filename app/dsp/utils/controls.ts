@@ -7,7 +7,7 @@ export function resolveControlStep(
   control: NodeControl | undefined,
   context: ControlStepContext
 ): number {
-  if (!control || control.type !== "slider") {
+  if (!control || (control.type !== "slider" && control.type !== "fader")) {
     return 0;
   }
   if (control.step == null) {
@@ -27,7 +27,7 @@ export function resolveControlMin(
   if (!control) {
     return DEFAULT_MIN;
   }
-  if (control.type !== "slider") {
+  if (control.type !== "slider" && control.type !== "fader") {
     if (control.options.length === 0) {
       return DEFAULT_MIN;
     }
@@ -55,7 +55,7 @@ export function resolveControlMax(
   if (!control) {
     return DEFAULT_MAX;
   }
-  if (control.type !== "slider") {
+  if (control.type !== "slider" && control.type !== "fader") {
     if (control.options.length === 0) {
       return DEFAULT_MAX;
     }

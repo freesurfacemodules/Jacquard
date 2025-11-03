@@ -27,6 +27,7 @@ export interface DspNodeManifest {
     width?: number;
     height?: number;
     icon?: string;
+    controlLayout?: string[][];
   };
   controls?: NodeControl[];
   hidden?: boolean;
@@ -51,8 +52,6 @@ export interface NodeImplementation {
   assembly?: NodeAssembly;
 }
 
-export type NodeControl = SliderControl | SelectControl;
-
 interface BaseControl {
   id: string;
   label: string;
@@ -60,6 +59,13 @@ interface BaseControl {
 
 export interface SliderControl extends BaseControl {
   type: "slider";
+  min: number | ControlRangeResolver;
+  max: number | ControlRangeResolver;
+  step?: number | ControlStepResolver;
+}
+
+export interface FaderControl extends BaseControl {
+  type: "fader";
   min: number | ControlRangeResolver;
   max: number | ControlRangeResolver;
   step?: number | ControlStepResolver;
@@ -81,3 +87,5 @@ export interface ControlStepContext {
 
 export type ControlRangeResolver = (context: ControlStepContext) => number;
 export type ControlStepResolver = (context: ControlStepContext) => number;
+
+export type NodeControl = SliderControl | FaderControl | SelectControl;

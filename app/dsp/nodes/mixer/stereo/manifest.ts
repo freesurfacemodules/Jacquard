@@ -13,15 +13,32 @@ export const stereoMixerNode: NodeImplementation = {
     ),
     outputs: [audioPort("left", "Left"), audioPort("right", "Right")],
     defaultParams: CHANNEL_IDS.reduce<Record<string, number>>((acc, id) => {
-      acc[`gain_${id}`] = 1;
+      acc[`gain_${id}`] = 0;
       acc[`pan_${id}`] = 0;
       return acc;
     }, {}),
     appearance: {
-      width: 220,
-      height: 160,
-      icon: "mixer"
-    }
+      width: 260,
+      height: 220,
+      icon: "mixer",
+      controlLayout: CHANNEL_IDS.map((id) => [`pan_${id}`, `gain_${id}`])
+    },
+    controls: CHANNEL_IDS.flatMap((id, index) => [
+      {
+        id: `pan_${id}`,
+        label: `Pan ${index + 1}`,
+        type: "slider" as const,
+        min: -1,
+        max: 1
+      },
+      {
+        id: `gain_${id}`,
+        label: `Level ${index + 1}`,
+        type: "fader" as const,
+        min: -96,
+        max: 12
+      }
+    ])
   },
   assembly: {
     emit(planNode, helpers) {
@@ -52,21 +69,29 @@ export const stereoMixerNode: NodeImplementation = {
         const sampleVar = `sample_${id}_${sanitizedChannel}`;
         const gainKey = `gain_${input.port.id}`;
         const panKey = `pan_${input.port.id}`;
-        const gainValue = helpers.numberLiteral(
-          typeof planNode.node.parameters?.[gainKey] === "number"
-            ? planNode.node.parameters![gainKey]
-            : 1
-        );
-        const panValue = helpers.numberLiteral(
-          typeof planNode.node.parameters?.[panKey] === "number"
-            ? planNode.node.parameters![panKey]
-            : 0
-        );
+        const gainControl = planNode.controls.find((control) => control.controlId === gainKey);
+        const panControl = planNode.controls.find((control) => control.controlId === panKey);
+        const gainDbExpr = gainControl
+          ? helpers.parameterRef(gainControl.index)
+          : helpers.numberLiteral(0);
+        const panExpr = panControl
+          ? helpers.parameterRef(panControl.index)
+          : helpers.numberLiteral(0);
 
         const expr = helpers.buildInputExpression(input);
         lines.push(helpers.indentLines(`let ${sampleVar}: f32 = ${expr};`, 1));
-        lines.push(helpers.indentLines(`let gain_${sanitizedChannel}: f32 = ${gainValue};`, 1));
-        lines.push(helpers.indentLines(`let pan_${sanitizedChannel}: f32 = ${panValue};`, 1));
+        lines.push(helpers.indentLines(`let pan_${sanitizedChannel}: f32 = ${panExpr};`, 1));
+        lines.push(helpers.indentLines(`if (pan_${sanitizedChannel} < -1.0) pan_${sanitizedChannel} = -1.0;`, 1));
+        lines.push(helpers.indentLines(`if (pan_${sanitizedChannel} > 1.0) pan_${sanitizedChannel} = 1.0;`, 1));
+        lines.push(helpers.indentLines(`let gainDb_${sanitizedChannel}: f32 = ${gainDbExpr};`, 1));
+        lines.push(helpers.indentLines(`if (gainDb_${sanitizedChannel} < -96.0) gainDb_${sanitizedChannel} = -96.0;`, 1));
+        lines.push(helpers.indentLines(`if (gainDb_${sanitizedChannel} > 12.0) gainDb_${sanitizedChannel} = 12.0;`, 1));
+        lines.push(
+          helpers.indentLines(
+            `let gain_${sanitizedChannel}: f32 = fastExp(gainDb_${sanitizedChannel} * (LN10 * 0.05));`,
+            1
+          )
+        );
         lines.push(
           helpers.indentLines(
             `${leftVar} += ${sampleVar} * gain_${sanitizedChannel} * (0.5 * (1.0 - pan_${sanitizedChannel}));`,

@@ -1282,9 +1282,10 @@ export function Canvas({
             const { width } = getNodeDimensions(node);
             const implementation = getNodeImplementation(node.kind);
             const controls = implementation?.manifest.controls ?? [];
+            const controlLayout = implementation?.manifest.appearance?.controlLayout ?? null;
             const controlNames = (node.metadata?.controlNames as Record<string, string> | undefined) ?? {};
             const controlConfigs = controls
-              .filter((control) => control.type === "slider")
+              .filter((control) => control.type === "slider" || control.type === "fader")
               .map((control) => {
                 const controlContext = { oversampling: viewModel.oversampling };
                 let min = resolveControlMin(control, controlContext);
@@ -1311,15 +1312,24 @@ export function Canvas({
               }
               const rawValue = getParameterValue(node.id, control.id);
               const clampedValue = Math.min(max, Math.max(min, rawValue));
-                const quantized = shouldSnap ? Math.round(clampedValue / step) * step : clampedValue;
+              const quantized = shouldSnap ? Math.round(clampedValue / step) * step : clampedValue;
+              const displayLabel = controlNames[control.id] ?? control.label;
+              let displayValue: string;
+              if (control.type === "fader") {
+                displayValue = `${quantized.toFixed(1)} dB`;
+              } else {
+                displayValue = quantized.toFixed(2);
+              }
                 return {
                   id: control.id,
-                  label: controlNames[control.id] ?? control.label,
+                  label: displayLabel,
                   value: quantized,
                   min,
                   max,
                   step: shouldSnap ? step : undefined,
-                  defaultValue
+                  defaultValue,
+                  type: control.type,
+                  displayValue
                 };
               });
             let widget: ReactNode | null = null;
@@ -1372,6 +1382,7 @@ export function Canvas({
                 onOutputPointerDown={handleOutputPointerDown}
                 onInputPointerUp={handleInputPointerUp}
                 controls={controlConfigs}
+                controlLayout={controlLayout ?? undefined}
                 inputConnections={portConnectionMap.get(node.id)?.inputs ?? {}}
                 outputConnections={portConnectionMap.get(node.id)?.outputs ?? {}}
                 activeOutputPortId={

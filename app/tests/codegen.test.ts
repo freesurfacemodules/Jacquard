@@ -135,8 +135,11 @@ describe("code generation", () => {
     expect(source).toContain("Stereo Mixer (mix1)");
     expect(source).toMatch(/let mix_mix1_left: f32 = 0.0;/);
     expect(source).toMatch(/let mix_mix1_right: f32 = 0.0;/);
-    expect(source).toMatch(/gain_ch1: f32 = 0.5/);
-    expect(source).toMatch(/pan_ch1: f32 = -0.25/);
+    expect(source).toMatch(/let pan_ch1: f32 = getParameterValue\(/);
+    expect(source).toContain("if (pan_ch1 < -1.0) pan_ch1 = -1.0;");
+    expect(source).toContain("if (pan_ch1 > 1.0) pan_ch1 = 1.0;");
+    expect(source).toMatch(/let gainDb_ch1: f32 = getParameterValue\(/);
+    expect(source).toContain("fastExp(gainDb_ch1 * (LN10 * 0.05))");
     expect(source).toMatch(/mix_mix1_left \+=/);
     expect(source).toMatch(/mix_mix1_right \+=/);
     expect(source).toMatch(/wire\d+ = mix_mix1_left;/);
