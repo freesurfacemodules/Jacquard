@@ -985,6 +985,12 @@ function collectStateDeclarations(plan: ExecutionPlan): string {
         lines.push(`const complexRes_${identifier} = new ComplexResonator();`);
         break;
       }
+      case "utility.gatelength": {
+        lines.push(`const gate_trig_${identifier} = new SchmittTrigger(2.5, 1.0);`);
+        lines.push(`let gate_active_${identifier}: bool = false;`);
+        lines.push(`let gate_counter_${identifier}: i32 = 0;`);
+        break;
+      }
       case "control.knobs": {
         break;
       }

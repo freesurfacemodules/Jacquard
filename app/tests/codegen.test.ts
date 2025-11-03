@@ -950,6 +950,38 @@ describe("code generation", () => {
     expect(source).toContain("const demuxB: f32 = isB ? signal : 0.0;");
   });
 
+  it("emits gate length node wiring", () => {
+    let graph = createGraph();
+    const trigger = instantiateNode("osc.sine", "trig1");
+    const gate = instantiateNode("utility.gatelength", "gate1");
+    const out = instantiateNode("io.output", "out1");
+
+    graph = addNode(graph, trigger);
+    graph = addNode(graph, gate);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: trigger.id,
+      fromPortId: "out",
+      toNodeId: gate.id,
+      toPortId: "trigger"
+    });
+
+    graph = connectNodes(graph, {
+      fromNodeId: gate.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    const { source } = emitAssemblyScript(graph);
+    expect(source).toContain("const gate_trig_gate1 = new SchmittTrigger(2.5, 1.0);");
+    expect(source).toContain("let gate_active_gate1: bool = false;");
+    expect(source).toContain("let gate_counter_gate1: i32 = 0;");
+    expect(source).toContain("if (gate_active_gate1) {");
+    expect(source).toContain("gateOutput = 10;");
+  });
+
   it("emits sample and hold wiring", () => {
     let graph = createGraph();
     const osc = instantiateNode("osc.sine", "sig1");

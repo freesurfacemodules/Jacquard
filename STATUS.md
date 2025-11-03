@@ -16,7 +16,7 @@
 - **Debugging**: Oscilloscope node captures patch signals with trigger support and streams history into the UI for real-time waveform inspection.
 - **Compilation Flow**: Compile logs surface module sizes and parameter counts. Topology changes invalidate the running artifact; parameter/position changes do not.
 - **Validation & Tests**: DAG validation, duplicate detection, control bindings, and codegen snippets are covered by Vitest; linting enforces TS/React style.
-- **Logic & Circuit Utilities**: AND/OR/XOR/NOT gates handle boolean logic, while comparator, counter, mux/demux, and sample & hold nodes now sit under the Circuit category for edge sequencing with 5 V high outputs.
+- **Logic & Circuit Utilities**: AND/OR/XOR/NOT gates handle boolean logic, while comparator, counter, mux/demux, and sample & hold nodes sit under the Circuit toolbox for edge sequencing; the new Gate Length utility turns triggers into fixed-duration 10 V gates.
 - **Node Library**: Categories refreshed (Mixing, Random, Circuit, Control, Meta) with the patch document updated to version 2; older exports are rejected with a friendly error so users can rebuild with the new taxonomy.
 - **DSP Benchmarking**: Standalone Node/Vite-node CLI compiles patches to Wasm and runs headless DSP benchmarks for A/B performance testing outside the browser.
 - **Math Mode A/B**: AssemblyScript codegen exposes fast vs baseline math toggles (sin/cos/log/exp/pow) so benchmarks can compare accuracy/perf trade-offs per patch.
