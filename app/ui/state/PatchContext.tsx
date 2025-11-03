@@ -376,6 +376,15 @@ export interface PatchController {
   ): void;
   createSubpatchFromSelection(nodeIds: string[]): void;
   resetPatch(): void;
+  updateActiveGraph(
+    updater: (graph: PatchGraph) => PatchGraph,
+    options?: {
+      changeType?: PatchChangeType;
+      selectNode?: string | null;
+      recordHistory?: boolean;
+      afterCommit?: (previous: PatchGraph, updated: PatchGraph) => void;
+    }
+  ): boolean;
 }
 
 const PatchContext = createContext<PatchController | null>(null);
@@ -685,6 +694,18 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       return applyGraphChange(nextGraph, options);
     },
     [applyGraphChange, produceGraphForActivePath]
+  );
+  const updateActiveGraph = useCallback(
+    (
+      updater: (graph: PatchGraph) => PatchGraph,
+      options?: {
+        changeType?: PatchChangeType;
+        selectNode?: string | null;
+        recordHistory?: boolean;
+        afterCommit?: (previous: PatchGraph, updated: PatchGraph) => void;
+      }
+    ) => applyActiveGraphChange(updater, options),
+    [applyActiveGraphChange]
   );
 
   const openSubpatch = useCallback(
@@ -2290,7 +2311,8 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       renameSubpatchPort,
       removeSubpatchPort,
       createSubpatchFromSelection,
-      resetPatch
+      resetPatch,
+      updateActiveGraph
     }),
     [
       activeGraph,
@@ -2338,7 +2360,8 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
       renameSubpatchPort,
       removeSubpatchPort,
       createSubpatchFromSelection,
-      resetPatch
+      resetPatch,
+      updateActiveGraph
     ]
   );
 

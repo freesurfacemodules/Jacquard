@@ -200,11 +200,11 @@ export function Canvas({
     getEnvelopeSnapshot,
     getScopeSnapshot,
     getParameterValue,
-    importPatch,
     openSubpatch,
     activeSubpatchPath,
     addSubpatchPort,
-    createSubpatchFromSelection
+    createSubpatchFromSelection,
+    updateActiveGraph
   } = usePatch();
 
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -463,44 +463,55 @@ export function Canvas({
         idMap.set(node.id, newId);
       }
 
-      let nextGraph = graph;
-      for (const node of newNodes) {
-        nextGraph = addGraphNode(nextGraph, node);
+      const changed = updateActiveGraph(
+        (current) => {
+          let nextGraph = current;
+          for (const node of newNodes) {
+            nextGraph = addGraphNode(nextGraph, node);
+          }
+
+          for (const connection of payload.connections) {
+            const fromNodeId = idMap.get(connection.from.node) ?? connection.from.node;
+            const toNodeId = idMap.get(connection.to.node) ?? connection.to.node;
+            if (!idMap.has(connection.from.node) && !idMap.has(connection.to.node)) {
+              continue;
+            }
+            try {
+              console.debug("[Canvas] paste connection", {
+                originalFrom: connection.from.node,
+                originalTo: connection.to.node,
+                fromNodeId,
+                toNodeId
+              });
+              nextGraph = connectGraphNodes(nextGraph, {
+                fromNodeId,
+                fromPortId: connection.from.port,
+                toNodeId,
+                toPortId: connection.to.port
+              });
+            } catch {
+              // Ignore connections that cannot be recreated (e.g., duplicates or validation issues).
+            }
+          }
+
+          return nextGraph;
+        },
+        { changeType: "topology", recordHistory: true }
+      );
+
+      if (!changed) {
+        return false;
       }
 
-      for (const connection of payload.connections) {
-        const fromNodeId = idMap.get(connection.from.node) ?? connection.from.node;
-        const toNodeId = idMap.get(connection.to.node) ?? connection.to.node;
-        if (!idMap.has(connection.from.node) && !idMap.has(connection.to.node)) {
-          continue;
-        }
-        try {
-          console.debug("[Canvas] paste connection", {
-            originalFrom: connection.from.node,
-            originalTo: connection.to.node,
-            fromNodeId,
-            toNodeId
-          });
-          nextGraph = connectGraphNodes(nextGraph, {
-            fromNodeId,
-            fromPortId: connection.from.port,
-            toNodeId,
-            toPortId: connection.to.port
-          });
-        } catch {
-          // Ignore connections that cannot be recreated (e.g., duplicates or validation issues).
-        }
-      }
       console.debug("[Canvas] pasteClipboard", {
         anchor,
         nodeCount: newNodes.length,
         connectionCount: payload.connections.length
       });
-      importPatch(nextGraph);
       selectNodes(newNodeIds);
       return true;
     },
-    [graph, importPatch, selectNodes]
+    [selectNodes, updateActiveGraph]
   );
 
   const updateSelectionForRect = useCallback(
