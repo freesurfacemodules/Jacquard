@@ -149,7 +149,7 @@ describe("code generation", () => {
   it("emits gain node with parameter fallback", () => {
     let graph = createGraph();
     const osc = instantiateNode("osc.sine", "osc1");
-    const gain = instantiateNode("utility.gain", "gain1");
+    const gain = instantiateNode("utility.scale", "scale1");
     gain.parameters.gain = 2.5;
     const out = instantiateNode("io.output", "out1");
 
@@ -179,7 +179,7 @@ describe("code generation", () => {
     });
 
     const { source } = emitAssemblyScript(graph);
-    expect(source).toContain("// Gain (gain1)");
+    expect(source).toContain("// Scale (scale1)");
     expect(source).toMatch(/scaled: f32 = \(wire\d+\) \* \(getParameterValue\(0\)\)/);
   });
 
@@ -864,7 +864,7 @@ describe("code generation", () => {
     let graph = createGraph();
     const sigA = instantiateNode("osc.sine", "sigA");
     const sigB = instantiateNode("osc.sine", "sigB");
-    const sel = instantiateNode("utility.gain", "sel1");
+    const sel = instantiateNode("utility.scale", "sel1");
     sel.parameters.gain = 0;
     const mux = instantiateNode("circuit.mux", "mux1");
     const out = instantiateNode("io.output", "out1");
@@ -910,7 +910,7 @@ describe("code generation", () => {
   it("emits demultiplexer node wiring", () => {
     let graph = createGraph();
     const signal = instantiateNode("osc.sine", "sig1");
-    const sel = instantiateNode("utility.gain", "sel1");
+    const sel = instantiateNode("utility.scale", "sel1");
     sel.parameters.gain = 0;
     const demux = instantiateNode("circuit.demux", "dm1");
     const out = instantiateNode("io.output", "out1");

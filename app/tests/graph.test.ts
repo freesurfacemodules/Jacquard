@@ -233,7 +233,7 @@ describe("graph", () => {
 
   it("removes connections targeting a specific input port", () => {
     const osc = instantiateNode("osc.sine", "osc1");
-    const gain = instantiateNode("utility.gain", "gain1");
+    const gain = instantiateNode("utility.scale", "scale1");
     const out = instantiateNode("io.output", "out1");
 
     let graph = createGraph();
@@ -296,7 +296,7 @@ describe("graph", () => {
 
   it("allows feedback loops when delayed", () => {
     let graph = createGraph();
-    const gain = instantiateNode("utility.gain", "gain1");
+    const gain = instantiateNode("utility.scale", "scale1");
     const delay = instantiateNode("delay.ddl", "delay1");
     const out = instantiateNode("io.output", "out1");
 
@@ -338,7 +338,7 @@ describe("graph", () => {
 
   it("allows feedback loops when waveguide delay is present", () => {
     let graph = createGraph();
-    const gain = instantiateNode("utility.gain", "gain1");
+    const gain = instantiateNode("utility.scale", "scale1");
     const delay = instantiateNode("delay.waveguide", "wg1");
     const out = instantiateNode("io.output", "out1");
 

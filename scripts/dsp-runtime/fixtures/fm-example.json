@@ -57,8 +57,8 @@
       },
       {
         "id": "rqqz2b6pz0cf",
-        "kind": "utility.gain",
-        "label": "Gain",
+        "kind": "utility.scale",
+        "label": "Scale",
         "inputs": [
           {
             "id": "in",
@@ -283,8 +283,8 @@
       },
       {
         "id": "jk6yd2cnlqpb",
-        "kind": "utility.gain",
-        "label": "Gain",
+        "kind": "utility.scale",
+        "label": "Scale",
         "inputs": [
           {
             "id": "in",

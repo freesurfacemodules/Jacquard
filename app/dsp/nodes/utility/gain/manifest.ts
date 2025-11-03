@@ -8,12 +8,12 @@ const CHANNEL_OUT = "out";
 
 export const gainNode: NodeImplementation = {
   manifest: {
-    kind: "utility.gain",
+    kind: "utility.scale",
     category: "utility",
-    label: "Gain",
+    label: "Scale",
     inputs: [
       audioPort(CHANNEL_IN, "In"),
-      audioPort(CHANNEL_GAIN, "Gain")
+      audioPort(CHANNEL_GAIN, "Scale")
     ],
     outputs: [audioPort(CHANNEL_OUT, "Out")],
     defaultParams: {
@@ -23,9 +23,9 @@ export const gainNode: NodeImplementation = {
     controls: [
       {
         id: CHANNEL_GAIN,
-        label: "Gain",
+        label: "Scale",
         type: "slider",
-        min: 0,
+        min: -10,
         max: 10
       },
       {
