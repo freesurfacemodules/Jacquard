@@ -7,8 +7,8 @@ const OUTPUT_PORT = "out";
 
 export const comparatorNode: NodeImplementation = {
   manifest: {
-    kind: "logic.comparator",
-    category: "logic",
+    kind: "circuit.comparator",
+    category: "circuit",
     label: "Comparator",
     inputs: [
       audioPort(INPUT_A, "A"),

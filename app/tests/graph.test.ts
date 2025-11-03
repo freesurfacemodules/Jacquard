@@ -203,7 +203,7 @@ describe("graph", () => {
 
   it("removes connections from a specific output port", () => {
     const osc = instantiateNode("osc.sine", "osc1");
-    const mixer = instantiateNode("mixer.stereo", "mix1");
+    const mixer = instantiateNode("mixing.stereo", "mix1");
     const out = instantiateNode("io.output", "out1");
 
     let graph = createGraph();

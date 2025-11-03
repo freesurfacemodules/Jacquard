@@ -100,7 +100,7 @@ describe("compiler", () => {
 
   it("produces a wasm binary for the noise node", async () => {
     let graph = createGraph();
-    const noise = instantiateNode("noise.basic", "noise1");
+    const noise = instantiateNode("random.basic", "noise1");
     const out = instantiateNode("io.output", "out1");
 
     graph = addNode(graph, noise);

@@ -8,8 +8,8 @@ const OUTPUT_B = "outB";
 
 export const demultiplexerNode: NodeImplementation = {
   manifest: {
-    kind: "utility.demux",
-    category: "utility",
+    kind: "circuit.demux",
+    category: "circuit",
     label: "1x2 Demux",
     inputs: [
       audioPort(INPUT_SIGNAL, "Signal"),

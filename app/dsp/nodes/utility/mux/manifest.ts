@@ -8,8 +8,8 @@ const OUTPUT_PORT = "out";
 
 export const multiplexerNode: NodeImplementation = {
   manifest: {
-    kind: "utility.mux",
-    category: "utility",
+    kind: "circuit.mux",
+    category: "circuit",
     label: "2x1 Mux",
     inputs: [
       audioPort(INPUT_A, "Signal A"),

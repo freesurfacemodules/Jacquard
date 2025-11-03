@@ -1,6 +1,6 @@
 import { PatchGraph } from "./types";
 
-export const PATCH_DOCUMENT_VERSION = 1;
+export const PATCH_DOCUMENT_VERSION = 2;
 
 export interface PatchDocument {
   version: number;

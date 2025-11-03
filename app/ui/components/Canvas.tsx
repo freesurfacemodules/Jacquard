@@ -946,7 +946,7 @@ export function Canvas({
       let effectivePortId = portId;
       let effectivePortIndex = portIndex;
 
-      if (node.kind === "logic.subpatch.input" && portId === SUBPATCH_INPUT_DUMMY_PORT) {
+      if (node.kind === "meta.subpatch.input" && portId === SUBPATCH_INPUT_DUMMY_PORT) {
         const currentSubpatchId = activeSubpatchPath[activeSubpatchPath.length - 1];
         if (!currentSubpatchId) {
           return;
@@ -970,7 +970,7 @@ export function Canvas({
         effectivePortIndex = newOutputs.findIndex((port) => port.id === spec.id);
       }
 
-      if (node.kind === "logic.subpatch" && portId === SUBPATCH_OUTPUT_DUMMY_PORT && node.subpatchId) {
+      if (node.kind === "meta.subpatch" && portId === SUBPATCH_OUTPUT_DUMMY_PORT && node.subpatchId) {
         const spec = addSubpatchPort(node.subpatchId, "output");
         if (!spec) {
           return;
@@ -1033,7 +1033,7 @@ export function Canvas({
 
       let targetPortId = portId;
       const targetNode = nodesById.get(nodeId);
-      if (targetNode?.kind === "logic.subpatch.output" && portId === SUBPATCH_OUTPUT_DUMMY_PORT) {
+      if (targetNode?.kind === "meta.subpatch.output" && portId === SUBPATCH_OUTPUT_DUMMY_PORT) {
         const currentSubpatchId = activeSubpatchPath[activeSubpatchPath.length - 1];
         if (!currentSubpatchId) {
           return;
@@ -1045,7 +1045,7 @@ export function Canvas({
         targetPortId = spec.id;
       }
 
-      if (targetNode?.kind === "logic.subpatch" && portId === SUBPATCH_INPUT_DUMMY_PORT && targetNode.subpatchId) {
+      if (targetNode?.kind === "meta.subpatch" && portId === SUBPATCH_INPUT_DUMMY_PORT && targetNode.subpatchId) {
         const spec = addSubpatchPort(targetNode.subpatchId, "input");
         if (!spec) {
           return;
@@ -1221,7 +1221,7 @@ export function Canvas({
   const handleNodeDoubleClick = useCallback(
     (nodeId: string) => {
       const targetNode = nodesById.get(nodeId);
-      if (targetNode?.kind === "logic.subpatch" && targetNode.subpatchId) {
+      if (targetNode?.kind === "meta.subpatch" && targetNode.subpatchId) {
         openSubpatch(targetNode.subpatchId);
       }
     },
@@ -1428,10 +1428,10 @@ export function Canvas({
                   contextMenu.selection.length === 1 ? contextMenu.selection[0] : null;
                 const selectedNode = singleSelection ? nodesById.get(singleSelection) : null;
                 const canOpenSubpatch =
-                  selectedNode?.kind === "logic.subpatch" && selectedNode.subpatchId;
+                  selectedNode?.kind === "meta.subpatch" && selectedNode.subpatchId;
                 const canCreateSubpatch = contextMenu.selection.some((id) => {
                   const node = nodesById.get(id);
-                  return !!node && node.kind !== "logic.subpatch.input" && node.kind !== "logic.subpatch.output";
+                  return !!node && node.kind !== "meta.subpatch.input" && node.kind !== "meta.subpatch.output";
                 });
                 return (
                   <>

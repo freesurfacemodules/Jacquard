@@ -54,7 +54,7 @@ import {
   PatchDocument
 } from "@graph/persistence";
 import { nanoid } from "@codegen/utils/nanoid";
-import { loadAutosavePatch, saveAutosavePatch } from "@ui/utils/indexedDb";
+import { clearAutosavePatch, loadAutosavePatch, saveAutosavePatch } from "@ui/utils/indexedDb";
 
 const PARAM_MESSAGE_BATCH = "parameterBatch";
 const PARAM_MESSAGE_SINGLE = "parameter";
@@ -761,15 +761,15 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
 
   const addNodeToGraph = useCallback(
     (node: NodeDescriptor) => {
-      if (node.kind === "logic.subpatch") {
+      if (node.kind === "meta.subpatch") {
         const subpatchId = nanoid();
         node.subpatchId = subpatchId;
         const parentId = subpatchPathRef.current.length > 0
           ? subpatchPathRef.current[subpatchPathRef.current.length - 1]
           : null;
 
-        const inputNode = instantiateNode("logic.subpatch.input", nanoid());
-        const outputNode = instantiateNode("logic.subpatch.output", nanoid());
+        const inputNode = instantiateNode("meta.subpatch.input", nanoid());
+        const outputNode = instantiateNode("meta.subpatch.output", nanoid());
 
         inputNode.metadata = {
           ...(inputNode.metadata ?? {}),
@@ -1159,7 +1159,7 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
         .map((id) => nodesById.get(id))
         .filter((node): node is NodeDescriptor => Boolean(node));
 
-      if (selectedNodes.length === 0 || selectedNodes.some((node) => node.kind === "logic.subpatch.input" || node.kind === "logic.subpatch.output")) {
+      if (selectedNodes.length === 0 || selectedNodes.some((node) => node.kind === "meta.subpatch.input" || node.kind === "meta.subpatch.output")) {
         return;
       }
 
@@ -1277,7 +1277,7 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
         ? subpatchPathRef.current[subpatchPathRef.current.length - 1]
         : null;
 
-      const subpatchNode = instantiateNode("logic.subpatch", nanoid());
+      const subpatchNode = instantiateNode("meta.subpatch", nanoid());
       subpatchNode.subpatchId = subpatchId;
       subpatchNode.label = "Subpatch";
 
@@ -1290,8 +1290,8 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
         }
       };
 
-      const inputNode = instantiateNode("logic.subpatch.input", nanoid());
-      const outputNode = instantiateNode("logic.subpatch.output", nanoid());
+      const inputNode = instantiateNode("meta.subpatch.input", nanoid());
+      const outputNode = instantiateNode("meta.subpatch.output", nanoid());
 
       const offsetX = Number.isFinite(minX) ? minX : 0;
       const offsetY = Number.isFinite(minY) ? minY : 0;
@@ -2171,9 +2171,9 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
   const importPatch = useCallback(
     (input: PatchDocument | PatchGraph, options?: { recordHistory?: boolean }) => {
       const document = normalizePatchDocument(input);
-      if (document.version > PATCH_DOCUMENT_VERSION) {
+      if (document.version !== PATCH_DOCUMENT_VERSION) {
         throw new Error(
-          `Unsupported patch version ${document.version}. Upgrade the application to load this file.`
+          `Unsupported patch document version ${document.version}. This build expects version ${PATCH_DOCUMENT_VERSION}.`
         );
       }
 
@@ -2233,6 +2233,14 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
         }
       } catch (error) {
         console.warn("[PatchContext] Failed to restore autosave", error);
+        if (
+          error instanceof Error &&
+          error.message.includes("Unsupported patch document version")
+        ) {
+          await clearAutosavePatch().catch((clearError) => {
+            console.warn("[PatchContext] Failed to clear incompatible autosave", clearError);
+          });
+        }
       } finally {
         if (!cancelled) {
           autosaveHydratedRef.current = true;

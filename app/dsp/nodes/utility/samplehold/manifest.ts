@@ -7,8 +7,8 @@ const OUTPUT_PORT = "out";
 
 export const sampleHoldNode: NodeImplementation = {
   manifest: {
-    kind: "utility.samplehold",
-    category: "utility",
+    kind: "circuit.samplehold",
+    category: "circuit",
     label: "Sample & Hold",
     inputs: [
       audioPort(INPUT_SIGNAL, "Signal"),

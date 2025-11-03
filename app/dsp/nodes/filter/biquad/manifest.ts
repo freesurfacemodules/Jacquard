@@ -15,7 +15,7 @@ export const biquadNode: NodeImplementation = {
   manifest: {
     kind: "filter.biquad",
     category: "filter",
-    label: "Biquad",
+    label: "Biquad Filter",
     inputs: [
       audioPort(IN_PORT, "In"),
       audioPort(CUTOFF_PORT, "Cutoff"),

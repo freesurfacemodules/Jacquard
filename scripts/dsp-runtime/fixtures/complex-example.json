@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "graph": {
     "nodes": [
       {
@@ -317,7 +317,7 @@
       },
       {
         "id": "28txbr31fbm1",
-        "kind": "noise.basic",
+        "kind": "random.basic",
         "label": "Noise",
         "inputs": [],
         "outputs": [

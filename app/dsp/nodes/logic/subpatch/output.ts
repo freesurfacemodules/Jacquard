@@ -2,7 +2,7 @@ import type { NodeImplementation } from "@dsp/types";
 
 export const subpatchOutputNode: NodeImplementation = {
   manifest: {
-    kind: "logic.subpatch.output",
+    kind: "meta.subpatch.output",
     category: "utility",
     label: "Subpatch Output",
     inputs: [],

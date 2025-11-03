@@ -6,8 +6,8 @@ const OUTPUT_PORT = "out";
 
 export const dcBiasNode: NodeImplementation = {
   manifest: {
-    kind: "utility.dcbias",
-    category: "utility",
+    kind: "filter.dcblock",
+    category: "filter",
     label: "DC Block",
     inputs: [audioPort(INPUT_PORT, "In")],
     outputs: [audioPort(OUTPUT_PORT, "Out")],

@@ -222,7 +222,7 @@ export function NodePropertiesPanel({ onClose }: NodePropertiesPanelProps): JSX.
                 />
               </label>
               <span className="properties-section__subtitle">{selectedNode.kind}</span>
-            {selectedNode.kind === "logic.subpatch" && selectedNode.subpatchId ? (
+            {selectedNode.kind === "meta.subpatch" && selectedNode.subpatchId ? (
               <button
                 type="button"
                 className="properties-action"
@@ -317,7 +317,7 @@ export function NodePropertiesPanel({ onClose }: NodePropertiesPanelProps): JSX.
               </section>
             ) : null}
 
-            {selectedNode.kind === "logic.subpatch"
+            {selectedNode.kind === "meta.subpatch"
               ? currentSubpatchEntry
                 ? (
                     <>
@@ -342,7 +342,7 @@ export function NodePropertiesPanel({ onClose }: NodePropertiesPanelProps): JSX.
                   )
               : null}
 
-            {selectedNode.kind === "logic.subpatch.input"
+            {selectedNode.kind === "meta.subpatch.input"
               ? renderPortEditors(
                   activeSubpatchEntry,
                   "input",
@@ -352,7 +352,7 @@ export function NodePropertiesPanel({ onClose }: NodePropertiesPanelProps): JSX.
                 )
               : null}
 
-            {selectedNode.kind === "logic.subpatch.output"
+            {selectedNode.kind === "meta.subpatch.output"
               ? renderPortEditors(
                   activeSubpatchEntry,
                   "output",

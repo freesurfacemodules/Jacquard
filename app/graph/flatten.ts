@@ -207,7 +207,7 @@ export function flattenForCodegen(root: PatchGraph): PatchGraph {
   };
 
   while (true) {
-    const index = nodes.findIndex((node) => node.kind === "logic.subpatch");
+    const index = nodes.findIndex((node) => node.kind === "meta.subpatch");
     if (index === -1) {
       break;
     }

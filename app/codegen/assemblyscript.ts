@@ -947,7 +947,7 @@ function collectStateDeclarations(plan: ExecutionPlan): string {
         lines.push(`const clock_reset_${identifier} = new SchmittTrigger(2.5, 1.0);`);
         break;
       }
-      case "noise.basic": {
+      case "random.basic": {
         const seedA = `0x9E3779B97F4A7C15 ^ (<u64>${index + 1})`;
         const seedB = `0xD1B54A32D192ED03 ^ (<u64>${index + 0xABCDEF})`;
         lines.push(`const noise_rng_${identifier} = new Xoroshiro128Plus(${seedA}, ${seedB});`);
@@ -960,11 +960,11 @@ function collectStateDeclarations(plan: ExecutionPlan): string {
         lines.push(`const slew_${identifier} = new SlewLimiter();`);
         break;
       }
-      case "utility.dcbias": {
+      case "filter.dcblock": {
         lines.push(`const dcblock_${identifier} = new DcBlocker();`);
         break;
       }
-      case "utility.samplehold": {
+      case "circuit.samplehold": {
         lines.push(`let snh_state_${identifier}: f32 = 0.0;`);
         lines.push(`const snh_trig_${identifier} = new SchmittTrigger(2.5, 1.0);`);
         break;
@@ -984,10 +984,10 @@ function collectStateDeclarations(plan: ExecutionPlan): string {
         lines.push(`const complexRes_${identifier} = new ComplexResonator();`);
         break;
       }
-      case "utility.knobs": {
+      case "control.knobs": {
         break;
       }
-      case "logic.counter": {
+      case "circuit.counter": {
         lines.push(`const counter_${identifier} = new CounterState();`);
         break;
       }

@@ -15,7 +15,7 @@ const SEED_INPUT_SCALE = 2000.0;
 export const seededRandomNode: NodeImplementation = {
   manifest: {
     kind: "random.seeded",
-    category: "utility",
+    category: "random",
     label: "Seeded Random",
     inputs: [
       audioPort(TRIGGER_INPUT, "Trigger"),

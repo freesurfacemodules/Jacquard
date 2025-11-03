@@ -4,8 +4,8 @@ const OUTPUT_IDS = ["out1", "out2", "out3", "out4"] as const;
 
 const knobsNode: NodeImplementation = {
   manifest: {
-    kind: "utility.knobs",
-    category: "utility",
+    kind: "control.knobs",
+    category: "control",
     label: "Knobs",
     inputs: [],
     outputs: OUTPUT_IDS.map((id, index) => ({

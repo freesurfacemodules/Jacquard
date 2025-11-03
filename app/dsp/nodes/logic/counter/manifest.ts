@@ -11,8 +11,8 @@ const CONTROL_MAX = "maxValue";
 
 export const counterNode: NodeImplementation = {
   manifest: {
-    kind: "logic.counter",
-    category: "logic",
+    kind: "circuit.counter",
+    category: "circuit",
     label: "Counter",
     inputs: [
       audioPort(INPUT_INCREMENT, "Increment"),

@@ -63,7 +63,7 @@ Primary goals: extremely low latency, deterministic scheduling, sandboxed user D
   `-O3 --noAssert --runtime minimal --use SIMD --enable relaxed-simd`
 * **Audio**: Web Audio **AudioWorklet**. Ring buffer via **SharedArrayBuffer** between main/UI and worklet for parameter events & metering.
 * **Runtime**: WebAssembly.instantiateStreaming (or fallback) with import table minimalism; optional tiny WASI shim only if needed (avoid for v1 to reduce size).
-* **Persistence**: JSON patch format, user files via IndexedDB + File System Access API.
+* **Persistence**: JSON patch format v2, user files via IndexedDB + File System Access API (older exports surface a friendly incompatibility warning and must be rebuilt).
 * **Testing**: Jest for graph/IR, Playwright for UI, audio golden tests via offline AudioWorklet in WorkletGlobalScope (debug build).
 
 ---
@@ -240,7 +240,7 @@ The paired manifest (`manifest.ts`) imports this snippet (`import sineOsc from "
   * Manifest declares one `pitch` input and one `out` output with default pitch 0.
   * AssemblyScript snippet defines the `SineOsc` class; emitter instantiates it and writes its output to connected wires or auto-route buffers.
 
-* **mixer.stereo**
+* **mixing.stereo**
 
   * Manifest exposes four mono inputs with per-channel gain/pan parameters and two outputs (`left`, `right`).
   * Emitter accumulates gain/pan-scaled sums for each channel and fans results into downstream wires or the auto-routing buffers when outputs are unconnected.

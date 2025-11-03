@@ -99,7 +99,7 @@ describe("code generation", () => {
   it("emits stereo mixer node wiring", () => {
     let graph = createGraph();
     const osc = instantiateNode("osc.sine", "osc1");
-    const mixer = instantiateNode("mixer.stereo", "mix1");
+    const mixer = instantiateNode("mixing.stereo", "mix1");
     const out = instantiateNode("io.output", "out1");
 
     mixer.parameters.pan_ch1 = -0.25;
@@ -306,7 +306,7 @@ describe("code generation", () => {
 
   it("emits noise node outputs", () => {
     let graph = createGraph();
-    const noise = instantiateNode("noise.basic", "noise1");
+    const noise = instantiateNode("random.basic", "noise1");
     const out = instantiateNode("io.output", "out1");
 
     graph = addNode(graph, noise);
@@ -513,7 +513,7 @@ describe("code generation", () => {
     let graph = createGraph();
     const oscA = instantiateNode("osc.sine", "oscA");
     const oscB = instantiateNode("osc.sine", "oscB");
-    const comparator = instantiateNode("logic.comparator", "cmp1");
+    const comparator = instantiateNode("circuit.comparator", "cmp1");
     const out = instantiateNode("io.output", "out1");
 
     graph = addNode(graph, oscA);
@@ -553,7 +553,7 @@ describe("code generation", () => {
     let graph = createGraph();
     const oscA = instantiateNode("osc.sine", "oscA");
     const oscB = instantiateNode("osc.sine", "oscB");
-    const counter = instantiateNode("logic.counter", "ctr1");
+    const counter = instantiateNode("circuit.counter", "ctr1");
     counter.parameters.maxValue = 12;
     const out = instantiateNode("io.output", "out1");
 
@@ -831,7 +831,7 @@ describe("code generation", () => {
   it("emits dc bias removal node wiring", () => {
     let graph = createGraph();
     const osc = instantiateNode("osc.sine", "osc1");
-    const dc = instantiateNode("utility.dcbias", "dc1");
+    const dc = instantiateNode("filter.dcblock", "dc1");
     const out = instantiateNode("io.output", "out1");
 
     graph = addNode(graph, osc);
@@ -863,7 +863,7 @@ describe("code generation", () => {
     const sigB = instantiateNode("osc.sine", "sigB");
     const sel = instantiateNode("utility.gain", "sel1");
     sel.parameters.gain = 0;
-    const mux = instantiateNode("utility.mux", "mux1");
+    const mux = instantiateNode("circuit.mux", "mux1");
     const out = instantiateNode("io.output", "out1");
 
     graph = addNode(graph, sigA);
@@ -909,7 +909,7 @@ describe("code generation", () => {
     const signal = instantiateNode("osc.sine", "sig1");
     const sel = instantiateNode("utility.gain", "sel1");
     sel.parameters.gain = 0;
-    const demux = instantiateNode("utility.demux", "dm1");
+    const demux = instantiateNode("circuit.demux", "dm1");
     const out = instantiateNode("io.output", "out1");
 
     graph = addNode(graph, signal);
@@ -954,7 +954,7 @@ describe("code generation", () => {
     let graph = createGraph();
     const osc = instantiateNode("osc.sine", "sig1");
     const trig = instantiateNode("clock.basic", "clk1");
-    const snh = instantiateNode("utility.samplehold", "snh1");
+    const snh = instantiateNode("circuit.samplehold", "snh1");
     const out = instantiateNode("io.output", "out1");
 
     graph = addNode(graph, osc);
