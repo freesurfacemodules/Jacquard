@@ -18,7 +18,8 @@ export interface DspNodeManifest {
     | "distortion"
     | "circuit"
     | "control"
-    | "meta";
+    | "meta"
+    | "resonator";
   label: string;
   inputs: PortDescriptor[];
   outputs: PortDescriptor[];
@@ -31,6 +32,7 @@ export interface DspNodeManifest {
   };
   controls?: NodeControl[];
   hidden?: boolean;
+  renameableOutputs?: boolean;
 }
 
 export interface NodeEmitHelpers {

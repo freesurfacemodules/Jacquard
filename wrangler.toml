@@ -1,0 +1,7 @@
+name = "jacquard"
+compatibility_date = "2025-11-06"
+
+pages_build_output_dir = "dist"
+
+[build]
+command = "npm run build"

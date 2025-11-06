@@ -95,7 +95,7 @@ export function EnvelopeVisualizer({
 
     const points: Point[] = [];
     for (let i = 0; i < SAMPLE_COUNT; i++) {
-      const t = SAMPLE_COUNT === 1 ? 0 : i / (SAMPLE_COUNT - 1);
+      const t = SAMPLE_COUNT <= 1 ? 0 : i / (SAMPLE_COUNT - 1);
       const y = evaluateEnvelope(t, attackRatio, shape);
       points.push({ x: t, y });
     }

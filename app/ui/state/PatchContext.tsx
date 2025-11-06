@@ -19,14 +19,14 @@ import {
   PatchSettingsUpdate,
   updatePatchSettings as updateGraphPatchSettings,
   updateNodePosition as updateGraphNodePosition,
-  updateNodeParameter as updateGraphNodeParameter
+  updateNodeParameter as updateGraphNodeParameter,
+  type ConnectNodesParams
 } from "@graph/graph";
 import {
   GraphViewModel,
   graphViewModelFromGraph
 } from "@graph/view-model";
 import {
-  ConnectNodesParams,
   Connection,
   NodeDescriptor,
   NodePosition,

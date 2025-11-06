@@ -959,9 +959,13 @@ export function Canvas({
         const dummyPort = node.outputs.find((port) => port.id === SUBPATCH_INPUT_DUMMY_PORT) ?? {
           id: SUBPATCH_INPUT_DUMMY_PORT,
           name: "+ Add Output",
-          type: "audio"
+          type: "audio" as const
         };
-        const newOutputs = [...withoutDummy, { id: spec.id, name: spec.name, type: "audio" }, dummyPort];
+        const newOutputs = [
+          ...withoutDummy,
+          { id: spec.id, name: spec.name, type: "audio" as const },
+          dummyPort
+        ];
         effectiveNode = {
           ...node,
           outputs: newOutputs
@@ -979,9 +983,13 @@ export function Canvas({
         const dummyPort = node.outputs.find((port) => port.id === SUBPATCH_OUTPUT_DUMMY_PORT) ?? {
           id: SUBPATCH_OUTPUT_DUMMY_PORT,
           name: "+ Add Output",
-          type: "audio"
+          type: "audio" as const
         };
-        const newOutputs = [...withoutDummy, { id: spec.id, name: spec.name, type: "audio" }, dummyPort];
+        const newOutputs = [
+          ...withoutDummy,
+          { id: spec.id, name: spec.name, type: "audio" as const },
+          dummyPort
+        ];
         effectiveNode = {
           ...node,
           outputs: newOutputs

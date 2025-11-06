@@ -24,8 +24,12 @@
   },
   "include": [
     "app",
-    "scripts",
     "vite.config.ts",
     "env.d.ts"
+  ],
+  "exclude": [
+    "scripts",
+    "scripts/**/*",
+    "app/tests/bench-harness.test.ts"
   ]
 }
