@@ -33,7 +33,7 @@ export function emitAssemblyScript(
   graph: PatchGraph,
   options: EmitOptions = {}
 ): EmitResult {
-  const moduleName = options.moduleName ?? "maxwasm_patch";
+  const moduleName = options.moduleName ?? "jacquard_patch";
   const mathMode: MathMode = options.mathMode ?? "fast";
   const flattenedGraph = flattenForCodegen(graph);
   const plan = createExecutionPlan(flattenedGraph);

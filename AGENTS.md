@@ -1,4 +1,4 @@
-# Agent Guide for MaxWasm
+# Agent Guide for Jacquard
 
 ## Project Overview
 - **README.md** → Detailed architecture, data flow, and technology stack.

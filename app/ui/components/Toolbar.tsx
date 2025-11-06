@@ -160,7 +160,7 @@ export function Toolbar({ windows, onToggleWindow, onOpenHelp }: ToolbarProps): 
       const anchor = window.document.createElement("a");
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
       anchor.href = url;
-      anchor.download = `maxwasm-patch-${timestamp}.json`;
+      anchor.download = `jacquard-patch-${timestamp}.json`;
       anchor.click();
       URL.revokeObjectURL(url);
       setSuccessMessage("Patch saved.");
@@ -285,7 +285,7 @@ export function Toolbar({ windows, onToggleWindow, onOpenHelp }: ToolbarProps): 
   return (
     <div className="toolbar" ref={toolbarRef} aria-label="Application controls">
       <div className="toolbar-section toolbar-section--brand">
-        <strong>MaxWasm</strong>
+        <strong>Jacquard</strong>
         <div className="toolbar-menubar">
           <button
             type="button"

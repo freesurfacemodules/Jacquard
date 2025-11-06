@@ -1,4 +1,4 @@
-# Project Status (MaxWasm)
+# Project Status (Jacquard)
 
 ## Current Functionality
 - **Graph Editing**: Registry-driven node palette with drag/drop placement, connection drawing, and node selection. Interactive knobs live on the nodes themselves.

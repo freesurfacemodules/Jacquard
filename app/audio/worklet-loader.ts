@@ -15,7 +15,7 @@ export async function loadPatchProcessor(
   context: AudioContext,
   artifact: CompileResult
 ): Promise<WorkletHandle> {
-  console.time("[MaxWasm] loadPatchProcessor");
+  console.time("[Jacquard] loadPatchProcessor");
   await ensureWorkletModule(context);
   const wasmArray =
     artifact.wasmBinary instanceof Uint8Array
@@ -27,7 +27,7 @@ export async function loadPatchProcessor(
     wasmArray.byteOffset + wasmArray.byteLength
   );
 
-  const node = new AudioWorkletNode(context, "maxwasm-patch", {
+  const node = new AudioWorkletNode(context, "jacquard-patch", {
     numberOfInputs: 0,
     numberOfOutputs: 1,
     outputChannelCount: [2],
@@ -45,7 +45,7 @@ export async function loadPatchProcessor(
 
   try {
     await waitForProcessorReady(node);
-    console.timeEnd("[MaxWasm] loadPatchProcessor");
+    console.timeEnd("[Jacquard] loadPatchProcessor");
   } catch (error) {
     try {
       node.disconnect();
@@ -85,25 +85,25 @@ async function ensureWorkletModule(context: AudioContext): Promise<void> {
 
   try {
     const href = moduleUrl.href;
-    console.info("[MaxWasm] Loading worklet module", href);
+    console.info("[Jacquard] Loading worklet module", href);
     await context.audioWorklet.addModule(href);
-    console.info("[MaxWasm] Worklet module loaded");
+    console.info("[Jacquard] Worklet module loaded");
   } catch (error) {
     const href = moduleUrl.href;
-    console.error("[MaxWasm] Failed to load worklet module", href, error);
+    console.error("[Jacquard] Failed to load worklet module", href, error);
     try {
       const response = await fetch(href);
       console.error(
-        "[MaxWasm] Worklet module fetch status",
+        "[Jacquard] Worklet module fetch status",
         response.status,
         response.statusText
       );
       if (!response.ok) {
         const snippet = (await response.text()).slice(0, 2000);
-        console.error("[MaxWasm] Worklet module response body (trimmed)", snippet);
+        console.error("[Jacquard] Worklet module response body (trimmed)", snippet);
       }
     } catch (probeError) {
-      console.error("[MaxWasm] Error probing worklet module URL", probeError);
+      console.error("[Jacquard] Error probing worklet module URL", probeError);
     }
     throw error;
   }

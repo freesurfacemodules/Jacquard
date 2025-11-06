@@ -21,14 +21,14 @@ export interface HelpContent {
 }
 
 export const HELP_CONTENT: HelpContent = {
-  title: "Welcome to MaxWasm",
+  title: "Welcome to Jacquard",
   sections: [
     {
-      heading: "What Is MaxWasm?",
+      heading: "What Is Jacquard?",
       blocks: [
         {
           type: "paragraph",
-          text: "MaxWasm is a modular playground for designing synthesizers and audio effects. Every patch you build is compiled into a single, highly optimised WebAssembly module so your signal flow runs with zero added buffering."
+          text: "Jacquard is a modular playground for designing synthesizers and audio effects. Every patch you build is compiled into a single, highly optimised WebAssembly module so your signal flow runs with zero added buffering."
         },
         {
           type: "paragraph",

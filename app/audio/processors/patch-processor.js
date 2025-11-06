@@ -5,7 +5,7 @@ if (typeof globalThis.AudioWorkletProcessor === "undefined") {
 } else {
   const PAGE_BYTES = 64 * 1024;
 
-  class MaxWasmProcessor extends AudioWorkletProcessor {
+  class JacquardProcessor extends AudioWorkletProcessor {
     constructor(options = {}) {
       super(options);
       this.state = null;
@@ -345,7 +345,7 @@ if (typeof globalThis.AudioWorkletProcessor === "undefined") {
         const snapshot = new Float32Array(this.envelopeMonitorValues);
         this.port.postMessage({ type: "envelopes", values: snapshot }, [snapshot.buffer]);
       } catch (error) {
-        console.warn("[MaxWasm] Failed to post envelope monitors", error);
+        console.warn("[Jacquard] Failed to post envelope monitors", error);
       }
     }
 
@@ -529,7 +529,7 @@ if (typeof globalThis.AudioWorkletProcessor === "undefined") {
           transferables
         );
       } catch (error) {
-        console.warn("[MaxWasm] Failed to post scope monitors", error);
+        console.warn("[Jacquard] Failed to post scope monitors", error);
       }
     }
   }
@@ -564,5 +564,5 @@ if (typeof globalThis.AudioWorkletProcessor === "undefined") {
     return Number(value.value);
   }
 
-  registerProcessor("maxwasm-patch", MaxWasmProcessor);
+  registerProcessor("jacquard-patch", JacquardProcessor);
 }

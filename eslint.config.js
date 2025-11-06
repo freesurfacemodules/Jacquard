@@ -29,6 +29,9 @@ const baseConfig = {
 };
 
 export default [
+  {
+    ignores: ["dist/**", "scripts/**", "app/tests/bench-harness.test.ts"]
+  },
   js.configs.recommended,
   {
     ...baseConfig,

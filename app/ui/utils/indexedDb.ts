@@ -1,6 +1,6 @@
 import type { PatchDocument } from "@graph/persistence";
 
-const DB_NAME = "maxwasm";
+const DB_NAME = "jacquard";
 const STORE_NAME = "patches";
 const AUTOSAVE_KEY = "autosave";
 const HELP_STARTUP_KEY = "help.showOnStartup";

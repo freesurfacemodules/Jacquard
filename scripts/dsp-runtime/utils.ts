@@ -61,7 +61,7 @@ export function defaultModuleNameFromPath(filePath: string): string {
 
 export function sanitizeModuleName(candidate: string): string {
   const trimmed = candidate.trim();
-  const fallback = "maxwasm_patch";
+const fallback = "jacquard_patch";
   if (!trimmed) {
     return fallback;
   }
@@ -82,7 +82,7 @@ export async function compilePatchGraph(
   options: CompileOptions = {}
 ): Promise<CompileArtifacts> {
   const moduleName =
-    options.moduleName ?? sanitizeModuleName(graph.nodes[0]?.id ?? "maxwasm_patch");
+    options.moduleName ?? sanitizeModuleName(graph.nodes[0]?.id ?? "jacquard_patch");
   const mathMode: MathMode = options.mathMode ?? "fast";
   const { source, plan } = emitAssemblyScript(graph, { moduleName, mathMode });
   let wasmBinary = await compileAssemblyScriptToWasm(source);

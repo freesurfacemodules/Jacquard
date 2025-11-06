@@ -17,9 +17,9 @@ export interface CompileResult {
  * a Worker bridge will be wired up once the evaluator is ready.
  */
 export async function compilePatch(graph: PatchGraph): Promise<CompileResult> {
-  console.info("[MaxWasm] emitAssemblyScript begin");
+  console.info("[Jacquard] emitAssemblyScript begin");
   const { source: moduleSource, plan } = emitAssemblyScript(graph);
-  console.info("[MaxWasm] emitAssemblyScript done", {
+  console.info("[Jacquard] emitAssemblyScript done", {
     controls: plan.controls.length,
     nodes: plan.nodes.length
   });
@@ -38,7 +38,7 @@ export async function compilePatch(graph: PatchGraph): Promise<CompileResult> {
     noAssert: true,
     enable: ["simd"]
   });
-  console.info("[MaxWasm] asc compileString finished", {
+  console.info("[Jacquard] asc compileString finished", {
     hasBinary: !!binary,
     binaryLength: binary?.length ?? 0
   });

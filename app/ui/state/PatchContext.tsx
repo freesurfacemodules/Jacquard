@@ -1894,12 +1894,12 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
   }, [audioSupported]);
 
   const compileGraph = useCallback(async (): Promise<CompileResult> => {
-    console.info("[MaxWasm] compile start", {
+    console.info("[Jacquard] compile start", {
       nodes: graph.nodes.length,
       connections: graph.connections.length
     });
     const result = await compilePatch(graph);
-    console.info("[MaxWasm] compile finished", {
+    console.info("[Jacquard] compile finished", {
       wasmBytes: result.wasmBinary.byteLength,
       parameters: result.parameterBindings.length
     });
@@ -1993,9 +1993,9 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
         audioContextRef.current = context;
       }
 
-      console.info("[MaxWasm] Creating audio worklet node");
+      console.info("[Jacquard] Creating audio worklet node");
       const handle = await loadPatchProcessor(context, artifact);
-      console.info("[MaxWasm] Worklet node created");
+      console.info("[Jacquard] Worklet node created");
       workletHandleRef.current = handle;
       const listener = (event: MessageEvent): void => {
         const data = event.data;
@@ -2007,7 +2007,7 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
             typeof data.message === "string"
               ? data.message
               : "Audio processor reported an error.";
-          console.error("[MaxWasm] Worklet error", message);
+          console.error("[Jacquard] Worklet error", message);
           setAudioState("error");
           setAudioError(message);
           void (async () => {
@@ -2145,19 +2145,19 @@ export function PatchProvider({ children }: PropsWithChildren): JSX.Element {
           };
         });
         handle.node.port.postMessage({ type: PARAM_MESSAGE_BATCH, values });
-        console.info("[MaxWasm] Sent parameter batch", values);
+        console.info("[Jacquard] Sent parameter batch", values);
       }
 
       if (context.state === "suspended") {
         await context.resume();
       }
 
-      console.info("[MaxWasm] Audio rendering started");
+      console.info("[Jacquard] Audio rendering started");
       setAudioState("running");
     } catch (error) {
       const message =
         error instanceof Error ? error.message : String(error);
-      console.error("[MaxWasm] Failed to start audio", error);
+      console.error("[Jacquard] Failed to start audio", error);
       setAudioState("error");
       setAudioError(message);
       await stopAudioInternal();
