@@ -948,6 +948,11 @@ function collectStateDeclarations(plan: ExecutionPlan): string {
         lines.push(`const clock_reset_${identifier} = new SchmittTrigger(2.5, 1.0);`);
         break;
       }
+      case "clock.phasor": {
+        lines.push(`let phasor_phase_${identifier}: f32 = 0.0;`);
+        lines.push(`const phasor_reset_${identifier} = new SchmittTrigger(2.5, 1.0);`);
+        break;
+      }
       case "random.basic": {
         const seedA = `0x9E3779B97F4A7C15 ^ (<u64>${index + 1})`;
         const seedB = `0xD1B54A32D192ED03 ^ (<u64>${index + 0xABCDEF})`;

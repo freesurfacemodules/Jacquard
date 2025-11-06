@@ -1,0 +1,52 @@
+{
+  "version": 2,
+  "graph": {
+    "nodes": [
+      {
+        "id": "phasor1",
+        "kind": "clock.phasor",
+        "label": "Phasor Clock",
+        "inputs": [
+          { "id": "reset", "name": "Reset", "type": "audio" },
+          { "id": "bpmIn", "name": "BPM CV", "type": "audio" }
+        ],
+        "outputs": [
+          { "id": "out", "name": "Out", "type": "audio" },
+          { "id": "bpmOut", "name": "BPM CV", "type": "audio" }
+        ],
+        "parameters": {
+          "bpm": 120,
+          "mult": 1,
+          "div": 1
+        },
+        "metadata": {
+          "position": { "x": -160, "y": -40 }
+        }
+      },
+      {
+        "id": "output1",
+        "kind": "io.output",
+        "label": "Output",
+        "inputs": [
+          { "id": "left", "name": "Left", "type": "audio" },
+          { "id": "right", "name": "Right", "type": "audio" }
+        ],
+        "outputs": [],
+        "parameters": {},
+        "metadata": {
+          "position": { "x": 140, "y": -40 }
+        }
+      }
+    ],
+    "connections": [
+      {
+        "id": "wire1",
+        "from": { "node": "phasor1", "port": "out" },
+        "to": { "node": "output1", "port": "left" }
+      }
+    ],
+    "sampleRate": 48000,
+    "blockSize": 128,
+    "oversampling": 1
+  }
+}

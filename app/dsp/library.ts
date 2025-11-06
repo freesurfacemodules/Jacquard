@@ -9,6 +9,7 @@ import { gainDbNode } from "@dsp/nodes/utility/gain-db/manifest";
 import { ddlDelayNode } from "@dsp/nodes/delay/ddl/manifest";
 import { waveguideDelayNode } from "@dsp/nodes/delay/waveguide/manifest";
 import { clockNode } from "@dsp/nodes/clock/manifest";
+import { phasorClockNode } from "@dsp/nodes/clock/phasor";
 import { biquadNode } from "@dsp/nodes/filter/biquad/manifest";
 import { ladderFilterNode } from "@dsp/nodes/filter/ladder/manifest";
 import { allpassFilterNode } from "@dsp/nodes/filter/allpass/manifest";
@@ -44,6 +45,7 @@ const implementations: NodeImplementation[] = [
   sineOscNode,
   stereoMixerNode,
   gainNode,
+  phasorClockNode,
   gainDbNode,
   clockNode,
   ddlDelayNode,

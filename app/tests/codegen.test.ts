@@ -985,6 +985,26 @@ describe("code generation", () => {
     expect(source).toContain("gateOutput = 10;");
   });
 
+  it("emits phasor clock output", () => {
+    let graph = createGraph();
+    const phasor = instantiateNode("clock.phasor", "phasor1");
+    const out = instantiateNode("io.output", "out1");
+
+    graph = addNode(graph, phasor);
+    graph = addNode(graph, out);
+
+    graph = connectNodes(graph, {
+      fromNodeId: phasor.id,
+      fromPortId: "out",
+      toNodeId: out.id,
+      toPortId: "left"
+    });
+
+    const { source } = emitAssemblyScript(graph);
+    expect(source).toContain("phasor_phase_phasor1 += phaseDelta;");
+    expect(source).toContain("phasorSample = phasor_phase_phasor1 * 10");
+  });
+
   it("emits gain node with db scaling", () => {
     let graph = createGraph();
     const osc = instantiateNode("osc.sine", "osc1");
